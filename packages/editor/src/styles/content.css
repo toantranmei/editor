@@ -486,6 +486,14 @@
   }
   .me-unknown--inline { display: inline; margin: 0; padding: 0 var(--me-space-2); }
 
+  /*
+   * Containers trim their edge children's outer margins, like the document does for its
+   * first block, so a heading or box at the top/bottom of a callout, column, toggle or
+   * quote doesn't leave more space on one side than the other.
+   */
+  .me-content :is(.me-callout-content, .me-column, [data-type="detailsContent"], blockquote) > :first-child { margin-top: 0; }
+  .me-content :is(.me-callout-content, .me-column, [data-type="detailsContent"], blockquote) > :last-child { margin-bottom: 0; }
+
   /* Misc */
   .me-content .ProseMirror-selectednode:not(hr) { outline: none; }
   .me-content .suggestion { border-radius: var(--me-radius-sm); background: var(--me-color-hover); }
