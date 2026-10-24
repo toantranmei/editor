@@ -1,7 +1,8 @@
 import type { Point } from '../geometry/math'
-import type { ElementPatch, ElementType, ShapeType, SketchElement } from '../model/types'
+import type { ElementPatch, ElementType, LinearElement, ShapeType, SketchElement } from '../model/types'
 import type { Theme } from '../render/shapes'
 import { freedrawKind } from './freedraw'
+import { linearKind } from './linear'
 import { shapeKind } from './shape'
 import { textKind } from './text'
 
@@ -25,6 +26,7 @@ export interface ElementKind<E extends SketchElement = SketchElement> {
 const registry = new Map<ElementType, ElementKind>()
 
 const SHAPE_TYPES: readonly ShapeType[] = ['rectangle', 'ellipse', 'diamond']
+const LINEAR_TYPES: readonly LinearElement['type'][] = ['line', 'arrow']
 let builtinsRegistered = false
 
 /**
@@ -39,6 +41,9 @@ function registerBuiltins(): void {
   }
   if (!registry.has('text')) registry.set('text', textKind as ElementKind)
   if (!registry.has('freedraw')) registry.set('freedraw', freedrawKind as ElementKind)
+  for (const t of LINEAR_TYPES) {
+    if (!registry.has(t)) registry.set(t, linearKind as ElementKind)
+  }
 }
 
 export function registerKind(type: ElementType, kind: ElementKind): void {
