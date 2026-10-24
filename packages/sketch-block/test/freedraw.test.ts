@@ -77,6 +77,17 @@ describe('freedraw outline', () => {
     expect(strokeSize(fd({ strokeWidth: 4, highlighter: true }))).toBe(42)
   })
 
+  it('committed strokes reach the last point (last: true); live drafts may not', () => {
+    const e = fd({ points: [[0, 0], [100, 0]], w: 100, h: 0 })
+    expect(Math.max(...strokeOutline(e).map(p => p[0]!))).toBeGreaterThanOrEqual(100)
+    expect(strokeOutline(e, { live: true })).not.toBe(strokeOutline(e))
+  })
+
+  it('simulates pressure whenever pressures do not match the points', () => {
+    const pts: LocalPoint[] = [[0, 0], [40, 10], [100, 0]]
+    expect(strokeOutline(fd({ points: pts, pressures: [0.2] }))).toEqual(strokeOutline(fd({ points: pts, pressures: [] })))
+  })
+
   it('uses real pressures when present', () => {
     const light = strokeOutline(fd({ points: [[0, 0], [100, 0]], pressures: [0.1, 0.1] }))
     const heavy = strokeOutline(fd({ points: [[0, 0], [100, 0]], pressures: [1, 1] }))
@@ -86,11 +97,25 @@ describe('freedraw outline', () => {
 })
 
 describe('freedraw kind', () => {
-  it('visualPad is size / 2 + 2', () => {
+  it('visualPad is 0.8 * size + 2 (perfect-freehand radius at pressure 1)', () => {
     const e = fd({ strokeWidth: 2 })
-    expect(kindOf(e).visualPad(e)).toBe(6)
+    expect(kindOf(e).visualPad(e)).toBeCloseTo(8.4, 9)
     const h = fd({ strokeWidth: 2, highlighter: true })
-    expect(kindOf(h).visualPad(h)).toBe(14)
+    expect(kindOf(h).visualPad(h)).toBeCloseTo(21.2, 9)
+  })
+
+  it('outline stays within visualPad of the points at pressure 1 and simulated pressure', () => {
+    const points: LocalPoint[] = Array.from({ length: 30 }, (_, i) => [i * 4, Math.sin(i / 3) * 20 + 20] as LocalPoint)
+    for (const strokeWidth of [1, 2, 4] as const) {
+      for (const highlighter of [false, true]) {
+        for (const pressures of [points.map(() => 1), []]) {
+          const e = fd({ points, pressures, strokeWidth, highlighter })
+          const pad = kindOf(e).visualPad(e)
+          const far = Math.max(...strokeOutline(e).map(([x, y]) => polylineDistance(points, { x: x!, y: y! })))
+          expect(far).toBeLessThanOrEqual(pad)
+        }
+      }
+    }
   })
 
   it('hit on stroke true, far false', () => {
@@ -100,6 +125,16 @@ describe('freedraw kind', () => {
     expect(k.hit(e, { x: 25, y: 27 }, 1)).toBe(true)
     expect(k.hit(e, { x: 50, y: 0 }, 1)).toBe(false)
     expect(k.hit(e, { x: 50, y: 20 }, 1)).toBe(false)
+  })
+
+  it('hit half-width: size / 2 when simulated, 0.8 * size with real pressures', () => {
+    const k = kindOf(fd())
+    const sim = fd({ points: [[0, 0], [100, 0]], h: 0 }) // size 8 → 4
+    const real = fd({ points: [[0, 0], [100, 0]], h: 0, pressures: [1, 1] }) // → 6.4
+    expect(k.hit(sim, { x: 50, y: 4 }, 0)).toBe(true)
+    expect(k.hit(sim, { x: 50, y: 6 }, 0)).toBe(false)
+    expect(k.hit(real, { x: 50, y: 6 }, 0)).toBe(true)
+    expect(k.hit(real, { x: 50, y: 7 }, 0)).toBe(false)
   })
 
   it('resize scales points proportionally', () => {
@@ -121,12 +156,15 @@ describe('freedraw kind', () => {
     expect(svg).not.toContain('mix-blend-mode')
   })
 
-  it('highlighter svg has opacity 0.4 and multiply blend', () => {
+  it('highlighter svg has opacity 0.4; multiply blend in light theme only', () => {
     const e = fd({ highlighter: true, stroke: '#f08c00' })
-    const svg = kindOf(e).svg(e, 'light')
-    expect(svg).toContain('fill="#f08c00"')
-    expect(svg).toContain('opacity="0.4"')
-    expect(svg).toContain('mix-blend-mode:multiply')
+    const light = kindOf(e).svg(e, 'light')
+    expect(light).toContain('fill="#f08c00"')
+    expect(light).toContain('opacity="0.4"')
+    expect(light).toContain('mix-blend-mode:multiply')
+    const dark = kindOf(e).svg(e, 'dark')
+    expect(dark).toContain('opacity="0.4"')
+    expect(dark).not.toContain('mix-blend-mode')
   })
 
   it('shapeKey changes when points change', () => {
@@ -160,16 +198,25 @@ describe('freedraw kind', () => {
     expect(ctx.calls.some(c => c.name === 'fill')).toBe(true)
   })
 
-  it('highlighter draw multiplies alpha by 0.4 and uses multiply in light theme only', () => {
+  it('highlighter draw multiplies alpha by 0.4 with source-over (the blend is applied by the caller)', () => {
     vi.stubGlobal('Path2D', class {})
     const e = fd({ highlighter: true })
+    for (const theme of ['light', 'dark'] as const) {
+      const ctx = newCtx()
+      ctx.globalAlpha = 0.5
+      kindOf(e).draw(ctx, e, theme)
+      expect(ctx.calls).toContainEqual({ name: 'set:globalAlpha', args: [0.2] })
+      expect(ctx.calls.some(c => c.name === 'set:globalCompositeOperation' && c.args[0] === 'multiply')).toBe(false)
+    }
+  })
+
+  it('highlighter drawLod multiplies in light theme only', () => {
+    const e = fd({ highlighter: true })
     const light = newCtx()
-    light.globalAlpha = 0.5
-    kindOf(e).draw(light, e, 'light')
-    expect(light.calls).toContainEqual({ name: 'set:globalAlpha', args: [0.2] })
+    kindOf(e).drawLod(light, e, 'light', 0.1)
     expect(light.calls).toContainEqual({ name: 'set:globalCompositeOperation', args: ['multiply'] })
     const dark = newCtx()
-    kindOf(e).draw(dark, e, 'dark')
+    kindOf(e).drawLod(dark, e, 'dark', 0.1)
     expect(dark.calls.some(c => c.name === 'set:globalCompositeOperation' && c.args[0] === 'multiply')).toBe(false)
   })
 

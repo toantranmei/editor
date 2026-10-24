@@ -1,3 +1,4 @@
+import { blendsMultiply } from '../elements/freedraw'
 import { kindOf } from '../elements/kind'
 import { type Box, type Handle, handlePositions } from '../geometry'
 import type { Scene } from '../model/scene'
@@ -65,7 +66,10 @@ export function renderInteractive(
     ctx.globalAlpha = draft.opacity
     elementFrame(ctx, state, draft.x + draft.w / 2, draft.y + draft.h / 2, draft.angle)
     ctx.translate(-draft.w / 2, -draft.h / 2)
+    const multiply = blendsMultiply(draft, state.theme)
+    if (multiply) ctx.globalCompositeOperation = 'multiply'
     kindOf(draft).draw(ctx, draft, state.theme)
+    if (multiply) ctx.globalCompositeOperation = 'source-over'
     ctx.globalAlpha = 1
   }
 

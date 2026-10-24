@@ -260,6 +260,31 @@ describe('renderStatic', () => {
     scene.destroy()
   })
 
+  it('composites a highlighter bitmap with multiply in light theme only', () => {
+    for (const theme of ['light', 'dark'] as const) {
+      const store = new BoardStore(new Y.Doc())
+      store.create({
+        type: 'freedraw', x: 0, y: 0, w: 100, h: 0, angle: 0, locked: false, ...DEFAULT_STYLE,
+        points: [[0, 0], [100, 0]], pressures: [], highlighter: true,
+      })
+      store.create(init({ x: 0, y: 50, w: 50, h: 50 }))
+      const scene = new Scene(store)
+      const { ctx } = newCanvas()
+      renderStatic(ctx, scene, state({ theme }), new BitmapCache())
+      const ops: string[] = []
+      let op = 'source-over'
+      for (const c of ctx.calls) {
+        if (c.name === 'set:globalCompositeOperation') op = c.args[0] as string
+        if (c.name === 'drawImage') ops.push(op)
+      }
+      expect(ops).toHaveLength(2)
+      if (theme === 'light') expect(ops.sort()).toEqual(['multiply', 'source-over'])
+      else expect(ops).toEqual(['source-over', 'source-over'])
+      expect(op).toBe('source-over')
+      scene.destroy()
+    }
+  })
+
   it('draws bitmap dimensions divided by the bitmap scale', () => {
     const store = new BoardStore(new Y.Doc())
     store.create(init({ w: 100.3, h: 50 }))
@@ -381,6 +406,28 @@ describe('renderInteractive', () => {
     expect(count(one.ctx, 'strokeRect')).toBe(10)
     expect(count(two.ctx, 'strokeRect')).toBe(2)
     expect(count(one.ctx, 'fillRect')).toBe(9)
+    scene.destroy()
+  })
+
+  it('blends a highlighter draft with multiply in light theme only, then restores', () => {
+    vi.stubGlobal('Path2D', class {})
+    const { scene } = sceneWith()
+    const draft = {
+      ...el({ id: 'hl' }), type: 'freedraw' as const, h: 0,
+      points: [[0, 0], [100, 0]] as [number, number][], pressures: [], highlighter: true,
+    }
+    for (const theme of ['light', 'dark'] as const) {
+      const { ctx } = newCanvas()
+      renderInteractive(ctx, scene, state({ theme }), overlay({ draft }))
+      let op = 'source-over'
+      const atFill: string[] = []
+      for (const c of ctx.calls) {
+        if (c.name === 'set:globalCompositeOperation') op = c.args[0] as string
+        if (c.name === 'fill') atFill.push(op)
+      }
+      expect(atFill[0]).toBe(theme === 'light' ? 'multiply' : 'source-over')
+      expect(op).toBe('source-over')
+    }
     scene.destroy()
   })
 

@@ -1,6 +1,6 @@
 import { getStroke } from 'perfect-freehand'
 import { polylineDistance, scalePoints } from '../geometry/math'
-import type { FreedrawElement, LocalPoint } from '../model/types'
+import { type FreedrawElement, isFreedraw, type LocalPoint, type SketchElement } from '../model/types'
 import { displayColor, type Theme } from '../render/shapes'
 import { type ElementKind, hashString } from './kind'
 
@@ -12,22 +12,38 @@ export function strokeSize(el: Pick<FreedrawElement, 'strokeWidth' | 'highlighte
   return el.highlighter ? el.strokeWidth * 3 * 3 + 6 : el.strokeWidth * 3 + 2
 }
 
-const outlines = new WeakMap<FreedrawElement, number[][]>()
+/** perfect-freehand's radius at pressure 1 with thinning 0.6: size * (0.5 + 0.6 * 0.5). */
+const MAX_RADIUS = 0.8
 
-/** Filled outline polygon of the stroke, in the local frame (memoized per element snapshot). */
-export function strokeOutline(el: FreedrawElement): number[][] {
-  let o = outlines.get(el)
+const hasPressures = (el: FreedrawElement): boolean =>
+  el.pressures.length > 0 && el.pressures.length === el.points.length
+
+/** Ink half-width estimate used for hit-testing (simulated pressure stays near size / 2). */
+const halfWidth = (el: FreedrawElement): number => strokeSize(el) * (hasPressures(el) ? MAX_RADIUS : 0.5)
+
+const outlines = new WeakMap<FreedrawElement, number[][]>()
+const liveOutlines = new WeakMap<FreedrawElement, number[][]>()
+
+/**
+ * Filled outline polygon of the stroke, in the local frame (memoized per element snapshot).
+ * Committed strokes are finished (`last: true`, full end cap); `live` is for the in-progress pen draft.
+ */
+export function strokeOutline(el: FreedrawElement, opts?: { live?: boolean }): number[][] {
+  const live = !!opts?.live
+  const memo = live ? liveOutlines : outlines
+  let o = memo.get(el)
   if (o) return o
-  const withPressure = el.pressures.length === el.points.length && el.pressures.length > 0
+  const withPressure = hasPressures(el)
   const input = withPressure ? el.points.map(([x, y], i) => [x, y, el.pressures[i]!]) : el.points.map(([x, y]) => [x, y])
   o = getStroke(input, {
     size: strokeSize(el),
     thinning: 0.6,
     smoothing: 0.5,
     streamline: 0.5,
-    simulatePressure: el.pressures.length === 0,
+    simulatePressure: !withPressure,
+    last: !live,
   })
-  outlines.set(el, o)
+  memo.set(el, o)
   return o
 }
 
@@ -64,16 +80,22 @@ function traceOutline(ctx: CanvasRenderingContext2D, outline: number[][]): void 
   ctx.closePath()
 }
 
-/** Highlighter: translucent ink, multiplied onto light backgrounds (multiply would vanish on dark). */
-function applyInk(ctx: CanvasRenderingContext2D, el: FreedrawElement, theme: Theme): void {
-  if (!el.highlighter) return
-  ctx.globalAlpha = ctx.globalAlpha * HIGHLIGHTER_ALPHA
-  if (theme === 'light') ctx.globalCompositeOperation = 'multiply'
+/**
+ * Whether the element's ink is composited onto the scene with `multiply`: highlighters in light theme
+ * (multiply would vanish on dark). Callers drawing straight onto the scene (static bitmaps, draft) apply it.
+ */
+export function blendsMultiply(el: SketchElement, theme: Theme): boolean {
+  return isFreedraw(el) && el.highlighter && theme === 'light'
+}
+
+/** Highlighter: translucent ink (source-over; the scene blend is applied when compositing). */
+function applyAlpha(ctx: CanvasRenderingContext2D, el: FreedrawElement): void {
+  if (el.highlighter) ctx.globalAlpha = ctx.globalAlpha * HIGHLIGHTER_ALPHA
 }
 
 /** Pen and highlighter strokes: a filled perfect-freehand outline. */
 export const freedrawKind: ElementKind<FreedrawElement> = {
-  visualPad: el => strokeSize(el) / 2 + 2,
+  visualPad: el => MAX_RADIUS * strokeSize(el) + 2,
 
   shapeKey: el => hashString(JSON.stringify([
     el.type, el.highlighter, el.stroke, el.strokeWidth, el.w, el.h, hashString(JSON.stringify([el.points, el.pressures])),
@@ -82,7 +104,7 @@ export const freedrawKind: ElementKind<FreedrawElement> = {
   draw(ctx, el, theme) {
     const outline = strokeOutline(el)
     ctx.save()
-    applyInk(ctx, el, theme)
+    applyAlpha(ctx, el)
     ctx.fillStyle = displayColor(el.stroke, theme)
     if (typeof Path2D === 'function') {
       ctx.fill(new Path2D(outlineToPath(outline)))
@@ -95,7 +117,8 @@ export const freedrawKind: ElementKind<FreedrawElement> = {
 
   drawLod(ctx, el, theme, zoom) {
     ctx.save()
-    applyInk(ctx, el, theme)
+    applyAlpha(ctx, el)
+    if (blendsMultiply(el, theme)) ctx.globalCompositeOperation = 'multiply'
     ctx.beginPath()
     el.points.forEach(([x, y], i) => {
       const lx = x - el.w / 2
@@ -114,11 +137,12 @@ export const freedrawKind: ElementKind<FreedrawElement> = {
 
   svg(el, theme) {
     const d = outlineToPath(strokeOutline(el))
-    const ink = el.highlighter ? ` opacity="${HIGHLIGHTER_ALPHA}" style="mix-blend-mode:multiply"` : ''
+    const blend = blendsMultiply(el, theme) ? ' style="mix-blend-mode:multiply"' : ''
+    const ink = el.highlighter ? ` opacity="${HIGHLIGHTER_ALPHA}"${blend}` : ''
     return `<path d="${esc(d)}" fill="${esc(displayColor(el.stroke, theme))}"${ink}/>`
   },
 
-  hit: (el, local, tol) => polylineDistance(el.points, local) <= tol + strokeSize(el) / 2,
+  hit: (el, local, tol) => polylineDistance(el.points, local) <= tol + halfWidth(el),
 
   resize: (el, next) => ({
     x: next.x, y: next.y, w: next.w, h: next.h, points: scalePoints(el.points, el, next) as LocalPoint[],

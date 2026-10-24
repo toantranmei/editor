@@ -1,3 +1,4 @@
+import { blendsMultiply } from '../elements/freedraw'
 import { kindOf } from '../elements/kind'
 import type { Box } from '../geometry'
 import type { Scene } from '../model/scene'
@@ -66,7 +67,10 @@ function drawBitmap(
   const pad = bitmapPad(el)
   const s = bitmapScale(el, zoom, state.dpr)
   // exact pixel size / scale: ceil() in buildBitmap must not stretch the bitmap
+  const multiply = blendsMultiply(el, state.theme)
+  if (multiply) ctx.globalCompositeOperation = 'multiply'
   ctx.drawImage(bmp, -el.w / 2 - pad, -el.h / 2 - pad, bmp.width / s, bmp.height / s)
+  if (multiply) ctx.globalCompositeOperation = 'source-over'
 }
 
 /**
