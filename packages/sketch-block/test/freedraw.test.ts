@@ -105,6 +105,37 @@ describe('freedraw outline', () => {
   })
 })
 
+describe('points hash memo', () => {
+  /** JSON.stringify calls that serialize `points` (alone or as the first entry). */
+  function countPointHashes(points: unknown, run: () => void): number {
+    const spy = vi.spyOn(JSON, 'stringify')
+    run()
+    const n = spy.mock.calls.filter(([v]) => v === points || (Array.isArray(v) && v[0] === points)).length
+    spy.mockRestore()
+    return n
+  }
+
+  it('hashes the points once for snapshots sharing the points array (freedraw and linear)', () => {
+    const points: LocalPoint[] = Array.from({ length: 200 }, (_, i) => [i, i % 7])
+    const a = fd({ points })
+    const b = { ...a, x: 50, version: 2 }
+    const k = kindOf(a)
+    expect(countPointHashes(points, () => {
+      expect(k.shapeKey(a)).toBe(k.shapeKey(b))
+    })).toBe(1)
+    // a different points array changes the key
+    expect(k.shapeKey({ ...a, points: [...points, [1, 1]] })).not.toBe(k.shapeKey(a))
+
+    const linePoints: LocalPoint[] = [[0, 0], [10, 10], [20, 0]]
+    const l1 = { ...fd(), type: 'line', points: linePoints, routing: 'straight', startArrowhead: 'none', endArrowhead: 'none' } as never
+    const l2 = { ...(l1 as object), y: 99 } as never
+    const lk = kindOf(l1)
+    expect(countPointHashes(linePoints, () => {
+      expect(lk.shapeKey(l1)).toBe(lk.shapeKey(l2))
+    })).toBe(1)
+  })
+})
+
 describe('freedraw kind', () => {
   it('visualPad is 0.8 * size + 2 (perfect-freehand radius at pressure 1)', () => {
     const e = fd({ strokeWidth: 2 })

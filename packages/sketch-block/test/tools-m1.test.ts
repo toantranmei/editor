@@ -119,6 +119,20 @@ describe('pen and highlighter', () => {
     for (const [x, y] of abs) expect(polylineDistance(sceneOf, { x, y })).toBeLessThanOrEqual(0.5 + 1e-9)
   })
 
+  it('simplify tolerance is 0.5 screen px (0.5 / zoom scene units)', () => {
+    // scene stroke (0,0) → (10,0.25) → (20,0): the middle point is 0.25 units off the chord
+    const draw = (zoom: number) => {
+      const { c, store } = setup({ zoom })
+      c.setTool('pen')
+      c.pointerDown(ptr(0, 0))
+      c.pointerMove(ptr(10 * zoom, 0.25 * zoom))
+      c.pointerUp(ptr(20 * zoom, 0))
+      return freedraws(store)[0]!.points.length
+    }
+    expect(draw(1)).toBe(2)
+    expect(draw(4)).toBe(3)
+  })
+
   it('pen draft tracks the stroke box and local points', () => {
     const { c } = setup()
     c.setTool('pen')

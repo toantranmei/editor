@@ -4,8 +4,8 @@ import { simplifyIndices } from '../geometry/simplify'
 import { DEFAULT_STYLE, type FreedrawElement, type LocalPoint } from '../model/types'
 import type { PointerInput, Tool, ToolHost } from './controller'
 
-/** Scene-unit tolerance for simplifying the committed stroke. */
-const SIMPLIFY_TOLERANCE = 0.5
+/** Tolerance for simplifying the committed stroke, in screen px (0.5 / zoom scene units). */
+const SIMPLIFY_PX = 0.5
 /** What a mouse reports while a button is held; a stroke made only of it carries no real pressure. */
 const MOUSE_PRESSURE = 0.5
 
@@ -55,7 +55,7 @@ export class PenTool implements Tool {
     // pens report pressure 0 on release: keep the last real one
     this.add(p, e.pressure || this.pressures[this.pressures.length - 1]!)
     const abs = this.points
-    const kept = simplifyIndices(abs, SIMPLIFY_TOLERANCE)
+    const kept = simplifyIndices(abs, SIMPLIFY_PX / this.host.ctx.viewport.zoom)
     const pressures = kept.map(i => this.pressures[i]!)
     const init = {
       ...this.styleProps(),

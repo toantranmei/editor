@@ -65,6 +65,19 @@ export function shapeKeyOf(el: SketchElement): string {
   return k
 }
 
+const arrayHashes = new WeakMap<readonly unknown[], string>()
+
+/**
+ * `hashString(JSON.stringify(arr))`, memoized per array identity. Stored arrays (`points`, `pressures`) are
+ * written whole and never mutated, and Y hands back the same array on every `toJSON` snapshot, so a moved
+ * element's new snapshot reuses the hash instead of re-serializing thousands of points.
+ */
+export function hashArray(arr: readonly unknown[]): string {
+  let h = arrayHashes.get(arr)
+  if (h === undefined) arrayHashes.set(arr, (h = hashString(JSON.stringify(arr))))
+  return h
+}
+
 /** cyrb53: fast 53-bit string hash, base36 (no ':' so it is safe inside cache keys). */
 export function hashString(s: string): string {
   let h1 = 0xdeadbeef

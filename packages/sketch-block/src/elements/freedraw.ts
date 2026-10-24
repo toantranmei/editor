@@ -2,7 +2,7 @@ import { getStroke } from 'perfect-freehand'
 import { polylineDistance, scalePoints } from '../geometry/math'
 import { type FreedrawElement, isFreedraw, type LocalPoint, type SketchElement } from '../model/types'
 import { displayColor, type Theme } from '../render/shapes'
-import { type ElementKind, hashString } from './kind'
+import { type ElementKind, hashArray, hashString } from './kind'
 import { escXml } from '../io/xml'
 
 /** Highlighter ink opacity (multiplied with the element's opacity). */
@@ -98,7 +98,7 @@ export const freedrawKind: ElementKind<FreedrawElement> = {
   visualPad: el => MAX_RADIUS * strokeSize(el) + 2,
 
   shapeKey: el => hashString(JSON.stringify([
-    el.type, el.highlighter, el.stroke, el.strokeWidth, el.w, el.h, hashString(JSON.stringify([el.points, el.pressures])),
+    el.type, el.highlighter, el.stroke, el.strokeWidth, el.w, el.h, hashArray(el.points), hashArray(el.pressures),
   ])),
 
   draw(ctx, el, theme) {

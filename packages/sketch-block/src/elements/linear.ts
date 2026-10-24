@@ -3,7 +3,7 @@ import type { Drawable, Options } from 'roughjs/bin/core'
 import { type Point, polylineDistance, rotatePoint, scalePoints } from '../geometry/math'
 import { type Arrowhead, isLinear, type LinearElement, type LocalPoint, type SketchElement } from '../model/types'
 import { displayColor, roughOptions, type Theme } from '../render/shapes'
-import { type ElementKind, hashString, shapeKeyOf } from './kind'
+import { type ElementKind, hashArray, hashString, shapeKeyOf } from './kind'
 import { escXml } from '../io/xml'
 
 /** Points the shaft actually passes through, in the local frame. */
@@ -185,7 +185,7 @@ export const linearKind: ElementKind<LinearElement> = {
 
   shapeKey: el => hashString(JSON.stringify([
     el.type, el.routing, el.startArrowhead, el.endArrowhead, el.stroke, el.strokeWidth, el.strokeStyle,
-    el.roughness, el.seed, el.w, el.h, hashString(JSON.stringify(el.points)),
+    el.roughness, el.seed, el.w, el.h, hashArray(el.points),
   ])),
 
   draw(ctx, el, theme) {
