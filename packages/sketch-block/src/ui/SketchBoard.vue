@@ -414,21 +414,32 @@ function onKeyDown(e: KeyboardEvent): void {
     else viewMode.value = !viewMode.value
     return
   }
-  if (
-    e.key === 'Escape' && zen.value && controller.selectedIds.value.size === 0
-    && activePointer === null && !controller.isGestureActive()
-  ) {
-    e.preventDefault()
-    zen.value = false
-    return
-  }
-  if (e.key === 'Escape' && controller.selectedIds.value.size === 0 && activePointer === null) {
-    e.preventDefault()
-    emit('exit')
-    return
-  }
   const input = { key: e.key, code: e.code, mod: e.ctrlKey || e.metaKey, shift: e.shiftKey, alt: e.altKey }
+  if (e.key === 'Escape') {
+    onEscape(input)
+    // always consumed by the board (the block view leaves only on an unprevented Escape it did not handle)
+    e.preventDefault()
+    return
+  }
   if (controller.keyDown(input)) e.preventDefault()
+}
+
+/**
+ * Escape, most specific first: a gesture (incl. an open multi-point line and text editing) → the controller
+ * finishes / cancels it; a non-select tool → select; a selection → clear it; zen → leave zen; else exit.
+ */
+function onEscape(input: Parameters<ToolController['keyDown']>[0]): void {
+  if (activePointer !== null || controller.isGestureActive()) {
+    controller.keyDown(input)
+  } else if (tool.value !== 'select' && !viewMode.value) {
+    controller.setTool('select')
+  } else if (controller.selectedIds.value.size > 0) {
+    controller.setSelection([])
+  } else if (zen.value) {
+    zen.value = false
+  } else {
+    emit('exit')
+  }
 }
 
 // ---------- clipboard ----------

@@ -152,6 +152,39 @@ describe('SketchBoard', () => {
     expect(wrapper.emitted('exit')).toHaveLength(1)
   })
 
+  it('Escape during a multi-point line finishes the line and stays on the board', async () => {
+    const { wrapper, key, pointer, store } = await setup()
+    await key('l')
+    // click, click: an open multi-point draft (no pointer held between clicks)
+    pointer('pointerdown', 100, 100)
+    pointer('pointerup', 100, 100)
+    pointer('pointermove', 200, 150)
+    pointer('pointerdown', 200, 150)
+    pointer('pointerup', 200, 150)
+    const ev = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })
+    wrapper.find('.me-sketch-board').element.dispatchEvent(ev)
+    await nextTick()
+    expect(ev.defaultPrevented).toBe(true)
+    expect(wrapper.emitted('exit')).toBeUndefined()
+    const els = store.all()
+    expect(els).toHaveLength(1)
+    expect(els[0]!.type).toBe('line')
+  })
+
+  it('Escape with a non-select tool switches to select instead of exiting', async () => {
+    const { wrapper, key } = await setup()
+    await key('r')
+    const ev = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })
+    wrapper.find('.me-sketch-board').element.dispatchEvent(ev)
+    await nextTick()
+    expect(ev.defaultPrevented).toBe(true)
+    expect(wrapper.find('[data-tool="select"]').classes()).toContain('is-active')
+    expect(wrapper.emitted('exit')).toBeUndefined()
+    // select tool, empty selection: now Escape exits
+    await key('Escape')
+    expect(wrapper.emitted('exit')).toHaveLength(1)
+  })
+
   it('handled keys are prevented; keys from inputs are ignored', async () => {
     const { root, wrapper } = await setup()
     const ev = new KeyboardEvent('keydown', { key: 'r', bubbles: true, cancelable: true })
