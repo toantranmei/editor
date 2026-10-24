@@ -1,6 +1,7 @@
 import type { Point } from '../geometry/math'
 import type { ElementPatch, ElementType, ShapeType, SketchElement } from '../model/types'
 import type { Theme } from '../render/shapes'
+import { freedrawKind } from './freedraw'
 import { shapeKind } from './shape'
 import { textKind } from './text'
 
@@ -37,6 +38,7 @@ function registerBuiltins(): void {
     if (!registry.has(t)) registry.set(t, shapeKind as ElementKind)
   }
   if (!registry.has('text')) registry.set('text', textKind as ElementKind)
+  if (!registry.has('freedraw')) registry.set('freedraw', freedrawKind as ElementKind)
 }
 
 export function registerKind(type: ElementType, kind: ElementKind): void {

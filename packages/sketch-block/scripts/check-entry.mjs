@@ -1,4 +1,4 @@
-// The main entry must stay light: roughjs, rbush and the engine load lazily.
+// The main entry must stay light: roughjs, rbush, perfect-freehand and the engine load lazily.
 import { readFileSync } from 'node:fs'
 import { gzipSync } from 'node:zlib'
 
@@ -9,8 +9,9 @@ const code = readFileSync(file, 'utf8')
 const heavy = [
   [/(?:^|\n)\s*(?:import|export)\b[^;]*?from\s*["']roughjs/, 'roughjs'],
   [/(?:^|\n)\s*(?:import|export)\b[^;]*?from\s*["']rbush["']/, 'rbush'],
+  [/(?:^|\n)\s*(?:import|export)\b[^;]*?from\s*["']perfect-freehand["']/, 'perfect-freehand'],
   [/(?:^|\n)\s*(?:import|export)\b[^;]*?from\s*["']\.\/engine/, './engine'],
-  [/(?:^|\n)\s*import\s*["'](?:roughjs|rbush|\.\/engine)/, 'side-effect import'],
+  [/(?:^|\n)\s*import\s*["'](?:roughjs|rbush|perfect-freehand|\.\/engine)/, 'side-effect import'],
 ]
 for (const [re, name] of heavy) {
   if (re.test(code)) {
