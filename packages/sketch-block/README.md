@@ -24,6 +24,23 @@ npm i @toantranmei/sketch-block yjs
 Requires `@toantranmei/editor` `^0.2.0` (and its peers: Vue `^3.5`, Tiptap, `@lucide/vue`) and `yjs` `^13.6`.
 Apps that don't install this package get no extra code in the editor bundle.
 
+The package has not been published yet. Its first release, **0.1.0**, ships M0 (foundation) and M1
+(drawing tools) together: the pending M0 and M1 changesets are both minor bumps from `0.0.0`.
+
+### Vite
+
+If the hand-written font falls back to a system font in your Vite dev server (dependency pre-bundling can
+break the URLs of the package's font files), exclude the package from dependency optimization:
+
+```ts
+// vite.config.ts
+export default defineConfig({
+  optimizeDeps: { exclude: ['@toantranmei/sketch-block'] },
+})
+```
+
+In Nuxt, set the same option under `vite: { optimizeDeps: { exclude: [...] } }` in `nuxt.config.ts`.
+
 ## Usage
 
 ```vue
@@ -43,8 +60,8 @@ const doc = ref<JSONContent | null>(null)
 ```
 
 Type `/` and pick **Sketch** (vi: **Bảng vẽ**; also found by `sketch`, `whiteboard`, `draw`). The
-block shows its preview image; click **Edit** (or double-click) to draw, press `Esc` or click
-outside to leave. The expand button opens the board full screen.
+block shows its preview image; click **Edit** (or double-click) to draw, press `Esc` (see [Escape](#escape)) or
+click outside to leave. The expand button opens the board full screen.
 
 Options:
 
@@ -147,7 +164,8 @@ sketch.configure({ provider: api })
 
 ## Tools
 
-Pick a tool in the toolbar or with its key (Excalidraw shortcuts). After drawing, the board goes back to
+Pick a tool in the toolbar or with its key (Excalidraw shortcuts; tool keys only act without `Alt`, `Ctrl` or
+`⌘`, so they never clash with browser or OS shortcuts). After drawing, the board goes back to
 **Select** unless the tool is locked (`Q`, or the lock button).
 
 | Tool | Key | Notes |
@@ -164,7 +182,7 @@ Pick a tool in the toolbar or with its key (Excalidraw shortcuts). After drawing
 | Text | `T` / `8` | Click to add text, click a text to edit it, click a shape to edit its label. `Esc` or `Ctrl/⌘ + Enter` commits |
 | Eraser | `E` / `0` | Drag over elements, release to delete them (one undo step) |
 | Laser | `K` | A fading trail for pointing; nothing is saved |
-| Eyedropper | `I` | Click an element to take its colors |
+| Eyedropper | `I` | Click an element to take its stroke color, `Alt`+click to take its background color. Applies to the selection and the next element, then returns to the previous tool |
 | Lasso | toolbar | Draw a free shape; selects the elements fully inside |
 | Tool lock | `Q` | Keep the current tool after drawing |
 
@@ -220,7 +238,20 @@ font by name only and fall back to a cursive font where it is not installed.
 | `Alt + R` | View mode: pan and zoom only, no editing |
 | Wheel / trackpad | Pan |
 | `Ctrl/⌘ + wheel`, pinch | Zoom at the cursor |
-| `Esc` | Cancel the current gesture, then clear the selection; with nothing selected, leave the board |
+| `Esc` | See [Escape](#escape) |
+
+### Escape
+
+`Esc` does the most specific thing first, and only leaves the board when there is nothing else to do:
+
+1. A gesture in progress: a multi-point line or arrow is **finished** (kept, if it has at least two points);
+   a drag (move, resize, rotate, point drag, drawing) is cancelled; text editing commits.
+2. A tool other than **Select** is active: switch back to Select.
+3. Something is selected: clear the selection.
+4. Zen mode: leave zen mode.
+5. Otherwise: leave the board (back to the document).
+
+In view mode (`Alt + R`) step 2 is skipped, so the hand tool stays active.
 
 ## Roadmap
 
