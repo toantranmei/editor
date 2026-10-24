@@ -1,9 +1,12 @@
 import rough from 'roughjs'
 import type { Drawable } from 'roughjs/bin/core'
-import type { ShapeElement } from '../model/types'
+import { type Point, polylineDistance } from '../geometry/math'
+import { pointInPolygon } from '../geometry/polygon'
+import type { LocalPoint, ShapeElement, ShapeType } from '../model/types'
 import { cornerRadius, displayColor, hasFill, roughOptions, type Theme } from '../render/shapes'
 import { measureText } from '../text/measure'
 import { type ElementKind, hashString, shapeKeyOf } from './kind'
+import { outlinePoints, shapeOutline } from './outlines'
 import { drawTextBlock, svgTextBlock, type TextBlock } from './text'
 import { escXml } from '../io/xml'
 
@@ -33,6 +36,21 @@ function roundedRectPath(w: number, h: number, r: number): string {
 }
 
 const generator = rough.generator()
+
+/** Shapes drawn by their M0 code paths (kept byte-identical); every other type is drawn from `shapeOutline`. */
+const M0_SHAPES: ReadonlySet<ShapeType> = new Set<ShapeType>(['rectangle', 'ellipse', 'diamond'])
+const isM0Shape = (type: ShapeType): boolean => M0_SHAPES.has(type)
+
+/** roughjs drawable for an outline-based shape (same options and seed as the M0 shapes). */
+function outlineDrawable(el: ShapeElement, o: ReturnType<typeof roughOptions>): Drawable {
+  const outline = shapeOutline(el.type, el.w, el.h)
+  if (outline.kind === 'polygon') return generator.polygon(outline.points, o)
+  const d = generator.path(outline.d, o)
+  if (!outline.detail) return d
+  // stroke-only detail (cylinder front edge) appended as extra sets, so canvas and SVG draw it in order
+  const detail = generator.path(outline.detail, { ...o, fill: undefined })
+  return { ...d, sets: [...d.sets, ...detail.sets] }
+}
 const MAX_DRAWABLES = 5000
 /** LRU of drawables keyed by `shapeKey:theme` (content-addressed, so moved/rotated copies share one). */
 const drawables = new Map<string, Drawable>()
@@ -63,10 +81,13 @@ export function shapeFor(el: ShapeElement, theme: Theme = 'light'): Drawable {
     case 'diamond':
       d = generator.polygon([[w / 2, 0], [w, h / 2], [w / 2, h], [0, h / 2]], o)
       break
-    default:
+    case 'rectangle':
       d = el.roundness === 'round' && cornerRadius(el) > 0
         ? generator.path(roundedRectPath(w, h, cornerRadius(el)), o)
         : generator.rectangle(0, 0, w, h, o)
+      break
+    default:
+      d = outlineDrawable(el, o)
   }
   drawables.set(key, d)
   if (drawables.size > MAX_DRAWABLES) drawables.delete(drawables.keys().next().value!)
@@ -78,7 +99,11 @@ function plainPath(ctx: CanvasRenderingContext2D, el: ShapeElement): void {
   const hw = el.w / 2
   const hh = el.h / 2
   ctx.beginPath()
-  if (el.type === 'ellipse') {
+  if (!isM0Shape(el.type)) {
+    const pts = outlinePoints(shapeOutline(el.type, el.w, el.h))
+    pts.forEach(([x, y], i) => (i ? ctx.lineTo(x - hw, y - hh) : ctx.moveTo(x - hw, y - hh)))
+    ctx.closePath()
+  } else if (el.type === 'ellipse') {
     ctx.ellipse(0, 0, Math.abs(hw), Math.abs(hh), 0, 0, Math.PI * 2)
   } else if (el.type === 'diamond') {
     ctx.moveTo(0, -hh)
@@ -90,6 +115,16 @@ function plainPath(ctx: CanvasRenderingContext2D, el: ShapeElement): void {
     ctx.roundRect(-hw, -hh, el.w, el.h, cornerRadius(el))
   } else {
     ctx.rect(-hw, -hh, el.w, el.h)
+  }
+}
+
+/** Inside flag and distance to the outline of an outline-based shape, `local` in the box frame. */
+function outlineMetrics(el: ShapeElement, local: Point) {
+  const pts = outlinePoints(shapeOutline(el.type, el.w, el.h))
+  const closed: LocalPoint[] = pts.length ? [...pts, pts[0]!] : pts
+  return {
+    inside: pointInPolygon(local, pts.map(([x, y]) => ({ x, y }))),
+    dist: polylineDistance(closed, local),
   }
 }
 
@@ -115,7 +150,7 @@ function shapeMetrics(type: ShapeElement['type'], dx: number, dy: number, hw: nu
 
 const num = (n: number): string => String(Math.round(n * 100) / 100)
 
-/** rectangle / ellipse / diamond, with an optional centered label. */
+/** Every shape type (rectangle / ellipse / diamond on their M0 paths, the rest from `shapeOutline`), with an optional centered label. */
 export const shapeKind: ElementKind<ShapeElement> = {
   visualPad: el => el.strokeWidth + el.roughness * 4,
 
@@ -153,7 +188,7 @@ export const shapeKind: ElementKind<ShapeElement> = {
   hit(el, local, tol) {
     const hw = el.w / 2
     const hh = el.h / 2
-    const m = shapeMetrics(el.type, local.x - hw, local.y - hh, hw, hh)
+    const m = isM0Shape(el.type) ? shapeMetrics(el.type, local.x - hw, local.y - hh, hw, hh) : outlineMetrics(el, local)
     if (hasFill(el) && m.inside) return true
     return m.dist <= tol + el.strokeWidth / 2
   },
