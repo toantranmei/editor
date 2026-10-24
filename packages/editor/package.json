@@ -1,0 +1,122 @@
+{
+  "name": "@toantranmei/editor",
+  "version": "0.1.0",
+  "description": "Notion-style block editor for Vue 3 and Nuxt, built on Tiptap.",
+  "keywords": [
+    "vue",
+    "nuxt",
+    "tiptap",
+    "editor",
+    "notion",
+    "block-editor",
+    "rich-text",
+    "prosemirror"
+  ],
+  "license": "MIT",
+  "author": "toantranmei",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/toantranmei/editor.git",
+    "directory": "packages/editor"
+  },
+  "homepage": "https://github.com/toantranmei/editor#readme",
+  "bugs": {
+    "url": "https://github.com/toantranmei/editor/issues"
+  },
+  "type": "module",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/types/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./nuxt": {
+      "types": "./dist/types/nuxt.d.ts",
+      "import": "./dist/nuxt.js"
+    },
+    "./style.css": "./dist/style.css"
+  },
+  "sideEffects": [
+    "**/*.css"
+  ],
+  "scripts": {
+    "build": "node scripts/check-styles.mjs && vite build && vue-tsc -p tsconfig.build.json && node scripts/check-deps.mjs",
+    "dev": "vite build --watch",
+    "typecheck": "vue-tsc --noEmit -p tsconfig.json",
+    "check:deps": "node scripts/check-deps.mjs",
+    "check:styles": "node scripts/check-styles.mjs"
+  },
+  "peerDependencies": {
+    "@nuxt/kit": "^4.0.0",
+    "katex": "^0.19.1",
+    "mermaid": "^12.2.0",
+    "vue": "^3.5.0"
+  },
+  "peerDependenciesMeta": {
+    "@nuxt/kit": {
+      "optional": true
+    },
+    "katex": {
+      "optional": true
+    },
+    "mermaid": {
+      "optional": true
+    }
+  },
+  "dependencies": {
+    "@floating-ui/dom": "^1.7.0",
+    "@lucide/vue": "^1.61.0",
+    "@tiptap/core": "3.32.0",
+    "@tiptap/extension-blockquote": "3.32.0",
+    "@tiptap/extension-code-block": "3.32.0",
+    "@tiptap/extension-code-block-lowlight": "3.32.0",
+    "@tiptap/extension-collaboration": "3.32.0",
+    "@tiptap/extension-details": "3.32.0",
+    "@tiptap/extension-drag-handle": "3.32.0",
+    "@tiptap/extension-drag-handle-vue-3": "3.32.0",
+    "@tiptap/extension-heading": "3.32.0",
+    "@tiptap/extension-horizontal-rule": "3.32.0",
+    "@tiptap/extension-image": "3.32.0",
+    "@tiptap/extension-list": "3.32.0",
+    "@tiptap/extension-mention": "3.32.0",
+    "@tiptap/extension-node-range": "3.32.0",
+    "@tiptap/extension-table": "3.32.0",
+    "@tiptap/extension-text-style": "3.32.0",
+    "@tiptap/extensions": "3.32.0",
+    "@tiptap/pm": "3.32.0",
+    "@tiptap/starter-kit": "3.32.0",
+    "@tiptap/suggestion": "3.32.0",
+    "@tiptap/vue-3": "3.32.0",
+    "@tiptap/y-tiptap": "^3.0.7",
+    "emojibase-data": "^18.0.0",
+    "highlight.js": "^11.11.0",
+    "lowlight": "^3.3.0",
+    "y-protocols": "^1.0.6",
+    "yjs": "^13.6.0"
+  },
+  "devDependencies": {
+    "@nuxt/kit": "^4.6.2",
+    "@nuxt/schema": "^4.6.2",
+    "@types/node": "^26.6.5",
+    "@vitejs/plugin-vue": "^6.0.10",
+    "katex": "^0.19.1",
+    "mermaid": "^12.2.0",
+    "typescript": "~5.9.3",
+    "vite": "^8.3.5",
+    "vue": "^3.5.0",
+    "vue-tsc": "^3.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

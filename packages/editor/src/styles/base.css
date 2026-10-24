@@ -1,0 +1,39 @@
+/*
+ * Minimal reset scoped to the editor (no global preflight).
+ * Rules here use only var(--me-…) tokens — values live in src/theme/tokens.ts.
+ */
+@layer mei-editor {
+  :where(.me-scope) {
+    color: var(--me-color-text);
+    font-family: var(--me-font-sans);
+    font-size: var(--me-font-size);
+    line-height: var(--me-font-line-height);
+    -webkit-font-smoothing: antialiased;
+  }
+  :where(.me-scope) *, :where(.me-scope) ::before, :where(.me-scope) ::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    border: 0 solid var(--me-color-border);
+  }
+  :where(.me-scope) :is(button, input, select, textarea) {
+    font: inherit;
+    color: inherit;
+    letter-spacing: inherit;
+    background: transparent;
+  }
+  :where(.me-scope) button { cursor: pointer; }
+  :where(.me-scope) button:disabled { cursor: default; opacity: 0.6; }
+  :where(.me-scope) :is(img, iframe) { display: block; max-width: 100%; }
+  :where(.me-scope) input::placeholder { color: var(--me-color-text-faint); }
+
+  /* Lucide icons: size and stroke come from tokens; containers tweak --me-icon-size. */
+  :where(.me-scope) .lucide {
+    display: inline-block;
+    flex-shrink: 0;
+    vertical-align: middle;
+    width: var(--me-icon-size);
+    height: var(--me-icon-size);
+    stroke-width: var(--me-icon-stroke);
+  }
+}

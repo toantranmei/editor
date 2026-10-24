@@ -1,0 +1,24 @@
+{
+  "name": "toantranmei-editor-monorepo",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.13.1",
+  "engines": {
+    "node": ">=26"
+  },
+  "scripts": {
+    "dev": "pnpm --filter playground dev",
+    "build": "pnpm --filter @toantranmei/editor build",
+    "build:playground": "pnpm --filter playground build",
+    "typecheck": "pnpm -r typecheck",
+    "pack:editor": "pnpm --filter @toantranmei/editor build && pnpm --filter @toantranmei/editor pack --pack-destination dist",
+    "changeset": "changeset",
+    "version-packages": "changeset version",
+    "release": "pnpm build && changeset publish",
+    "bench": "node scripts/bench.mjs"
+  },
+  "devDependencies": {
+    "@changesets/cli": "^3.0.3",
+    "playwright": "^1.64.1"
+  }
+}
