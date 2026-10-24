@@ -125,6 +125,69 @@ describe('serializeClipboard / parseClipboard', () => {
     expect(el.opacity).toBe(1)
   })
 
+  it('hostile payload: coordinates and sizes are clamped', () => {
+    const r = parseClipboard(payload([
+      { ...rectInit(), x: 1e308, y: -1e308 },
+      { ...rectInit(), w: 1e12, h: 1e12 },
+    ])) as { elements: ElementInit[] }
+    expect(r.elements).toHaveLength(2)
+    expect(r.elements[0]).toMatchObject({ x: 1e6, y: -1e6 })
+    expect(r.elements[1]).toMatchObject({ w: 1e5, h: 1e5 })
+  })
+
+  it('hostile payload: 1e999 (Infinity) is rejected', () => {
+    const text = `{"type":"${CLIPBOARD_TYPE}","version":1,"elements":[`
+      + `{"type":"rectangle","x":1e999,"y":0,"w":10,"h":10,"angle":0},`
+      + `{"type":"rectangle","x":0,"y":0,"w":10,"h":10,"angle":0}]}`
+    const r = parseClipboard(text) as { elements: ElementInit[] }
+    expect(r.elements).toHaveLength(1)
+    expect(r.elements[0]).toMatchObject({ x: 0 })
+  })
+
+  it('hostile payload: __proto__ is not copied', () => {
+    const text = `{"type":"${CLIPBOARD_TYPE}","version":1,"elements":[`
+      + `{"type":"rectangle","x":0,"y":0,"w":10,"h":10,"angle":0,"__proto__":{"polluted":1}}]}`
+    const r = parseClipboard(text) as { elements: ElementInit[] }
+    const el = r.elements[0]!
+    expect(Object.getPrototypeOf(el)).toBe(Object.prototype)
+    expect((el as Record<string, unknown>).polluted).toBeUndefined()
+    expect(Object.prototype.hasOwnProperty.call(el, '__proto__')).toBe(false)
+  })
+
+  it('hostile payload: exactly 2 000 000 chars accepted, one more rejected; text and label capped', () => {
+    const shell = payload([{ ...rectInit(), label: '' }])
+    const exact = payload([{ ...rectInit(), label: 'x'.repeat(2_000_000 - shell.length) }])
+    expect(exact).toHaveLength(2_000_000)
+    const r = parseClipboard(exact) as { elements: ShapeElement[] }
+    expect(r.elements).toHaveLength(1)
+    expect(r.elements[0]!.label).toHaveLength(10_000)
+    const over = payload([{ ...rectInit(), label: 'x'.repeat(2_000_001 - shell.length) }])
+    expect(parseClipboard(over)).toBeNull()
+    const t = parseClipboard(payload([{ type: 'text', x: 0, y: 0, w: 10, h: 10, angle: 0, text: 'y'.repeat(50_000) }])) as {
+      elements: TextElement[]
+    }
+    expect(t.elements[0]!.text).toHaveLength(10_000)
+  })
+
+  it('hostile payload: points are capped, out-of-box points dropped, pressures capped', () => {
+    const many = Array.from({ length: 30_000 }, (_, i) => [i % 50, (i * 7) % 50])
+    const r = parseClipboard(payload([
+      { ...drawInit(), w: 50, h: 50, points: many, pressures: many.map(() => 0.5) },
+      { ...drawInit(), w: 5, h: 5, points: [[0, 0], [1e9, 1e9], [5, 5]], pressures: [0.1, 0.2, 0.3] },
+      { ...lineInit(), points: [[0, 0], [1e9, 0]] },
+      { ...drawInit(), w: 5, h: 5, points: [[0, 0], [5, 5]], pressures: [0.1, 0.2, 0.3, 0.4, 0.5] },
+    ])) as { elements: FreedrawElement[] }
+    // the 2-point line loses a point outside its box: too few left, dropped
+    expect(r.elements).toHaveLength(3)
+    expect(r.elements[0]!.points).toHaveLength(20_000)
+    expect(r.elements[0]!.pressures).toHaveLength(20_000)
+    expect(r.elements[1]!.points).toEqual([[0, 0], [5, 5]])
+    // aligned pressures follow the kept points
+    expect(r.elements[1]!.pressures).toEqual([0.1, 0.3])
+    // never more pressures than points
+    expect(r.elements[2]!.pressures).toEqual([0.1, 0.2])
+  })
+
   it('over 2MB ignored', () => {
     const big = payload([{ ...rectInit(), label: 'x'.repeat(2_000_001) }])
     expect(parseClipboard(big)).toBeNull()

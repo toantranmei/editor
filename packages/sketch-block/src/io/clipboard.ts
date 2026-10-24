@@ -6,8 +6,16 @@ export const CLIPBOARD_TYPE = 'mei-sketch/clipboard'
 const MAX_CLIPBOARD_CHARS = 2_000_000
 /** Payloads with more elements than this are ignored. */
 const MAX_ELEMENTS = 5000
-/** Plain text pasted as a text element is cut to this length. */
+/** Plain text pasted as a text element, and an element's `text` / `label`, are cut to this length. */
 const MAX_TEXT_CHARS = 10_000
+/** |x|, |y| of a pasted element are clamped to this (scene units). */
+const MAX_COORD = 1e6
+/** w, h of a pasted element are clamped to this (scene units). */
+const MAX_SIZE = 1e5
+/** Points farther than this outside the element's box are dropped (scene units). */
+const POINT_SLACK = 10
+/** Points kept per element. */
+const MAX_POINTS = 20_000
 
 const ELEMENT_TYPES: ReadonlySet<string> = new Set<ElementType>([
   'rectangle', 'ellipse', 'diamond', 'line', 'arrow', 'freedraw', 'text',
@@ -88,14 +96,25 @@ const OPTIONAL: Record<string, (v: unknown) => boolean> = {
   endArrowhead: ARROWHEAD,
 }
 
-function sanitizePoints(v: unknown): [number, number][] | null {
+const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v))
+
+/**
+ * Valid points inside the box (0,0)–(w,h) ± POINT_SLACK, capped at MAX_POINTS, plus the source indices kept
+ * (so per-point arrays stay aligned). Null when any entry is malformed.
+ */
+function sanitizePoints(v: unknown, w: number, h: number): { points: [number, number][]; kept: number[] } | null {
   if (!Array.isArray(v)) return null
-  const out: [number, number][] = []
-  for (const p of v) {
+  const points: [number, number][] = []
+  const kept: number[] = []
+  for (let i = 0; i < v.length && points.length < MAX_POINTS; i++) {
+    const p: unknown = v[i]
     if (!Array.isArray(p) || p.length < 2 || !finite(p[0]) || !finite(p[1])) return null
-    out.push([p[0], p[1]])
+    const [x, y] = p as [number, number]
+    if (x < -POINT_SLACK || y < -POINT_SLACK || x > w + POINT_SLACK || y > h + POINT_SLACK) continue
+    points.push([x, y])
+    kept.push(i)
   }
-  return out
+  return { points, kept }
 }
 
 /** A validated element init rebuilt from known props, or null when it cannot be used. */
@@ -105,21 +124,37 @@ function sanitizeElement(raw: unknown): ElementInit | null {
   if (typeof type !== 'string' || !ELEMENT_TYPES.has(type)) return null
   const { x, y, w, h, angle } = raw
   if (!finite(x) || !finite(y) || !finite(w) || !finite(h) || !finite(angle)) return null
+  const bw = clamp(w, 0, MAX_SIZE)
+  const bh = clamp(h, 0, MAX_SIZE)
   const out: Record<string, unknown> = {
-    type, x, y, w: Math.max(0, w), h: Math.max(0, h), angle, locked: raw.locked === true,
+    type,
+    x: clamp(x, -MAX_COORD, MAX_COORD),
+    y: clamp(y, -MAX_COORD, MAX_COORD),
+    w: bw,
+    h: bh,
+    angle,
+    locked: raw.locked === true,
   }
+  let kept: number[] = []
   if (type === 'line' || type === 'arrow' || type === 'freedraw') {
-    const points = sanitizePoints(raw.points)
-    if (!points || points.length < (type === 'freedraw' ? 1 : 2)) return null
-    out.points = points
+    const sane = sanitizePoints(raw.points, bw, bh)
+    if (!sane || sane.points.length < (type === 'freedraw' ? 1 : 2)) return null
+    out.points = sane.points
+    kept = sane.kept
   }
   if (type === 'freedraw' && raw.pressures !== undefined) {
     const p = raw.pressures
     if (!Array.isArray(p) || !p.every(finite)) return null
-    out.pressures = [...p]
+    const n = (out.points as unknown[]).length
+    // per-point pressures follow the kept points; never more pressures than points
+    const aligned = p.length === (raw.points as unknown[]).length
+    out.pressures = aligned ? kept.map(i => p[i] as number) : p.slice(0, n)
   }
   for (const [k, ok] of Object.entries(OPTIONAL)) {
     if (ok(raw[k])) out[k] = raw[k]
+  }
+  for (const k of ['text', 'label'] as const) {
+    if (typeof out[k] === 'string') out[k] = (out[k] as string).slice(0, MAX_TEXT_CHARS)
   }
   if (finite(raw.opacity)) out.opacity = Math.min(1, Math.max(0, raw.opacity))
   return normalizeElement(out) as unknown as ElementInit
