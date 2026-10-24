@@ -132,13 +132,17 @@ export class BoardStore {
 
   /**
    * Moves `ids` above (front) or below (back) every other element, keeping their relative z-order, in one
-   * transaction. Unknown ids are ignored.
+   * transaction. Unknown ids are ignored; ids that already form the top (front) / bottom (back) run are left
+   * as they are.
    */
   reorderMany(ids: string[], to: 'front' | 'back'): void {
     const all = this.all()
     const wanted = new Set(ids)
     const moving = all.filter(e => wanted.has(e.id))
     if (!moving.length || moving.length === all.length) return
+    // already the top / bottom run: nothing to move (and no empty undo step)
+    const edge = to === 'front' ? all.slice(all.length - moving.length) : all.slice(0, moving.length)
+    if (edge.every(e => wanted.has(e.id))) return
     const keys = to === 'front'
       ? generateNKeysBetween(all[all.length - 1]!.index, null, moving.length)
       : generateNKeysBetween(null, all[0]!.index, moving.length)

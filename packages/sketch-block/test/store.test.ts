@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import * as Y from 'yjs'
+import { History } from '../src/model/history'
 import { BoardStore, LOCAL_ORIGIN } from '../src/model/store'
 import { DEFAULT_STYLE, isRenderable } from '../src/model/types'
 
@@ -79,6 +80,38 @@ describe('BoardStore', () => {
     s.reorderMany(['nope'], 'front')
     s.reorderMany(s.all().map(x => x.id), 'back')
     expect(n).toBe(3)
+  })
+
+  it('reorderMany is a no-op when the ids already are the top (front) or bottom (back) run', () => {
+    const doc = new Y.Doc()
+    const s = new BoardStore(doc)
+    const [a, b, c, d] = [0, 1, 2, 3].map(() => s.create(init()))
+    let n = 0
+    doc.on('afterTransaction', () => n++)
+    s.reorderMany([d!.id, c!.id], 'front')
+    s.reorderMany([d!.id], 'front')
+    s.reorderMany([a!.id, b!.id], 'back')
+    s.reorderMany([a!.id], 'back')
+    expect(n).toBe(0)
+    expect(s.all().map(x => x.id)).toEqual([a!.id, b!.id, c!.id, d!.id])
+    // not a contiguous edge run: moves
+    s.reorderMany([b!.id, d!.id], 'front')
+    expect(n).toBe(1)
+    expect(s.all().map(x => x.id)).toEqual([a!.id, c!.id, b!.id, d!.id])
+  })
+
+  it('reorderMany already at the front adds no undo step', () => {
+    const doc = new Y.Doc()
+    const s = new BoardStore(doc)
+    const history = new History(s)
+    s.create(init())
+    const b = s.create(init())
+    history.stopCapturing()
+    s.reorderMany([b.id], 'front')
+    history.stopCapturing()
+    history.undo()
+    // the only undo step was creating the elements
+    expect(s.all()).toHaveLength(0)
   })
 
   it('reorder front/back changes index order', () => {
