@@ -1,4 +1,4 @@
-import { type ElementInit, type ElementType, normalizeElement, type SketchElement } from '../model/types'
+import { ELEMENT_TYPES, type ElementInit, normalizeElement, type SketchElement } from '../model/types'
 
 export const CLIPBOARD_TYPE = 'mei-sketch/clipboard'
 
@@ -17,9 +17,7 @@ const POINT_SLACK = 10
 /** Points kept per element. */
 const MAX_POINTS = 20_000
 
-const ELEMENT_TYPES: ReadonlySet<string> = new Set<ElementType>([
-  'rectangle', 'ellipse', 'diamond', 'line', 'arrow', 'freedraw', 'text',
-])
+const KNOWN_TYPES: ReadonlySet<string> = new Set<string>(ELEMENT_TYPES)
 
 /** Our own element payload: `{ type, version: 1, elements }` without `index` / `version` (seed is kept). */
 export function serializeClipboard(elements: readonly SketchElement[]): string {
@@ -121,7 +119,7 @@ function sanitizePoints(v: unknown, w: number, h: number): { points: [number, nu
 function sanitizeElement(raw: unknown): ElementInit | null {
   if (!isRecord(raw)) return null
   const type = raw.type
-  if (typeof type !== 'string' || !ELEMENT_TYPES.has(type)) return null
+  if (typeof type !== 'string' || !KNOWN_TYPES.has(type)) return null
   const { x, y, w, h, angle } = raw
   if (!finite(x) || !finite(y) || !finite(w) || !finite(h) || !finite(angle)) return null
   const bw = clamp(w, 0, MAX_SIZE)

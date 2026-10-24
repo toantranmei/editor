@@ -1,5 +1,5 @@
 import type { Point } from '../geometry/math'
-import type { ElementPatch, ElementType, LinearElement, ShapeType, SketchElement } from '../model/types'
+import { type ElementPatch, type ElementType, LINEAR_TYPES, SHAPE_TYPES, type SketchElement } from '../model/types'
 import type { Theme } from '../render/shapes'
 import { freedrawKind } from './freedraw'
 import { linearKind } from './linear'
@@ -25,8 +25,6 @@ export interface ElementKind<E extends SketchElement = SketchElement> {
 
 const registry = new Map<ElementType, ElementKind>()
 
-const SHAPE_TYPES: readonly ShapeType[] = ['rectangle', 'ellipse', 'diamond']
-const LINEAR_TYPES: readonly LinearElement['type'][] = ['line', 'arrow']
 let builtinsRegistered = false
 
 /**

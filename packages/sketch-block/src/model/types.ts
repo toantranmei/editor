@@ -1,5 +1,13 @@
-export type ShapeType = 'rectangle' | 'ellipse' | 'diamond'
-export type ElementType = ShapeType | 'line' | 'arrow' | 'freedraw' | 'text'
+/** Shape element types: the single source for every shape list (kinds, clipboard, style panel, tools). */
+export const SHAPE_TYPES = ['rectangle', 'ellipse', 'diamond'] as const
+/** Line-like element types (points + arrowheads). */
+export const LINEAR_TYPES = ['line', 'arrow'] as const
+/** Every element type the board knows how to render; the single source for every element-type list. */
+export const ELEMENT_TYPES = [...SHAPE_TYPES, ...LINEAR_TYPES, 'freedraw', 'text'] as const
+
+export type ShapeType = typeof SHAPE_TYPES[number]
+export type LinearType = typeof LINEAR_TYPES[number]
+export type ElementType = typeof ELEMENT_TYPES[number]
 export type FillStyle = 'hachure' | 'cross-hatch' | 'solid' | 'none'
 export type FontFamily = 'hand' | 'normal' | 'code'
 export type FontSize = 16 | 20 | 28 | 36
@@ -46,7 +54,7 @@ export interface ShapeElement extends CommonProps, TextStyle {
 }
 
 export interface LinearElement extends CommonProps {
-  type: 'line' | 'arrow'
+  type: LinearType
   points: LocalPoint[]
   routing: Routing
   startArrowhead: Arrowhead
@@ -135,9 +143,10 @@ export function normalizeElement(raw: Record<string, unknown>): SketchElement {
   return out as unknown as SketchElement
 }
 
-const SHAPE_TYPES: ReadonlySet<string> = new Set<ShapeType>(['rectangle', 'ellipse', 'diamond'])
+const SHAPE_SET: ReadonlySet<string> = new Set<string>(SHAPE_TYPES)
+const LINEAR_SET: ReadonlySet<string> = new Set<string>(LINEAR_TYPES)
 
-export const isShape = (el: SketchElement): el is ShapeElement => SHAPE_TYPES.has(el.type)
-export const isLinear = (el: SketchElement): el is LinearElement => el.type === 'line' || el.type === 'arrow'
+export const isShape = (el: SketchElement): el is ShapeElement => SHAPE_SET.has(el.type)
+export const isLinear = (el: SketchElement): el is LinearElement => LINEAR_SET.has(el.type)
 export const isFreedraw = (el: SketchElement): el is FreedrawElement => el.type === 'freedraw'
 export const isText = (el: SketchElement): el is TextElement => el.type === 'text'

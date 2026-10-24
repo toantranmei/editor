@@ -5,7 +5,7 @@ import { type CurrentStyle, relevantStyleKeys, STYLE_SECTIONS, type StyleKey, ty
 import type { ElementType, SketchElement } from '../model/types'
 import { displayColor, type Theme } from '../render/shapes'
 import { FONT_FAMILIES } from '../text/fonts'
-import type { ToolName } from '../tools/controller'
+import { TOOL_ELEMENT_TYPES, type ToolName } from '../tools/controller'
 import { BringToFront, Palette, SendToBack, TextAlignCenter, TextAlignEnd, TextAlignStart } from './icons'
 import { BG_COLORS, STROKE_COLORS } from './palette'
 
@@ -27,10 +27,7 @@ const emit = defineEmits<{
 }>()
 
 /** Element type each drawing tool creates. */
-const TOOL_TYPES: Partial<Record<ToolName, ElementType>> = {
-  rectangle: 'rectangle', ellipse: 'ellipse', diamond: 'diamond', pen: 'freedraw', highlighter: 'freedraw',
-  line: 'line', arrow: 'arrow', text: 'text',
-}
+const TOOL_TYPES = TOOL_ELEMENT_TYPES
 
 const m = computed<StyleMessages>(() => props.messages.style)
 const collapsed = ref(false)

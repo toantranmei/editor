@@ -6,10 +6,12 @@ import type { History } from '../model/history'
 import type { Scene } from '../model/scene'
 import type { BoardStore } from '../model/store'
 import { type CurrentStyle, INITIAL_STYLE, styleOf, stylePatchFor } from '../model/style'
-import type { ElementInit, ElementPatch, SketchElement, TextElement, TextStyle } from '../model/types'
+import type {
+  ElementInit, ElementPatch, ElementType, LinearType, ShapeType, SketchElement, TextElement, TextStyle,
+} from '../model/types'
 import { linearScenePoints } from '../elements/linear'
 import { editedTextBox } from '../elements/text'
-import { DEFAULT_STYLE, isLinear, isShape, isText } from '../model/types'
+import { DEFAULT_STYLE, isLinear, isShape, isText, LINEAR_TYPES, SHAPE_TYPES } from '../model/types'
 import { stripControl } from '../io/xml'
 import { measureText } from '../text/measure'
 import type { Overlay } from '../render/interactive'
@@ -25,14 +27,24 @@ import { SelectTool } from './select'
 import { ShapeTool } from './shape'
 import { TextTool } from './text'
 
-export type ToolName =
-  | 'hand' | 'select' | 'rectangle' | 'ellipse' | 'diamond' | 'pen' | 'highlighter' | 'line' | 'arrow' | 'text'
+/** Tools with an implementation (besides `hand`); each shape type has a tool of the same name. */
+type PointerToolName =
+  | 'select' | ShapeType | 'pen' | 'highlighter' | LinearType | 'text'
   | 'eraser' | 'laser' | 'lasso' | 'eyedropper'
 
-/** Tools with an implementation (besides `hand`); later tasks register theirs here and in TOOL_KEYS. */
-type PointerToolName =
-  | 'select' | 'rectangle' | 'ellipse' | 'diamond' | 'pen' | 'highlighter' | 'line' | 'arrow' | 'text'
-  | 'eraser' | 'laser' | 'lasso' | 'eyedropper'
+export type ToolName = 'hand' | PointerToolName
+
+/** Element type each creating tool makes (shape and linear tools are named after their type). */
+export const TOOL_ELEMENT_TYPES: Readonly<Partial<Record<ToolName, ElementType>>> = {
+  ...Object.fromEntries(SHAPE_TYPES.map(t => [t, t])),
+  ...Object.fromEntries(LINEAR_TYPES.map(t => [t, t])),
+  pen: 'freedraw',
+  highlighter: 'freedraw',
+  text: 'text',
+}
+
+/** Tools that create elements: crosshair cursor, clear the selection, unavailable when read-only. */
+export const CREATOR_TOOLS: ReadonlySet<ToolName> = new Set(Object.keys(TOOL_ELEMENT_TYPES) as ToolName[])
 
 export type { CurrentStyle }
 
@@ -113,8 +125,7 @@ export interface Tool {
   finish?(): void
 }
 
-/** Tools that create elements: crosshair cursor, clear the selection, unavailable when read-only. */
-const CREATORS = new Set<ToolName>(['rectangle', 'ellipse', 'diamond', 'pen', 'highlighter', 'line', 'arrow', 'text'])
+const CREATORS = CREATOR_TOOLS
 /** Tools that write (creators plus the eraser): unavailable when read-only. */
 const WRITERS = new Set<ToolName>([...CREATORS, 'eraser', 'eyedropper'])
 const TOOL_KEYS: Record<string, 'hand' | PointerToolName> = {
@@ -132,6 +143,11 @@ const PASTE_OFFSET = 16
 const EDIT_HIT_PX = 6
 const NUDGE: Record<string, [number, number]> = {
   ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1],
+}
+
+/** One shape tool per shape type. */
+function shapeTools(host: ToolHost): Record<ShapeType, Tool> {
+  return Object.fromEntries(SHAPE_TYPES.map(t => [t, new ShapeTool(host, t)])) as unknown as Record<ShapeType, Tool>
 }
 
 /** Routes board input to tools; owns selection, tool state and the interactive overlay. */
@@ -170,9 +186,7 @@ export class ToolController implements ToolHost {
     const select = new SelectTool(this)
     this.tools = {
       select,
-      rectangle: new ShapeTool(this, 'rectangle'),
-      ellipse: new ShapeTool(this, 'ellipse'),
-      diamond: new ShapeTool(this, 'diamond'),
+      ...shapeTools(this),
       pen: new PenTool(this, false),
       highlighter: new PenTool(this, true),
       line: new LinearTool(this, 'line'),

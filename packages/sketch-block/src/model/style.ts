@@ -1,5 +1,5 @@
 import type { AllProps, ElementType, SketchElement } from './types'
-import { DEFAULT_STYLE, TYPE_DEFAULTS } from './types'
+import { DEFAULT_STYLE, ELEMENT_TYPES, LINEAR_TYPES, SHAPE_TYPES, TYPE_DEFAULTS } from './types'
 
 /** Style the next element is drawn with; also what the style panel edits. */
 export type CurrentStyle = Pick<AllProps,
@@ -23,9 +23,9 @@ export type StyleSection =
   | 'arrowheads' | 'font' | 'opacity'
 
 type Kind = ElementType
-const SHAPES: Kind[] = ['rectangle', 'ellipse', 'diamond']
-const LINEAR: Kind[] = ['line', 'arrow']
-const ALL: Kind[] = [...SHAPES, ...LINEAR, 'freedraw', 'text']
+const SHAPES: readonly Kind[] = SHAPE_TYPES
+const LINEAR: readonly Kind[] = LINEAR_TYPES
+const ALL: readonly Kind[] = ELEMENT_TYPES
 
 /** Panel order; `keys` are written by the section, `types` are the element types it applies to. */
 export const STYLE_SECTIONS: readonly { id: StyleSection; keys: StyleKey[]; types: readonly Kind[] }[] = [
