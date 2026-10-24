@@ -8,6 +8,8 @@ export interface SketchMessages {
   close: string
   empty: string
   notOnDevice: string
+  loading: string
+  loadError: string
   tools: Record<ToolName | 'lock', string>
   undo: string
   redo: string
@@ -26,6 +28,8 @@ export const messages: Record<'vi' | 'en', SketchMessages> = {
     close: 'Đóng',
     empty: 'Bảng vẽ trống. Bấm để bắt đầu vẽ',
     notOnDevice: 'Bảng vẽ này không có trên thiết bị này',
+    loading: 'Đang tải…',
+    loadError: 'Không mở được bảng vẽ',
     tools: {
       hand: 'Kéo (H)',
       select: 'Chọn (V)',
@@ -49,6 +53,8 @@ export const messages: Record<'vi' | 'en', SketchMessages> = {
     close: 'Close',
     empty: 'Empty board. Click to start drawing',
     notOnDevice: 'This board is not available on this device',
+    loading: 'Loading…',
+    loadError: 'Could not open the board',
     tools: {
       hand: 'Hand (H)',
       select: 'Select (V)',
