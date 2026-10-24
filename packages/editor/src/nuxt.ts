@@ -23,7 +23,6 @@ export const RUNTIME_DEPS = [
   '@tiptap/extension-mention',
   '@tiptap/extension-node-range',
   '@tiptap/extension-table',
-  '@tiptap/extensions',
   '@tiptap/pm/model',
   '@tiptap/pm/state',
   '@tiptap/pm/tables',

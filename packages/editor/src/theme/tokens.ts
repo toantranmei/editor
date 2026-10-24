@@ -217,8 +217,11 @@ export const component = {
     color: r('color.handle'),
     hoverColor: r('color.textMuted'),
     hoverBg: r('color.hover'),
-    buttonWidth: '20px',
+    /** "+" button (square) and the ⋮⋮ grip, like Notion. */
+    buttonWidth: '24px',
     buttonHeight: '24px',
+    gripWidth: '18px',
+    iconSize: '18px',
     radius: r('radius.sm'),
     gap: r('space.1'),
   },

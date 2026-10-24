@@ -1,11 +1,11 @@
 import type { AnyExtension } from '@tiptap/core'
 import StarterKit from '@tiptap/starter-kit'
-import { Placeholder } from '@tiptap/extensions'
 import { MeiConfig, type MeiConfigStorage } from '../config'
 import { collectExtensions, type BlockDefinition } from '../define-block'
 import { BlockDrop } from './block-drop'
 import { BlockId } from './block-id'
 import { BlockSelection } from './block-selection'
+import { Placeholder } from './placeholder'
 import { BgColor, BlockColor, TextColor } from './color-marks'
 import { SlashCommand } from './slash-command'
 import { UnknownBlock, UnknownInline } from './unknown'
@@ -37,7 +37,6 @@ export function createExtensions({ blocks, ...config }: MeiExtensionsOptions): A
       link: { openOnClick: false, autolink: true, defaultProtocol: 'https' },
     }),
     Placeholder.configure({
-      includeChildren: true,
       placeholder: ({ editor, node }) => {
         const m = editor.storage.meiConfig.messages
         if (node.type.name === 'heading') return m.headingPlaceholder(node.attrs.level)

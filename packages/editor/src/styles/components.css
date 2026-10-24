@@ -156,7 +156,9 @@
   .me-drag-handle[data-dragging="true"] { opacity: 0; }
   .me-handle { display: flex; align-items: center; gap: var(--me-handle-gap); padding-right: var(--me-space-2); }
   .me-handle-btn {
+    --me-icon-size: var(--me-handle-icon-size);
     display: inline-flex;
+    flex-shrink: 0;
     align-items: center;
     justify-content: center;
     width: var(--me-handle-button-width);
@@ -165,7 +167,7 @@
     color: var(--me-handle-color);
   }
   .me-handle-btn:hover { background: var(--me-handle-hover-bg); color: var(--me-handle-hover-color); }
-  .me-handle-btn--grab { cursor: grab; }
+  .me-handle-btn--grab { width: var(--me-handle-grip-width); cursor: grab; }
   .me-drop-indicator {
     position: fixed;
     z-index: 60;

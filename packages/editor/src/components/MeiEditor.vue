@@ -4,11 +4,13 @@ import { type Editor, EditorContent, type JSONContent, useEditor } from '@tiptap
 import { DragHandle } from '@tiptap/extension-drag-handle-vue-3'
 import type { NestedOptions } from '@tiptap/extension-drag-handle'
 import type { Node as PMNode } from '@tiptap/pm/model'
+import type { ComputePositionConfig, Middleware } from '@floating-ui/dom'
 import { GripVertical, Plus } from '@lucide/vue'
 import { computed, inject, onBeforeUnmount, onMounted, ref, shallowRef, toRaw, useId, watch, watchEffect } from 'vue'
 import type { ImageUploader } from '../config'
 import { createExtensions } from '../extensions'
 import { type BlockRange, currentRange, isBlockSelection, rangeOfBlock, selectBlocks } from '../block-ops'
+import { handleAnchorRect } from '../handle-anchor'
 import { kbd } from '../keys'
 import { type LocaleName, type PartialMessages, resolveMessages } from '../locale'
 import { GLOBAL_BLOCKS_KEY, GLOBAL_TOKENS_KEY } from '../plugin-key'
@@ -213,10 +215,32 @@ interface HoveredBlock { node: PMNode, pos: number }
 const hovered = shallowRef<HoveredBlock | null>(null)
 const menu = shallowRef<{ range: BlockRange, anchor: DOMRect } | null>(null)
 
+// Block under the pointer, for placing the handle (tracked even while a menu is open).
+let handlePos: number | null = null
+
 function onNodeChange({ node, pos }: { node: PMNode | null, pos: number }) {
+  handlePos = node ? pos : null
   if (menu.value) return
   hovered.value = node ? { node, pos } : null
 }
+
+/**
+ * Centers the handle on the block's anchor line (first text line, header bar, divider…)
+ * instead of aligning tops, so it lines up the same way for every block type.
+ */
+const alignHandleToLine: Middleware = {
+  name: 'meAlignToLine',
+  fn({ y, rects }) {
+    const ed = editor.value
+    const dom = ed && handlePos !== null ? ed.view.nodeDOM(handlePos) : null
+    if (!(dom instanceof HTMLElement)) return {}
+    const anchor = handleAnchorRect(dom)
+    // Work in the reference's own coordinates: shift by the anchor's offset from the block's top.
+    const offset = anchor.top + anchor.height / 2 - dom.getBoundingClientRect().top
+    return { y: Number.isFinite(offset) ? rects.reference.y + offset - rects.floating.height / 2 : y }
+  },
+}
+const handlePosition: Partial<ComputePositionConfig> = { placement: 'left-start', strategy: 'absolute', middleware: [alignHandleToLine] }
 
 // Lets the BlockDrop extension take over the drop (see block-drop.ts).
 function onDragStart() {
@@ -359,7 +383,7 @@ onBeforeUnmount(() => {
       :nested="nestedOptions"
       :on-node-change="onNodeChange"
       :on-element-drag-start="onDragStart"
-      :compute-position-config="{ placement: 'left-start', strategy: 'absolute' }"
+      :compute-position-config="handlePosition"
       class="me-drag-handle"
     >
       <div class="me-handle">
