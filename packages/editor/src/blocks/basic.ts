@@ -14,7 +14,15 @@ export const text = defineBlock({
     icon: Type,
     group: 'basic',
     keywords: ['text', 'paragraph', 'p', 'van ban'],
-    insert: c => c.setParagraph(),
+    // Already text: Tiptap's setParagraph would then lift the line out of its wrapper.
+    // That's right for lists and quotes ("/text" drops the bullet, like Notion) but not
+    // for callouts, columns, toggles or table cells, where the line should stay put.
+    insert: c => c.command(({ state, commands }) => {
+      const { $from } = state.selection
+      if ($from.parent.type.name !== 'paragraph') return commands.setParagraph()
+      const wrapper = $from.depth > 1 ? $from.node($from.depth - 1).type.name : 'doc'
+      return ['listItem', 'taskItem', 'blockquote'].includes(wrapper) ? commands.setParagraph() : true
+    }),
     turnInto: c => c.setParagraph(),
     matches: isNode('paragraph'),
   }],
