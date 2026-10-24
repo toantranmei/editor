@@ -11,6 +11,7 @@ import { Viewport } from '../src/viewport'
 
 // ---------- manual requestAnimationFrame ----------
 let frames: FrameRequestCallback[] = []
+const pause = (ms: number) => new Promise(r => setTimeout(r, ms))
 const flushFrames = () => {
   const run = frames
   frames = []
@@ -206,6 +207,33 @@ describe('select tool', () => {
     expect(store.get(a.id)).toMatchObject({ x: 0, y: 0 })
     expect(store.get(b.id)).toMatchObject({ x: 100, y: 0 })
     expect(store.all()).toHaveLength(2)
+  })
+
+  // yjs reads time via lib0's `getUnixTime = Date.now`, bound at import, so fake timers cannot
+  // move it: real waits past the 300 ms capture timeout are needed.
+  it('a drag that pauses longer than the capture timeout is still one undo step', async () => {
+    const { c, store, history } = setup({ zoom: 2 })
+    const a = rect(store, 0, 0, 50, 50)
+    c.selectAll()
+    // move
+    c.pointerDown(ptr(50, 50))
+    c.pointerMove(ptr(60, 60)); flushFrames()
+    await pause(350)
+    c.pointerMove(ptr(80, 80)); flushFrames()
+    c.pointerUp(ptr(100, 100))
+    expect(store.get(a.id)).toMatchObject({ x: 25, y: 25 })
+    // resize (se handle at scene (75,75) = screen (150,150))
+    c.pointerDown(ptr(150, 150))
+    c.pointerMove(ptr(160, 160)); flushFrames()
+    await pause(350)
+    c.pointerMove(ptr(170, 170)); flushFrames()
+    c.pointerUp(ptr(200, 200))
+    expect(store.get(a.id)).toMatchObject({ x: 25, y: 25, w: 75, h: 75 })
+    history.undo()
+    expect(store.get(a.id)).toMatchObject({ x: 25, y: 25, w: 50, h: 50 })
+    history.undo()
+    expect(store.get(a.id)).toMatchObject({ x: 0, y: 0, w: 50, h: 50 })
+    expect(store.all()).toHaveLength(1)
   })
 
   it('clicking a selected element does not write', () => {

@@ -56,6 +56,7 @@ export class SelectTool implements Tool {
   private g: Gesture = { kind: 'none' }
   private downAt: Point = { x: 0, y: 0 }
   private dirty = false
+  private writing = false
   private readonly writer: FrameWriter
 
   constructor(private readonly host: ToolHost) {
@@ -69,7 +70,7 @@ export class SelectTool implements Tool {
     this.dirty = false
     const handle = ro ? null : this.handleAt(p)
     if (handle) {
-      ctx.history.stopCapturing()
+      this.beginWrite()
       this.g = handle.handle === 'rotate'
         ? { kind: 'rotate', el: handle.el }
         : { kind: 'resize', handle: handle.handle, el: handle.el }
@@ -103,7 +104,7 @@ export class SelectTool implements Tool {
     const origins = [...this.host.selectedIds.value]
       .map(id => ctx.scene.get(id))
       .filter((el): el is SketchElement => !!el && !el.locked)
-    ctx.history.stopCapturing()
+    if (origins.length) this.beginWrite()
     this.g = { kind: 'move', start: p, origins }
     this.host.cursor.value = 'move'
   }
@@ -149,11 +150,11 @@ export class SelectTool implements Tool {
       // a plain click must not write (no version bump, no empty undo step)
       if (this.dirty || p.x !== this.downAt.x || p.y !== this.downAt.y) this.move(e, p)
       this.writer.flush()
-      this.host.ctx.history.stopCapturing()
     } else if (g.kind === 'marquee') {
       this.host.marquee = null
       this.host.ctx.invalidate()
     }
+    this.endWrite()
     this.g = { kind: 'none' }
     this.hover(e, p)
   }
@@ -174,11 +175,24 @@ export class SelectTool implements Tool {
 
   cancel(): void {
     this.writer.drop()
+    this.endWrite()
     if (this.g.kind === 'marquee') {
       this.host.marquee = null
       this.host.ctx.invalidate()
     }
     this.g = { kind: 'none' }
+  }
+
+  /** Opens one undo step spanning the whole move/resize/rotate gesture (pauses included). */
+  private beginWrite(): void {
+    this.host.ctx.history.beginGesture()
+    this.writing = true
+  }
+
+  private endWrite(): void {
+    if (!this.writing) return
+    this.writing = false
+    this.host.ctx.history.endGesture()
   }
 
   /** Handle under `p` when exactly one unlocked element is selected. */

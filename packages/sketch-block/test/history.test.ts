@@ -73,4 +73,41 @@ describe('History', () => {
     expect(h.canRedo.value).toBe(false)
     h.destroy()
   })
+
+  // yjs reads time via lib0's `getUnixTime = Date.now`, bound at import: fake timers cannot
+  // move it, so these use real waits around the 300 ms capture timeout.
+  describe('gestures', () => {
+    const pause = (ms: number) => new Promise(r => setTimeout(r, ms))
+
+    it('beginGesture merges edits regardless of pauses until endGesture', async () => {
+      const store = new BoardStore(new Y.Doc())
+      const h = new History(store)
+      const a = store.create(init())
+      h.beginGesture()
+      store.update(a.id, { x: 10 })
+      await pause(350)
+      store.update(a.id, { x: 20 })
+      h.endGesture()
+      h.undo()
+      expect(store.get(a.id)!.x).toBe(0)
+      expect(store.all()).toHaveLength(1)
+      h.destroy()
+    })
+
+    it('edits after endGesture are a separate step even within the capture timeout', () => {
+      const store = new BoardStore(new Y.Doc())
+      const h = new History(store)
+      const a = store.create(init())
+      h.beginGesture()
+      store.update(a.id, { x: 10 })
+      h.endGesture()
+      store.update(a.id, { x: 20 })
+      store.update(a.id, { x: 30 }) // merges with x: 20 (normal capture restored)
+      h.undo()
+      expect(store.get(a.id)!.x).toBe(10)
+      h.undo()
+      expect(store.get(a.id)!.x).toBe(0)
+      h.destroy()
+    })
+  })
 })
