@@ -88,28 +88,28 @@ describe('SketchBoard', () => {
     expect(wrapper.find('.me-sketch-zoom-pct').text()).toBe('100%')
   })
 
-  it('toolbar renders 15 tools in order with letter badges', async () => {
+  it('toolbar renders 16 tools in order with letter badges', async () => {
     const { wrapper } = await setup()
     const toolbar = wrapper.find('.me-sketch-toolbar')
     const buttons = toolbar.findAll('button')
     const order = [
       'lock', 'hand', 'select', 'lasso', 'rectangle', 'diamond', 'ellipse', 'arrow', 'line',
-      'pen', 'highlighter', 'text', 'eraser', 'laser', 'eyedropper',
+      'pen', 'highlighter', 'text', 'sticky', 'eraser', 'laser', 'eyedropper',
     ] as const
-    expect(buttons).toHaveLength(15)
+    expect(buttons).toHaveLength(16)
     expect(buttons.map(b => b.attributes('data-tool'))).toEqual([...order])
     expect(buttons.map(b => b.attributes('title'))).toEqual(order.map(n => messages.vi.tools[n]))
     const badges = buttons.map(b => b.find('.me-sketch-badge').exists() ? b.find('.me-sketch-badge').text() : '')
-    expect(badges).toEqual(['Q', 'H', 'V', '', 'R', 'D', 'O', 'A', 'L', 'P', 'M', 'T', 'E', 'K', 'I'])
+    expect(badges).toEqual(['Q', 'H', 'V', '', 'R', 'D', 'O', 'A', 'L', 'P', 'M', 'T', 'S', 'E', 'K', 'I'])
     // every badge is the letter the tooltip names
     for (const [i, b] of buttons.entries()) {
       const key = /\(([A-Z])\)$/.exec(b.attributes('title')!)?.[1] ?? ''
       expect(badges[i]).toBe(key)
     }
-    // groups: lock | hand select lasso | shapes & lines | pen highlighter text | eraser laser eyedropper
+    // groups: lock | hand select lasso | shapes & lines | pen highlighter text sticky | eraser laser eyedropper
     const kids = [...toolbar.element.children].map(c => (c.classList.contains('me-toolbar-divider') ? '|' : c.getAttribute('data-tool')))
     expect(kids.join(' ')).toBe(
-      'lock | hand select lasso | rectangle diamond ellipse arrow line | pen highlighter text | eraser laser eyedropper',
+      'lock | hand select lasso | rectangle diamond ellipse arrow line | pen highlighter text sticky | eraser laser eyedropper',
     )
   })
 
@@ -559,7 +559,7 @@ describe('SketchBoard', () => {
     expect(store.all()).toHaveLength(0)
     // Alt+R again: drawing works again
     await key('®', { code: 'KeyR', altKey: true })
-    expect(wrapper.findAll('.me-sketch-toolbar button')).toHaveLength(15)
+    expect(wrapper.findAll('.me-sketch-toolbar button')).toHaveLength(16)
     await key('r')
     drag(100, 100, 200, 160)
     expect(store.all()).toHaveLength(1)

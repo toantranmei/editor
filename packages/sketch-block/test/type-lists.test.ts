@@ -7,8 +7,8 @@ import {
 } from '../src/model/types'
 import { CREATOR_TOOLS, TOOL_ELEMENT_TYPES } from '../src/tools/controller'
 
-/** Element types whose kinds (and tools) land in later M2 tasks (sticky: 3, image: 4, frame: 5); hidden until then. */
-const PENDING_KINDS: readonly ElementType[] = ['sticky', 'image', 'frame']
+/** Element types whose kinds (and tools) land in later M2 tasks (image: 4, frame: 5); hidden until then. */
+const PENDING_KINDS: readonly ElementType[] = ['image', 'frame']
 const READY_TYPES = ELEMENT_TYPES.filter(t => !PENDING_KINDS.includes(t))
 
 /** A minimal valid element of `type` (points for the types that need them). */

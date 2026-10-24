@@ -35,7 +35,8 @@ const listeners = new Set<() => void>()
 
 /**
  * Registers and loads the hand font. Idempotent (one shared promise); never rejects — when FontFace /
- * document.fonts are unavailable or a file fails, it warns and the fallback stack is used.
+ * document.fonts are unavailable or a file fails, it warns and the fallback stack is used for that range.
+ * Listeners fire once when at least one face loaded.
  */
 export function loadFonts(): Promise<void> {
   if (loading) return loading
@@ -44,16 +45,21 @@ export function loadFonts(): Promise<void> {
       console.warn('sketch-block: FontFace API unavailable, using fallback fonts')
       return
     }
+    let results: PromiseSettledResult<unknown>[]
     try {
       const faces = FACES.map(f => new FontFace(HAND_FAMILY, `url(${f.url()}) format('woff2')`, {
         style: 'normal', weight: '400', display: 'swap', unicodeRange: f.unicodeRange,
       }))
       for (const face of faces) document.fonts.add(face)
-      await Promise.all(faces.map(face => face.load()))
+      results = await Promise.allSettled(faces.map(face => face.load()))
     } catch (err) {
       console.warn('sketch-block: failed to load the hand font', err)
       return
     }
+    const failed = results.filter((r): r is PromiseRejectedResult => r.status === 'rejected')
+    if (failed.length) console.warn('sketch-block: failed to load the hand font', failed.map(r => r.reason))
+    // any face that loaded changes metrics for its range: redraw
+    if (failed.length === results.length) return
     loaded = true
     for (const cb of [...listeners]) cb()
   })()

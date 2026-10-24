@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef } from 'vue'
 import { labelBox } from '../elements/shape'
+import { STICKY_PAD, STICKY_TEXT_COLOR, stickyLayout } from '../elements/sticky'
 import { editedTextBox } from '../elements/text'
-import { isShape, isText, type SketchElement } from '../model/types'
+import { isShape, isSticky, isText, type SketchElement } from '../model/types'
 import { displayColor, type Theme } from '../render/shapes'
 import { FONT_FAMILIES, LINE_HEIGHT } from '../text/fonts'
 import { Viewport } from '../viewport'
@@ -10,7 +11,7 @@ import { Viewport } from '../viewport'
 const props = defineProps<{
   /** The element being edited (its current state). */
   element: SketchElement
-  kind: 'text' | 'label'
+  kind: 'text' | 'label' | 'sticky'
   /** Viewport state; the overlay follows pans and zooms. */
   view: { x: number; y: number; zoom: number }
   theme: Theme
@@ -20,6 +21,8 @@ const props = defineProps<{
 const emit = defineEmits<{
   /** The final value (blur, Escape, Ctrl/Cmd+Enter); emitted once. */
   commit: [value: string]
+  /** Tab while editing a sticky: commit and continue with the next sticky (instead of a tab character). */
+  tab: [value: string]
 }>()
 
 /** Extra width (CSS px) so the caret at the end of the longest line is not clipped. */
@@ -28,7 +31,7 @@ const CARET_PX = 2
 const textarea = shallowRef<HTMLTextAreaElement | null>(null)
 const initial = (): string => {
   const el = props.element
-  return isText(el) ? el.text : isShape(el) ? el.label : ''
+  return isText(el) || isSticky(el) ? el.text : isShape(el) ? el.label : ''
 }
 const value = ref(initial())
 /** Between compositionstart and compositionend (IME: Telex / VNI, CJK…). */
@@ -48,7 +51,17 @@ const layout = computed(() => {
   let y = el.y
   let w = el.w
   let h = el.h
-  if (props.kind === 'label' && isShape(el)) {
+  let fontSize: number | null = 'fontSize' in el ? el.fontSize : null
+  if (props.kind === 'sticky' && isSticky(el)) {
+    // the padded text box at the auto-fit size, centered in the sticky (scrolls when even 12 overflows)
+    const l = stickyLayout(el, value.value)
+    const maxH = Math.max(l.fontSize * LINE_HEIGHT, el.h - 2 * STICKY_PAD)
+    fontSize = l.fontSize
+    h = Math.min(l.lines.length * l.fontSize * LINE_HEIGHT, maxH)
+    x = el.x + l.x
+    y = el.y + (el.h - h) / 2
+    w = l.w
+  } else if (props.kind === 'label' && isShape(el)) {
     const b = labelBox(el, value.value)
     x = el.x + b.x
     y = el.y + b.y
@@ -63,14 +76,14 @@ const layout = computed(() => {
   const at = viewport.value.toScreen({ x, y })
   // rotate about the element's center, like the canvas
   const origin = { x: (el.x + el.w / 2 - x) * zoom, y: (el.y + el.h / 2 - y) * zoom }
-  return { at, w: w * zoom, h: h * zoom, origin }
+  return { at, w: w * zoom, h: h * zoom, origin, fontSize }
 })
 
 const style = computed(() => {
   const el = props.element
-  const { at, w, h, origin } = layout.value
+  const { at, w, h, origin, fontSize } = layout.value
   const font = 'fontFamily' in el ? el : null
-  const wraps = props.kind === 'label' || (isText(el) && !el.autoSize)
+  const wraps = props.kind !== 'text' || (isText(el) && !el.autoSize)
   return {
     left: `${at.x}px`,
     top: `${at.y}px`,
@@ -79,11 +92,12 @@ const style = computed(() => {
     transform: el.angle ? `rotate(${el.angle}rad)` : undefined,
     transformOrigin: `${origin.x}px ${origin.y}px`,
     fontFamily: font ? FONT_FAMILIES[font.fontFamily] : undefined,
-    fontSize: font && 'fontSize' in font ? `${font.fontSize * props.view.zoom}px` : undefined,
+    fontSize: fontSize !== null ? `${fontSize * props.view.zoom}px` : undefined,
     lineHeight: String(LINE_HEIGHT),
     textAlign: font ? font.textAlign : undefined,
     whiteSpace: wraps ? 'pre-wrap' : 'pre',
-    color: displayColor(el.stroke, props.theme),
+    // sticky text stays dark on its pastel fill in both themes
+    color: isSticky(el) ? STICKY_TEXT_COLOR : displayColor(el.stroke, props.theme),
     opacity: String(el.opacity),
   }
 })
@@ -113,6 +127,13 @@ function onKeyDown(e: KeyboardEvent): void {
   // IME: Enter / Escape confirm or cancel the composition, not the edit. keyCode 229: Safari sends the
   // confirming keydown after compositionend.
   if (composing || e.isComposing || e.keyCode === 229) return
+  if (e.key === 'Tab' && props.kind === 'sticky' && !e.shiftKey && !e.altKey && !e.ctrlKey && !e.metaKey) {
+    e.preventDefault()
+    if (done) return
+    done = true
+    emit('tab', textarea.value?.value ?? value.value)
+    return
+  }
   if (e.key === 'Escape' || (e.key === 'Enter' && (e.ctrlKey || e.metaKey))) {
     e.preventDefault()
     commit()

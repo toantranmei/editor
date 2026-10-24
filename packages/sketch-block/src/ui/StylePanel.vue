@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue'
 import type { SketchMessages, StyleMessages } from '../messages'
 import { type CurrentStyle, relevantStyleKeys, STYLE_SECTIONS, type StyleKey, type StyleSection } from '../model/style'
-import type { ElementType, SketchElement } from '../model/types'
+import { type ElementType, type SketchElement, STICKY_COLORS } from '../model/types'
 import { displayColor, type Theme } from '../render/shapes'
 import { FONT_FAMILIES } from '../text/fonts'
 import { TOOL_ELEMENT_TYPES, type ToolName } from '../tools/controller'
@@ -86,21 +86,28 @@ function apply<K extends StyleKey>(key: K, v: CurrentStyle[K]): void {
 }
 
 // ---------- colors ----------
+type ColorKey = 'stroke' | 'fill' | 'color'
+/** Swatches per color key (sticky colors are pastel in both themes: never theme-mapped). */
+const PALETTES: Record<ColorKey, readonly string[]> = { stroke: STROKE_COLORS, fill: BG_COLORS, color: STICKY_COLORS }
 const swatchStyle = (c: string) => (c === 'transparent' ? undefined : { background: displayColor(c, props.theme) })
-const isPalette = (key: 'stroke' | 'fill', c: unknown): boolean =>
-  typeof c === 'string' && (key === 'stroke' ? STROKE_COLORS : BG_COLORS).some(p => p === c.toLowerCase())
-/** `<input type="color">` value: the current hex (default ink when mixed / transparent). */
-function pickerValue(key: 'stroke' | 'fill'): string {
+const isPalette = (key: ColorKey, c: unknown): boolean =>
+  typeof c === 'string' && PALETTES[key].some(p => p === c.toLowerCase())
+/** `<input type="color">` value: the current hex (the palette's first color when mixed / transparent). */
+function pickerValue(key: ColorKey): string {
   const v = values.value[key]
-  return typeof v === 'string' && /^#[0-9a-f]{6}$/i.test(v) ? v.toLowerCase() : STROKE_COLORS[0]
+  return typeof v === 'string' && /^#[0-9a-f]{6}$/i.test(v) ? v.toLowerCase() : PALETTES[key][0]!
 }
-function onPicker(key: 'stroke' | 'fill', e: Event): void {
+function onPicker(key: ColorKey, e: Event): void {
   apply(key, (e.target as HTMLInputElement).value)
 }
 const colorRows = computed(() => [
+  { id: 'stickyColor' as const, key: 'color' as const, colors: STICKY_COLORS, label: m.value.stickyColor },
   { id: 'stroke' as const, key: 'stroke' as const, colors: STROKE_COLORS, label: m.value.stroke },
   { id: 'background' as const, key: 'fill' as const, colors: BG_COLORS, label: m.value.background },
 ].filter(r => sections.value.has(r.id)))
+
+/** Some type in the selection (or the tool's) has a font size (sticky text is auto-fit). */
+const hasFontSize = computed(() => [...types.value].some(t => relevantStyleKeys(t).has('fontSize')))
 
 // ---------- option rows (glyphs are 20×20 inline SVG paths, drawn in currentColor) ----------
 interface Path { d: string; fill?: boolean; width?: number; dash?: string }
@@ -351,7 +358,7 @@ function onOpacity(e: Event): void {
             {{ o.text }}
           </button>
         </div>
-        <div class="me-sketch-style-row" role="group" :aria-label="m.fontSize">
+        <div v-if="hasFontSize" class="me-sketch-style-row" role="group" :aria-label="m.fontSize">
           <button
             v-for="o in sizes"
             :key="o.value"

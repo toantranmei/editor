@@ -75,6 +75,7 @@ const isString = (v: unknown) => typeof v === 'string'
 const isBool = (v: unknown) => typeof v === 'boolean'
 const COLOR_RE = /^(?:#[0-9a-f]{3,8}|transparent)$/i
 const isColor = (v: unknown) => typeof v === 'string' && COLOR_RE.test(v)
+const STICKY_COLOR_RE = /^#[0-9a-f]{6}$/i
 const ARROWHEAD = oneOf('none', 'arrow', 'triangle', 'dot', 'bar')
 
 /** Optional props: kept when valid, otherwise left to `normalizeElement`'s defaults. */
@@ -157,6 +158,8 @@ function sanitizeElement(raw: unknown): ElementInit | null {
   for (const [k, ok] of Object.entries(OPTIONAL)) {
     if (ok(raw[k])) out[k] = raw[k]
   }
+  // the sticky fill: a sticky-only prop, always #rrggbb
+  if (type === 'sticky' && typeof raw.color === 'string' && STICKY_COLOR_RE.test(raw.color)) out.color = raw.color.toLowerCase()
   for (const k of ['text', 'label'] as const) {
     if (typeof out[k] === 'string') out[k] = (out[k] as string).slice(0, MAX_TEXT_CHARS)
   }

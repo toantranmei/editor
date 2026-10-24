@@ -4,7 +4,7 @@ import type { SketchMessages } from '../messages'
 import type { ToolName } from '../tools/controller'
 import {
   Circle, Diamond, Eraser, Hand, Highlighter, Lasso, Lock, LockOpen, Minus, MousePointer2, MoveUpRight, Pencil,
-  Pipette, Square, Type, Wand2,
+  Pipette, Square, StickyNote, Type, Wand2,
 } from './icons'
 
 const props = withDefaults(defineProps<{
@@ -41,6 +41,7 @@ const GROUPS: Item[][] = [
     { name: 'pen', icon: Pencil, badge: 'P' },
     { name: 'highlighter', icon: Highlighter, badge: 'M' },
     { name: 'text', icon: Type, badge: 'T' },
+    { name: 'sticky', icon: StickyNote, badge: 'S' },
   ],
   [
     { name: 'eraser', icon: Eraser, badge: 'E' },

@@ -7,11 +7,11 @@ import type { Scene } from '../model/scene'
 import type { BoardStore } from '../model/store'
 import { type CurrentStyle, INITIAL_STYLE, styleOf, stylePatchFor } from '../model/style'
 import type {
-  ElementInit, ElementPatch, ElementType, LinearType, ShapeType, SketchElement, TextElement, TextStyle,
+  ElementInit, ElementPatch, ElementType, LinearType, ShapeType, SketchElement, StickyElement, TextElement, TextStyle,
 } from '../model/types'
 import { linearScenePoints } from '../elements/linear'
 import { editedTextBox } from '../elements/text'
-import { DEFAULT_STYLE, isLinear, isShape, isText, LINEAR_TYPES, SHAPE_TYPES } from '../model/types'
+import { DEFAULT_STYLE, isLinear, isShape, isSticky, isText, LINEAR_TYPES, SHAPE_TYPES, stickyInit } from '../model/types'
 import { stripControl } from '../io/xml'
 import { measureText } from '../text/measure'
 import type { Overlay } from '../render/interactive'
@@ -25,11 +25,12 @@ import { LinearTool } from './linear'
 import { PenTool } from './pen'
 import { SelectTool } from './select'
 import { ShapeTool } from './shape'
+import { StickyTool } from './sticky'
 import { TextTool } from './text'
 
 /** Tools with an implementation (besides `hand`); each shape type has a tool of the same name. */
 type PointerToolName =
-  | 'select' | ShapeType | 'pen' | 'highlighter' | LinearType | 'text'
+  | 'select' | ShapeType | 'pen' | 'highlighter' | LinearType | 'text' | 'sticky'
   | 'eraser' | 'laser' | 'lasso' | 'eyedropper'
 
 export type ToolName = 'hand' | PointerToolName
@@ -41,6 +42,7 @@ export const TOOL_ELEMENT_TYPES: Readonly<Partial<Record<ToolName, ElementType>>
   pen: 'freedraw',
   highlighter: 'freedraw',
   text: 'text',
+  sticky: 'sticky',
 }
 
 /** Tools that create elements: crosshair cursor, clear the selection, unavailable when read-only. */
@@ -48,10 +50,10 @@ export const CREATOR_TOOLS: ReadonlySet<ToolName> = new Set(Object.keys(TOOL_ELE
 
 export type { CurrentStyle }
 
-/** The element whose text (a text element) or label (a shape) is open in the editor overlay. */
+/** The element whose text (a text element or sticky note) or label (a shape) is open in the editor overlay. */
 export interface EditingTarget {
   id: string
-  kind: 'text' | 'label'
+  kind: 'text' | 'label' | 'sticky'
 }
 
 export interface PointerInput {
@@ -108,6 +110,8 @@ export interface ToolHost {
   resetCursor(): void
   /** Text tool click at scene point `p`: edit the text / shape label there, else create a text element. */
   editAt(p: Point): void
+  /** Creates a sticky note with box `box` (last used sticky color, current font) and edits it. */
+  createSticky(box: { x: number; y: number; w: number; h: number }): void
 }
 
 /** A gesture handler; `p` is the pointer in scene coordinates. */
@@ -132,13 +136,15 @@ const TOOL_KEYS: Record<string, 'hand' | PointerToolName> = {
   v: 'select', 1: 'select', h: 'hand',
   r: 'rectangle', 2: 'rectangle', d: 'diamond', 3: 'diamond', o: 'ellipse', 4: 'ellipse',
   a: 'arrow', 5: 'arrow', l: 'line', 6: 'line',
-  p: 'pen', 7: 'pen', m: 'highlighter', t: 'text', 8: 'text',
+  p: 'pen', 7: 'pen', m: 'highlighter', t: 'text', 8: 'text', s: 'sticky',
   e: 'eraser', 0: 'eraser', k: 'laser', i: 'eyedropper',
 }
 /** Non-creating tools that still show a crosshair. */
 const POINTERS = new Set<ToolName>(['eraser', 'laser', 'lasso', 'eyedropper'])
 /** Offset of pasted / duplicated elements from their originals when there is no pointer position, scene px. */
 const PASTE_OFFSET = 16
+/** Gap between a sticky and the next one quick-created beside it (Tab / mod+Enter), scene units. */
+const STICKY_GAP = 20
 /** Hit tolerance for picking the element to edit, in screen px. */
 const EDIT_HIT_PX = 6
 const NUDGE: Record<string, [number, number]> = {
@@ -167,7 +173,10 @@ export class ToolController implements ToolHost {
   /** Text / label being edited in the overlay (null = none). Editing counts as an active gesture. */
   readonly editing: Ref<EditingTarget | null> = shallowRef(null)
 
-  /** The edited text element was created for this edit (cancel / empty commit removes it, leaving no undo step). */
+  /**
+   * The edited element was created for this edit: cancel removes it, leaving no undo step (an empty commit too,
+   * for a text element).
+   */
   private editCreated = false
   /** Tool to return to when the eyedropper is done. */
   private prevTool: ToolName = 'select'
@@ -192,6 +201,7 @@ export class ToolController implements ToolHost {
       line: new LinearTool(this, 'line'),
       arrow: new LinearTool(this, 'arrow'),
       text: new TextTool(this),
+      sticky: new StickyTool(this),
       eraser: new EraserTool(this),
       laser: new LaserTool(this),
       lasso: new LassoTool(this),
@@ -370,6 +380,10 @@ export class ToolController implements ToolHost {
       if (k !== 'Escape') return false
       this.cancelGesture()
       return true
+    }
+    // quick create (before the mod / alt guards): the next sticky beside the single selected one
+    if ((k === 'Tab' && !e.mod && !e.alt && !e.shift) || (k === 'Enter' && e.mod && !e.alt && !e.shift)) {
+      if (!ro && this.quickCreateSticky()) return true
     }
     if (e.mod) {
       if (e.alt && e.code === 'KeyC') {
@@ -599,7 +613,7 @@ export class ToolController implements ToolHost {
   startEditing(id: string, kind: EditingTarget['kind']): void {
     if (this.ctx.readonly() || this.editing.value) return
     const el = this.ctx.scene.get(id)
-    if (!el || el.locked || (kind === 'text' ? !isText(el) : !isShape(el))) return
+    if (!el || el.locked || kindOfEdit(el) !== kind) return
     this.ctx.history.beginGesture()
     this.openEditor(id, kind, false)
   }
@@ -626,6 +640,11 @@ export class ToolController implements ToolHost {
         history.endGesture()
         this.setSelection([el.id])
       }
+    } else if (el && target.kind === 'sticky' && isSticky(el)) {
+      // an empty sticky is kept (it is still a colored note)
+      if (el.text !== value) store.update(el.id, { text: value })
+      history.endGesture()
+      this.setSelection([el.id])
     } else if (el && target.kind === 'label' && isShape(el)) {
       if (el.label !== value) store.update(el.id, { label: value })
       history.endGesture()
@@ -636,7 +655,45 @@ export class ToolController implements ToolHost {
     this.afterEditing()
   }
 
-  /** Ends the edit discarding the editor's value: a text element created for it is removed, with no undo step. */
+  /**
+   * Tab in the editor: commits, and when a sticky was being edited, creates the next sticky beside it and edits
+   * that one (its creation plus commit is again one undo step).
+   */
+  commitAndNext(raw: string): void {
+    const target = this.editing.value
+    if (!target) return
+    this.commitEditing(raw)
+    if (target.kind === 'sticky') this.quickCreateSticky()
+  }
+
+  /**
+   * With exactly one unlocked sticky selected (and nothing being edited): creates an empty sticky of the same
+   * size, color and font STICKY_GAP to its right and edits it. False when it does not apply.
+   */
+  quickCreateSticky(): boolean {
+    if (this.ctx.readonly() || this.editing.value || this.selectedIds.value.size !== 1) return false
+    const src = this.ctx.scene.get([...this.selectedIds.value][0]!)
+    if (!src || src.locked || !isSticky(src)) return false
+    const { color, fontFamily, textAlign, opacity, w, h } = src
+    this.beginSticky(stickyInit(src.x + w + STICKY_GAP, src.y, { w, h, color, fontFamily, textAlign, opacity }))
+    return true
+  }
+
+  createSticky(box: { x: number; y: number; w: number; h: number }): void {
+    if (this.ctx.readonly() || this.editing.value) return
+    const { color, fontFamily, textAlign, opacity } = this.currentStyle.value
+    this.beginSticky(stickyInit(box.x, box.y, { w: box.w, h: box.h, color, fontFamily, textAlign, opacity }))
+  }
+
+  /** Creates the sticky inside a gesture that its text commit ends (one undo step) and opens the editor. */
+  private beginSticky(init: ElementInit): void {
+    const { history, store } = this.ctx
+    history.beginGesture()
+    const el = store.create(init) as StickyElement
+    this.openEditor(el.id, 'sticky', true)
+  }
+
+  /** Ends the edit discarding the editor's value: an element created for it is removed, with no undo step. */
   cancelEditing(): void {
     const target = this.editing.value
     if (!target) return
@@ -663,10 +720,11 @@ export class ToolController implements ToolHost {
     this.openEditor(el.id, 'text', true)
   }
 
-  /** Starts editing `el` if it is an unlocked text or shape; false otherwise. */
+  /** Starts editing `el` if it is an unlocked text, sticky or shape; false otherwise. */
   private editElement(el: SketchElement): boolean {
-    if (el.locked || !(isText(el) || isShape(el))) return false
-    this.startEditing(el.id, isText(el) ? 'text' : 'label')
+    const kind = kindOfEdit(el)
+    if (el.locked || !kind) return false
+    this.startEditing(el.id, kind)
     return this.editing.value !== null
   }
 
@@ -700,9 +758,10 @@ export class ToolController implements ToolHost {
     return created
   }
 
-  /** After an edit from the text tool: back to select unless the tool is locked. */
+  /** After an edit from the text / sticky tool: back to select unless the tool is locked. */
   private afterEditing(): void {
-    if (this.tool.value === 'text' && !this.toolLocked.value) this.setTool('select')
+    const t = this.tool.value
+    if ((t === 'text' || t === 'sticky') && !this.toolLocked.value) this.setTool('select')
     this.ctx.invalidate()
   }
 
@@ -751,6 +810,11 @@ export class ToolController implements ToolHost {
       this.ctx.invalidate()
     }
   }
+}
+
+/** How `el`'s text is edited: its text (text, sticky), its label (shape), or not at all (null). */
+function kindOfEdit(el: SketchElement): EditingTarget['kind'] | null {
+  return isText(el) ? 'text' : isSticky(el) ? 'sticky' : isShape(el) ? 'label' : null
 }
 
 /** The entries of `next` that differ from `el`, or null when none do. */

@@ -65,10 +65,10 @@ function arrow(store: BoardStore, patch: Partial<LinearElement> = {}) {
 }
 
 describe('current style', () => {
-  it('starts from DEFAULT_STYLE plus the linear defaults', () => {
+  it('starts from DEFAULT_STYLE plus the linear defaults and the default sticky color', () => {
     const { c } = setup()
     expect(c.currentStyle.value).toEqual({
-      ...DEFAULT_STYLE, routing: 'straight', startArrowhead: 'none', endArrowhead: 'arrow',
+      ...DEFAULT_STYLE, routing: 'straight', startArrowhead: 'none', endArrowhead: 'arrow', color: '#fff3bf',
     })
   })
 
@@ -333,7 +333,7 @@ describe('palette', () => {
 })
 
 describe('StylePanel', () => {
-  const style = { ...DEFAULT_STYLE, routing: 'straight', startArrowhead: 'none', endArrowhead: 'arrow' } as const
+  const style = { ...DEFAULT_STYLE, routing: 'straight', startArrowhead: 'none', endArrowhead: 'arrow', color: '#fff3bf' } as const
   const el = (patch: Partial<SketchElement> & Pick<SketchElement, 'type'>): SketchElement => ({
     id: Math.random().toString(36), x: 0, y: 0, w: 10, h: 10, angle: 0, index: 'a0', seed: 1, version: 1,
     locked: false, ...DEFAULT_STYLE, label: '', text: '', autoSize: true, points: [[0, 0], [10, 0]],

@@ -171,6 +171,14 @@ export const shapeKind: ElementKind<ShapeElement> = {
     ctx.strokeStyle = displayColor(el.stroke, theme)
     ctx.lineWidth = Math.max(1 / zoom, el.strokeWidth)
     ctx.stroke()
+    const label = labelBlock(el, theme)
+    if (label) {
+      // the label as plain text (drawLod's origin is the box center)
+      ctx.save()
+      ctx.translate(-el.w / 2, -el.h / 2)
+      drawTextBlock(ctx, label)
+      ctx.restore()
+    }
   },
 
   svg(el, theme) {

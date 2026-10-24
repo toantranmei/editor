@@ -34,6 +34,7 @@ export interface StyleMessages {
   transparent: string
   stroke: string
   background: string
+  stickyColor: string
   fillStyle: string
   hachure: string
   crossHatch: string
@@ -117,6 +118,7 @@ export const messages: Record<'vi' | 'en', SketchMessages> = {
       line: 'Đường thẳng (L)',
       arrow: 'Mũi tên (A)',
       text: 'Văn bản (T)',
+      sticky: 'Giấy nhớ (S)',
       eraser: 'Tẩy (E)',
       laser: 'Bút laser (K)',
       lasso: 'Chọn tự do',
@@ -142,6 +144,7 @@ export const messages: Record<'vi' | 'en', SketchMessages> = {
       transparent: 'Trong suốt',
       stroke: 'Nét vẽ',
       background: 'Nền',
+      stickyColor: 'Màu giấy nhớ',
       fillStyle: 'Kiểu tô',
       hachure: 'Gạch chéo',
       crossHatch: 'Gạch lưới',
@@ -224,6 +227,7 @@ export const messages: Record<'vi' | 'en', SketchMessages> = {
       line: 'Line (L)',
       arrow: 'Arrow (A)',
       text: 'Text (T)',
+      sticky: 'Sticky note (S)',
       eraser: 'Eraser (E)',
       laser: 'Laser pointer (K)',
       lasso: 'Lasso select',
@@ -249,6 +253,7 @@ export const messages: Record<'vi' | 'en', SketchMessages> = {
       transparent: 'Transparent',
       stroke: 'Stroke',
       background: 'Background',
+      stickyColor: 'Note color',
       fillStyle: 'Fill',
       hachure: 'Hachure',
       crossHatch: 'Cross-hatch',

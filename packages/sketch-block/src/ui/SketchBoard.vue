@@ -9,7 +9,7 @@ import { messages as allMessages } from '../messages'
 import { History } from '../model/history'
 import { Scene } from '../model/scene'
 import { BoardStore } from '../model/store'
-import { isShape, type SketchElement } from '../model/types'
+import { isShape, isSticky, type SketchElement } from '../model/types'
 import type { BoardConnection } from '../providers/types'
 import { BitmapCache, bindCacheInvalidation } from '../render/bitmap-cache'
 import { renderInteractive, resetAccentCache } from '../render/interactive'
@@ -87,13 +87,15 @@ function renderState(): RenderState {
 function drawStatic(): void {
   const ctx = staticCanvas.value?.getContext('2d')
   if (!ctx) return
-  // the element being edited is drawn by the editor overlay: a text element is hidden, a shape loses its label
+  // the element being edited is drawn by the editor overlay: a text element is hidden, a shape loses its label,
+  // a sticky note its text
   // erase-marked elements are drawn faded by the interactive layer
   const el = editingEl.value
   drawnErasing = controller.erasing
   let skip: Set<string> | undefined = drawnErasing.size ? new Set(drawnErasing) : undefined
   let substitutes: Map<string, SketchElement> | undefined
   if (el && isShape(el)) substitutes = new Map([[el.id, { ...el, label: '' }]])
+  else if (el && isSticky(el)) substitutes = new Map([[el.id, { ...el, text: '' }]])
   else if (el) (skip ??= new Set()).add(el.id)
   renderStatic(ctx, scene, renderState(), cache, skip, substitutes)
 }
@@ -195,6 +197,13 @@ function onEditorCommit(value: string): void {
   const keyboard = editor.value?.$el === document.activeElement
   controller.commitEditing(value)
   if (keyboard) root.value?.focus({ preventScroll: true })
+}
+
+/** Tab in a sticky's editor: commit it and edit a new sticky beside it (the new editor takes focus on mount). */
+function onEditorTab(value: string): void {
+  const keyboard = editor.value?.$el === document.activeElement
+  controller.commitAndNext(value)
+  if (keyboard && !editing.value) root.value?.focus({ preventScroll: true })
 }
 
 function onDblClick(e: MouseEvent): void {
@@ -595,6 +604,7 @@ defineExpose({
       :theme="theme"
       :label="t.tools.text"
       @commit="onEditorCommit"
+      @tab="onEditorTab"
     />
     <StylePanel
       :elements="selectedEls"

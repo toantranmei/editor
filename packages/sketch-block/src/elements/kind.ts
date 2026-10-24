@@ -4,6 +4,7 @@ import type { Theme } from '../render/shapes'
 import { freedrawKind } from './freedraw'
 import { linearKind } from './linear'
 import { shapeKind } from './shape'
+import { stickyKind } from './sticky'
 import { textKind } from './text'
 
 /** Per-type behaviour. Renderer, SVG export, hit-testing, bounds and resize only talk to this. */
@@ -38,6 +39,7 @@ function registerBuiltins(): void {
     if (!registry.has(t)) registry.set(t, shapeKind as ElementKind)
   }
   if (!registry.has('text')) registry.set('text', textKind as ElementKind)
+  if (!registry.has('sticky')) registry.set('sticky', stickyKind as ElementKind)
   if (!registry.has('freedraw')) registry.set('freedraw', freedrawKind as ElementKind)
   for (const t of LINEAR_TYPES) {
     if (!registry.has(t)) registry.set(t, linearKind as ElementKind)
