@@ -247,9 +247,13 @@ function onPointerDown(e: PointerEvent): void {
 function onPointerMove(e: PointerEvent): void {
   if (activePointer !== null && e.pointerId !== activePointer) return
   const rect = canvasRect()
-  // Pen/touch deliver several samples per frame; M0 tools only need the last, the loop is for a future pen tool.
+  const input = toInput(e, rect)
+  // Pen/touch deliver several samples per frame: one move carries them all (drawing tools consume each).
   const samples = e.pointerType !== 'mouse' ? e.getCoalescedEvents?.() : undefined
-  for (const s of samples?.length ? samples : [e]) controller.pointerMove(toInput(s, rect))
+  if (samples && samples.length > 1) {
+    input.coalesced = samples.map(s => ({ ...toInput(s, rect).screen, pressure: s.pressure }))
+  }
+  controller.pointerMove(input)
 }
 
 function onPointerUp(e: PointerEvent): void {

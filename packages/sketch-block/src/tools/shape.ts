@@ -48,11 +48,10 @@ export class ShapeTool implements Tool {
     const { store, history, viewport, readonly } = this.host.ctx
     const min = MIN_SIZE_PX / viewport.zoom
     if (readonly() || draft.w < min || draft.h < min) return
-    const { id: _id, index: _index, seed, version: _v, ...init } = draft
+    const { id: _id, index: _index, version: _v, ...init } = draft
     history.stopCapturing()
+    // keeps the draft's seed, so the committed rough outline matches the preview
     const el = store.create(init)
-    // keep the draft's rough outline (store.create picks its own seed); same undo step
-    store.update(el.id, { seed })
     history.stopCapturing()
     this.host.setSelection([el.id])
     if (!this.host.toolLocked.value) this.host.setTool('select')

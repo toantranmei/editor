@@ -7,10 +7,16 @@ import type { DEFAULT_STYLE, ElementPatch, SketchElement } from '../model/types'
 import type { Overlay } from '../render/interactive'
 import type { Viewport } from '../viewport'
 import { HandTool } from './hand'
+import { PenTool } from './pen'
 import { SelectTool } from './select'
 import { ShapeTool } from './shape'
 
-export type ToolName = 'hand' | 'select' | 'rectangle' | 'ellipse' | 'diamond'
+export type ToolName =
+  | 'hand' | 'select' | 'rectangle' | 'ellipse' | 'diamond' | 'pen' | 'highlighter' | 'line' | 'arrow' | 'text'
+  | 'eraser' | 'laser' | 'lasso' | 'eyedropper'
+
+/** Tools with an implementation (besides `hand`); later tasks register theirs here and in TOOL_KEYS. */
+type PointerToolName = 'select' | 'rectangle' | 'ellipse' | 'diamond' | 'pen' | 'highlighter'
 
 export interface PointerInput {
   screen: Point
@@ -19,6 +25,8 @@ export interface PointerInput {
   alt: boolean
   mod: boolean
   pressure: number
+  /** Screen points of the coalesced events behind this move (last = `screen`); drawing tools consume all. */
+  coalesced?: (Point & { pressure?: number })[]
 }
 
 export interface ToolControllerContext {
@@ -58,10 +66,12 @@ export interface Tool {
   cancel?(): void
 }
 
-const SHAPES = new Set<ToolName>(['rectangle', 'ellipse', 'diamond'])
-const TOOL_KEYS: Record<string, ToolName> = {
+/** Tools that create elements: crosshair cursor, clear the selection, unavailable when read-only. */
+const CREATORS = new Set<ToolName>(['rectangle', 'ellipse', 'diamond', 'pen', 'highlighter'])
+const TOOL_KEYS: Record<string, 'hand' | PointerToolName> = {
   v: 'select', 1: 'select', h: 'hand',
   r: 'rectangle', 2: 'rectangle', d: 'diamond', 3: 'diamond', o: 'ellipse', 4: 'ellipse',
+  p: 'pen', 7: 'pen', m: 'highlighter',
 }
 const NUDGE: Record<string, [number, number]> = {
   ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1],
@@ -78,7 +88,7 @@ export class ToolController implements ToolHost {
   draft: SketchElement | null = null
 
   private readonly hand: HandTool
-  private readonly tools: Record<Exclude<ToolName, 'hand'>, Tool>
+  private readonly tools: Record<PointerToolName, Tool>
   private active: Tool | null = null
   private spaceHeld = false
   private readonly off: () => void
@@ -91,6 +101,8 @@ export class ToolController implements ToolHost {
       rectangle: new ShapeTool(this, 'rectangle'),
       ellipse: new ShapeTool(this, 'ellipse'),
       diamond: new ShapeTool(this, 'diamond'),
+      pen: new PenTool(this, false),
+      highlighter: new PenTool(this, true),
     }
     this.off = ctx.scene.onChange(() => this.pruneSelection())
   }
@@ -99,11 +111,13 @@ export class ToolController implements ToolHost {
     return { selectedIds: this.selectedIds.value, marquee: this.marquee, hoverId: this.hoverId, draft: this.draft }
   }
 
+  /** Switches tool; tools without an implementation yet are ignored. */
   setTool(t: ToolName): void {
+    if (t !== 'hand' && !(t in this.tools)) return
     this.active?.cancel?.()
     this.active = null
     this.tool.value = t
-    if (SHAPES.has(t)) this.setSelection([])
+    if (CREATORS.has(t)) this.setSelection([])
     this.hoverId = null
     this.resetCursor()
     this.ctx.invalidate()
@@ -119,7 +133,7 @@ export class ToolController implements ToolHost {
 
   resetCursor(): void {
     const t = this.tool.value
-    this.cursor.value = this.spaceHeld || t === 'hand' ? 'grab' : SHAPES.has(t) ? 'crosshair' : 'default'
+    this.cursor.value = this.spaceHeld || t === 'hand' ? 'grab' : CREATORS.has(t) ? 'crosshair' : 'default'
   }
 
   // ---------- pointer ----------
@@ -128,7 +142,7 @@ export class ToolController implements ToolHost {
     if (this.active) return
     const panning = e.button === 1 || this.spaceHeld || this.tool.value === 'hand'
     if (!panning && e.button !== 0) return
-    this.active = panning ? this.hand : this.tools[this.tool.value as Exclude<ToolName, 'hand'>]
+    this.active = panning ? this.hand : this.tools[this.tool.value as PointerToolName]
     this.active.down(e, this.toScene(e))
   }
 
@@ -139,7 +153,7 @@ export class ToolController implements ToolHost {
       return
     }
     if (this.spaceHeld || this.tool.value === 'hand') return
-    this.tools[this.tool.value as Exclude<ToolName, 'hand'>].hover?.(e, p)
+    this.tools[this.tool.value as PointerToolName].hover?.(e, p)
   }
 
   pointerUp(e: PointerInput): void {
@@ -147,6 +161,21 @@ export class ToolController implements ToolHost {
     if (!tool) return
     this.active = null
     tool.up(e, this.toScene(e))
+  }
+
+  /** A pointer gesture (draw, move, resize, rotate, marquee, pan) is in progress. */
+  isGestureActive(): boolean {
+    return this.active !== null
+  }
+
+  /** Aborts the gesture: drafts are discarded, a move/resize/rotate reverts with no undo step. */
+  cancelGesture(): void {
+    const tool = this.active
+    if (!tool) return
+    this.active = null
+    tool.cancel?.()
+    this.resetCursor()
+    this.ctx.invalidate()
   }
 
   private toScene(e: PointerInput): Point {
@@ -158,6 +187,12 @@ export class ToolController implements ToolHost {
   keyDown(e: { key: string; mod: boolean; shift: boolean }): boolean {
     const ro = this.ctx.readonly()
     const k = e.key.length === 1 ? e.key.toLowerCase() : e.key
+    if (this.active && k !== ' ') {
+      // mid-gesture: only Escape (cancel) and Space (pan modifier) act
+      if (k !== 'Escape') return false
+      this.cancelGesture()
+      return true
+    }
     if (e.mod) {
       if (k === 'z' || k === 'y') {
         if (ro) return false
@@ -181,7 +216,7 @@ export class ToolController implements ToolHost {
     }
     const t = TOOL_KEYS[k]
     if (t) {
-      if (ro && SHAPES.has(t)) return false
+      if (ro && CREATORS.has(t)) return false
       this.setTool(t)
       return true
     }

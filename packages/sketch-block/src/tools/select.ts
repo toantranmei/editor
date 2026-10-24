@@ -25,6 +25,8 @@ type Gesture =
 class FrameWriter {
   private pending: Record<string, ElementPatch> | null = null
   private scheduled = false
+  /** Whether any patch reached the store since the last `reset`. */
+  wrote = false
 
   constructor(private readonly write: (patches: Record<string, ElementPatch>) => void) {}
 
@@ -44,12 +46,29 @@ class FrameWriter {
   flush(): void {
     const p = this.pending
     this.pending = null
-    if (p) this.write(p)
+    if (!p) return
+    this.wrote = true
+    this.write(p)
   }
 
   drop(): void {
     this.pending = null
   }
+
+  reset(): void {
+    this.pending = null
+    this.wrote = false
+  }
+}
+
+/** Patches restoring every stored prop of each origin snapshot. */
+function revertPatches(origins: SketchElement[]): Record<string, ElementPatch> {
+  const out: Record<string, ElementPatch> = {}
+  for (const el of origins) {
+    const { id, version: _v, type: _t, index: _i, ...props } = el
+    out[id] = props as ElementPatch
+  }
+  return out
 }
 
 /** Click/shift-click selection, marquee, move, single-element resize and rotate. */
@@ -176,9 +195,16 @@ export class SelectTool implements Tool {
       : hit && this.host.selectedIds.value.has(hit.id) ? 'move' : 'default'
   }
 
+  /** Aborts the gesture; a move/resize/rotate that already wrote is reverted to its origins (no undo step). */
   cancel(): void {
     this.writer.drop()
-    this.endWrite()
+    if (this.writing) {
+      const { store, history } = this.host.ctx
+      const origins = this.origins()
+      if (this.writer.wrote && origins.length) store.updateMany(revertPatches(origins))
+      this.writing = false
+      history.discardGesture()
+    }
     if (this.g.kind === 'marquee') {
       this.host.marquee = null
       this.host.ctx.invalidate()
@@ -189,7 +215,13 @@ export class SelectTool implements Tool {
   /** Opens one undo step spanning the whole move/resize/rotate gesture (pauses included). */
   private beginWrite(): void {
     this.host.ctx.history.beginGesture()
+    this.writer.reset()
     this.writing = true
+  }
+
+  private origins(): SketchElement[] {
+    const g = this.g
+    return g.kind === 'move' ? g.origins : g.kind === 'resize' || g.kind === 'rotate' ? [g.el] : []
   }
 
   private endWrite(): void {

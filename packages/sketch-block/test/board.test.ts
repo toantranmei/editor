@@ -243,4 +243,24 @@ describe('SketchBoard', () => {
     expect(() => frames.flush()).not.toThrow()
     await flushPromises()
   })
+
+  it('a pen move feeds every coalesced sample to the stroke in one pointerMove', async () => {
+    const { key, pointer, top, store } = await setup()
+    await key('p')
+    pointer('pointerdown', 100, 100, { pointerType: 'pen', pressure: 0.3 })
+    const move = new PointerEvent('pointermove', {
+      clientX: 160, clientY: 100, pointerId: 1, pointerType: 'pen', pressure: 0.5, buttons: 1, bubbles: true,
+    })
+    const sample = (x: number, y: number, pressure: number) =>
+      new PointerEvent('pointermove', { clientX: x, clientY: y, pointerId: 1, pointerType: 'pen', pressure })
+    Object.defineProperty(move, 'getCoalescedEvents', {
+      value: () => [sample(120, 110, 0.4), sample(140, 90, 0.6), sample(160, 100, 0.5)],
+    })
+    top.dispatchEvent(move)
+    pointer('pointerup', 160, 100, { pointerType: 'pen', pressure: 0 })
+    const [el] = store.all()
+    expect(el!.type).toBe('freedraw')
+    expect((el as { points: unknown[] }).points).toHaveLength(4)
+    expect((el as { pressures: number[] }).pressures).toEqual([0.3, 0.4, 0.6, 0.5])
+  })
 })
