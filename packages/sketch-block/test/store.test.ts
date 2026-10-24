@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import * as Y from 'yjs'
 import { BoardStore, LOCAL_ORIGIN } from '../src/model/store'
-import { DEFAULT_STYLE } from '../src/model/types'
+import { DEFAULT_STYLE, isRenderable } from '../src/model/types'
+
+/** Writes a raw element map straight into the doc (as a newer client or a corrupt peer might). */
+function putRaw(doc: Y.Doc, id: string, props: Record<string, unknown>): void {
+  const m = new Y.Map<unknown>()
+  for (const [k, v] of Object.entries(props)) m.set(k, v)
+  ;(doc.getMap('elements') as Y.Map<Y.Map<unknown>>).set(id, m)
+}
 
 const init = (over: Record<string, unknown> = {}) => ({
   type: 'rectangle' as const, x: 0, y: 0, w: 100, h: 50, angle: 0, locked: false,
@@ -120,5 +127,50 @@ describe('BoardStore', () => {
     s.remove([a.id])
     expect(origins.length).toBeGreaterThan(0)
     expect(origins.every(o => o === LOCAL_ORIGIN)).toBe(true)
+  })
+
+  it('unknown or malformed elements are skipped by get/all but left in Y', () => {
+    const doc = new Y.Doc()
+    const s = new BoardStore(doc)
+    putRaw(doc, 'holo', { id: 'holo', type: 'hologram', x: 0, y: 0, w: 10, h: 10, angle: 0, index: 'zz' })
+    putRaw(doc, 'nopts', { ...init(), type: 'freedraw', id: 'nopts', index: 'a1', seed: 1, version: 1 })
+    putRaw(doc, 'nan', { ...init(), id: 'nan', index: 'a2', seed: 1, version: 1, x: Number.NaN })
+    expect(s.all()).toEqual([])
+    expect(s.get('holo')).toBeUndefined()
+    expect(s.get('nopts')).toBeUndefined()
+    expect(s.get('nan')).toBeUndefined()
+    // createMany and the top index still work around them
+    const [a, b] = s.createMany([init(), init()])
+    expect(s.all().map(e => e.id)).toEqual([a!.id, b!.id])
+    expect(b!.index > a!.index).toBe(true)
+    s.reorderMany([a!.id], 'front')
+    expect(s.all().map(e => e.id)).toEqual([b!.id, a!.id])
+    // untouched in Y (forward compatible)
+    const elements = doc.getMap('elements') as Y.Map<Y.Map<unknown>>
+    expect(elements.get('holo')!.toJSON()).toMatchObject({ type: 'hologram', index: 'zz' })
+    expect(elements.has('nopts')).toBe(true)
+  })
+})
+
+describe('isRenderable', () => {
+  it('requires a known type, finite numbers and points where needed', () => {
+    const base = { ...init(), id: 'x', index: 'a0', seed: 1, version: 1 }
+    expect(isRenderable(base)).toBe(true)
+    expect(isRenderable({ ...base, type: 'hologram' })).toBe(false)
+    expect(isRenderable({ ...base, type: undefined })).toBe(false)
+    for (const k of ['x', 'y', 'w', 'h', 'angle']) {
+      expect(isRenderable({ ...base, [k]: Number.POSITIVE_INFINITY }), k).toBe(false)
+      expect(isRenderable({ ...base, [k]: '1' }), k).toBe(false)
+    }
+    expect(isRenderable({ ...base, index: 3 })).toBe(false)
+    expect(isRenderable({ ...base, index: 'zz' })).toBe(false)
+    expect(isRenderable({ ...base, index: 'a00' })).toBe(false)
+    expect(isRenderable({ ...base, index: 'a0V' })).toBe(true)
+    expect(isRenderable({ ...base, type: 'freedraw' })).toBe(false)
+    expect(isRenderable({ ...base, type: 'freedraw', points: [[0, 0]] })).toBe(true)
+    expect(isRenderable({ ...base, type: 'freedraw', points: [[0, 0]], pressures: 'x' })).toBe(false)
+    expect(isRenderable({ ...base, type: 'line', points: 'nope' })).toBe(false)
+    expect(isRenderable({ ...base, type: 'arrow', points: [[0, 0], [1, 1]] })).toBe(true)
+    expect(isRenderable({ ...base, type: 'text' })).toBe(true)
   })
 })

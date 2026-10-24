@@ -127,6 +127,39 @@ export const TYPE_DEFAULTS: { [T in ElementType]: Partial<ElementOf<T>> } = {
   text: { text: '', autoSize: true },
 }
 
+const KNOWN_TYPES: ReadonlySet<string> = new Set<string>(ELEMENT_TYPES)
+const POINTS_TYPES: ReadonlySet<string> = new Set<string>([...LINEAR_TYPES, 'freedraw'])
+const isFiniteNumber = (v: unknown): boolean => typeof v === 'number' && Number.isFinite(v)
+const BASE62 = /^[0-9A-Za-z]+$/
+const SMALLEST_KEY = `A${'0'.repeat(26)}`
+
+/**
+ * Whether `key` is a valid fractional-indexing order key (the library throws on invalid ones): a head letter
+ * fixing the integer part's length, base-62 digits, and no trailing zero in the fractional part.
+ */
+export function isOrderKey(key: unknown): key is string {
+  if (typeof key !== 'string' || !BASE62.test(key)) return false
+  const head = key.charCodeAt(0)
+  const intLength = head >= 97 && head <= 122 ? head - 97 + 2 : head >= 65 && head <= 90 ? 90 - head + 2 : 0
+  if (!intLength || key.length < intLength || key === SMALLEST_KEY) return false
+  return key.length === intLength || !key.endsWith('0')
+}
+
+/**
+ * Whether a stored element (raw Y map JSON) can be rendered: a known type, string id, valid order key, finite geometry
+ * and a `points` array where the type needs one. Anything else (a newer client's type, a corrupt peer) is
+ * skipped by the store's reads and left untouched in Y.
+ */
+export function isRenderable(raw: Record<string, unknown>): boolean {
+  if (typeof raw.type !== 'string' || !KNOWN_TYPES.has(raw.type)) return false
+  if (typeof raw.id !== 'string' || !isOrderKey(raw.index)) return false
+  if (!isFiniteNumber(raw.x) || !isFiniteNumber(raw.y) || !isFiniteNumber(raw.w) || !isFiniteNumber(raw.h)) return false
+  if (!isFiniteNumber(raw.angle)) return false
+  if (POINTS_TYPES.has(raw.type) && !Array.isArray(raw.points)) return false
+  if (raw.pressures !== undefined && !Array.isArray(raw.pressures)) return false
+  return true
+}
+
 /**
  * Fills fields missing from a stored element (e.g. an M0 board) from DEFAULT_STYLE + TYPE_DEFAULTS.
  * Present fields win; array defaults are fresh copies so callers never share them.

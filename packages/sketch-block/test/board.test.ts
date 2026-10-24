@@ -126,6 +126,25 @@ describe('SketchBoard', () => {
     expect((wrapper.vm as unknown as { getElements(): unknown[] }).getElements()).toHaveLength(1)
   })
 
+  it('mounts with unknown / malformed elements in the doc and ignores them', async () => {
+    const { wrapper, store } = await setup({}, s => {
+      s.create(init())
+      const raw = (props: Record<string, unknown>) => {
+        const m = new Y.Map<unknown>()
+        for (const [k, v] of Object.entries(props)) m.set(k, v)
+        return m
+      }
+      const elements = s.doc.getMap('elements') as Y.Map<Y.Map<unknown>>
+      elements.set('holo', raw({ id: 'holo', type: 'hologram', x: 0, y: 0, w: 1, h: 1, angle: 0, index: 'b0' }))
+      elements.set('bad', raw({ ...init(), type: 'freedraw', id: 'bad', index: 'b1', seed: 1, version: 1 }))
+    })
+    frames.flush()
+    const vm = wrapper.vm as unknown as { getElements(): { type: string }[], fit(): void }
+    expect(vm.getElements().map(e => e.type)).toEqual(['rectangle'])
+    expect(store.all()).toHaveLength(1)
+    expect(() => vm.fit()).not.toThrow()
+  })
+
   it('draws both layers on the next frame', async () => {
     const { wrapper } = await setup({}, s => s.create(init()))
     frames.flush()

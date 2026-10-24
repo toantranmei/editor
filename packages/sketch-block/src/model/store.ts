@@ -1,12 +1,14 @@
 import { generateKeyBetween, generateNKeysBetween } from 'fractional-indexing'
 import { nanoid } from 'nanoid'
 import * as Y from 'yjs'
-import { type ElementInit, type ElementPatch, normalizeElement, type SketchElement } from './types'
+import { type ElementInit, type ElementPatch, isOrderKey, isRenderable, normalizeElement, type SketchElement } from './types'
 
 export const LOCAL_ORIGIN: unique symbol = Symbol('sketch-local')
 
-function toPlain(m: Y.Map<unknown>): SketchElement {
-  return normalizeElement(m.toJSON())
+/** The element as a plain object, or undefined when it cannot be rendered (unknown type, malformed). */
+function toPlain(m: Y.Map<unknown>): SketchElement | undefined {
+  const raw = m.toJSON()
+  return isRenderable(raw) ? normalizeElement(raw) : undefined
 }
 
 export class BoardStore {
@@ -56,13 +58,14 @@ export class BoardStore {
     return out
   }
 
-  /** Highest index in the doc; recomputed by an O(n) scan of `index` values only when dirty. */
+  /** Highest valid index in the doc; recomputed by an O(n) scan of `index` values only when dirty. */
   private top(): string | null {
     if (this.topDirty) {
       let top: string | null = null
       this.elements.forEach(m => {
         const i = m.get('index')
-        if (typeof i === 'string' && (top === null || i > top)) top = i
+        // an invalid key (corrupt / foreign element) would make fractional-indexing throw: ignore it
+        if (typeof i === 'string' && (top === null || i > top) && isOrderKey(i)) top = i
       })
       this.topIndex = top
       this.topDirty = false
@@ -100,14 +103,19 @@ export class BoardStore {
     }, LOCAL_ORIGIN)
   }
 
+  /** The element, or undefined when missing or not renderable. */
   get(id: string): SketchElement | undefined {
     const m = this.elements.get(id)
     return m ? toPlain(m) : undefined
   }
 
+  /** Renderable elements in z-order; unknown / malformed ones are skipped (and left in Y untouched). */
   all(): SketchElement[] {
     const out: SketchElement[] = []
-    this.elements.forEach(m => out.push(toPlain(m)))
+    this.elements.forEach(m => {
+      const el = toPlain(m)
+      if (el) out.push(el)
+    })
     return out.sort((a, b) => (a.index < b.index ? -1 : a.index > b.index ? 1 : a.id < b.id ? -1 : 1))
   }
 
