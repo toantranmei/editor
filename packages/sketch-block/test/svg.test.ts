@@ -47,4 +47,17 @@ describe('svg export', () => {
     expect(called).toBe(1200)
     expect(p).toBe(png)
   })
+
+  it('dashes only the outline, not hatch fills, and sets no caps', () => {
+    const svg = exportSvg([el({ strokeStyle: 'dashed', fill: '#ff0000', fillStyle: 'hachure' })])
+    const paths = svg.match(/<path [^>]*>/g)!
+    const dashed = paths.filter(p => p.includes('stroke-dasharray'))
+    const hatch = paths.filter(p => p.includes('stroke="#ff0000"'))
+    expect(dashed.length).toBeGreaterThan(0)
+    expect(hatch.length).toBeGreaterThan(0)
+    expect(hatch.some(p => p.includes('stroke-dasharray'))).toBe(false)
+    expect(dashed.every(p => p.includes('stroke="#1e1e1e"'))).toBe(true)
+    expect(svg).not.toContain('stroke-linecap')
+    expect(svg).not.toContain('stroke-linejoin')
+  })
 })

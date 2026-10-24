@@ -18,10 +18,12 @@ const esc = (s: string): string => s.replace(/&/g, '&amp;').replace(/"/g, '&quot
 
 function elementSvg(el: SketchElement): string {
   const dash = roughOptions(el).strokeLineDash
-  const paths = generator.toPaths(shapeFor(el)).map((p) => {
-    const dashAttr = dash && p.fill === 'none' ? ` stroke-dasharray="${dash.map(num).join(' ')}"` : ''
+  const drawable = shapeFor(el)
+  // toPaths yields one path per set, in order; only 'path' sets are dashed (as on canvas)
+  const paths = generator.toPaths(drawable).map((p, i) => {
+    const dashAttr = dash && drawable.sets[i]?.type === 'path' ? ` stroke-dasharray="${dash.map(num).join(' ')}"` : ''
     const strokeAttr = p.stroke ? ` stroke="${esc(p.stroke)}" stroke-width="${num(p.strokeWidth)}"` : ''
-    return `<path d="${esc(p.d)}"${strokeAttr} fill="${esc(p.fill || 'none')}" stroke-linecap="round" stroke-linejoin="round"${dashAttr}/>`
+    return `<path d="${esc(p.d)}"${strokeAttr} fill="${esc(p.fill || 'none')}"${dashAttr}/>`
   })
   const attrs: string[] = []
   if (el.angle) {

@@ -9,12 +9,18 @@ export function indexeddb(opts: { prefix?: string } = {}): SketchProvider {
     async connect(boardId: string): Promise<BoardConnection> {
       const doc = new Y.Doc()
       const persistence = new IndexeddbPersistence(`${prefix}:${boardId}`, doc)
-      await persistence.whenSynced
+      try {
+        await persistence.whenSynced
+      } catch (err) {
+        persistence.destroy().catch(() => {})
+        doc.destroy()
+        throw err
+      }
       return {
         doc,
         existed: doc.getMap('elements').size > 0,
         destroy() {
-          void persistence.destroy()
+          persistence.destroy().catch(() => {})
           doc.destroy()
         },
       }
