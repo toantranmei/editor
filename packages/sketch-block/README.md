@@ -134,6 +134,12 @@ sketch.configure({ provider: api })
   preview, and the board opens empty with a "not available on this device" notice. Use a custom
   provider to sync boards between devices.
 - The preview is regenerated 2 s after the last edit and when you leave the board.
+- **Copies share the board.** Copy/paste, duplicating the block or pasting it into another document
+  keeps its `boardId`, so both blocks open and edit the *same* board (each block keeps its own preview
+  image, refreshed when that block saves). Giving a pasted block its own copy of the board is planned
+  for M3. Until then, to start a separate board, insert a new sketch block instead.
+- Preview, board id and version changes are not editor undo steps: `Ctrl/⌘ + Z` in the text only
+  undoes inserting or deleting the block.
 
 ## Keyboard & mouse
 
@@ -160,7 +166,7 @@ sketch.configure({ provider: api })
 
 - **M1 – Drawing tools (0.2.0):** line/arrow, pen (perfect-freehand), text, eraser, style panel, Excalidraw shortcuts, copy/paste/duplicate.
 - **M2 – Miro features (0.3.0):** arrows bound to shapes, sticky notes, frames, group/ungroup, lock, images, snapping.
-- **M3 – Backend & collaboration (0.4.0):** `http()` and `websocket()` providers with live cursors, board export/import, cloning boards on paste.
+- **M3 – Backend & collaboration (0.4.0):** `http()` and `websocket()` providers with live cursors, board export/import, cloning boards on paste and duplicate (until then a copied block shares its board with the original).
 - **M4 – Export, library, polish (0.5.0 → 1.0):** PNG/SVG export, shape library, board templates, minimap, level of detail.
 
 ## License
