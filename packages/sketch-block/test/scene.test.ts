@@ -84,7 +84,8 @@ describe('Scene', () => {
     expect(scene.contentBounds()).toBeNull()
     store.create(init({ x: 0, y: 0 }))
     store.create(init({ x: 200, y: 100 }))
-    expect(scene.contentBounds()).toEqual({ minX: -1, minY: -1, maxX: 301, maxY: 151 })
+    // padded by the shape visual pad: strokeWidth 2 + roughness 1 * 4 = 6
+    expect(scene.contentBounds()).toEqual({ minX: -6, minY: -6, maxX: 306, maxY: 156 })
   })
 
   it('1000 elements: hitTest of a small box touches far fewer than all', () => {

@@ -1,9 +1,10 @@
+import { kindOf } from '../elements/kind'
+import type { Box } from '../geometry'
 import type { Scene } from '../model/scene'
 import type { SketchElement } from '../model/types'
-import type { Box } from '../geometry'
 import type { Viewport } from '../viewport'
 import { type BitmapCache, bitmapPad, bitmapScale, buildBitmap, cacheKey } from './bitmap-cache'
-import { cornerRadius, displayColor, hasFill, type Theme } from './shapes'
+import type { Theme } from './shapes'
 
 export interface RenderState {
   viewport: Viewport
@@ -17,8 +18,6 @@ export interface RenderState {
 }
 
 export const LOD_ZOOM = 0.3
-/** Largest rough-stroke overshoot beyond the element box: strokeWidth 4 + roughness 2 * 4. Index bounds only pad strokeWidth / 2. */
-const MAX_ROUGH_PAD = 4 + 2 * 4
 const GRID = 20
 const GRID_MIN_PX = 8
 
@@ -54,37 +53,6 @@ function drawGrid(ctx: CanvasRenderingContext2D, box: Box, state: RenderState): 
   ctx.stroke()
 }
 
-/** Plain geometric path in the element's centered frame (used for LOD). */
-function plainPath(ctx: CanvasRenderingContext2D, el: SketchElement): void {
-  const hw = el.w / 2
-  const hh = el.h / 2
-  ctx.beginPath()
-  if (el.type === 'ellipse') {
-    ctx.ellipse(0, 0, Math.abs(hw), Math.abs(hh), 0, 0, Math.PI * 2)
-  } else if (el.type === 'diamond') {
-    ctx.moveTo(0, -hh)
-    ctx.lineTo(hw, 0)
-    ctx.lineTo(0, hh)
-    ctx.lineTo(-hw, 0)
-    ctx.closePath()
-  } else if (el.roundness === 'round' && typeof ctx.roundRect === 'function') {
-    ctx.roundRect(-hw, -hh, el.w, el.h, cornerRadius(el))
-  } else {
-    ctx.rect(-hw, -hh, el.w, el.h)
-  }
-}
-
-function drawLod(ctx: CanvasRenderingContext2D, el: SketchElement, theme: Theme, zoom: number): void {
-  plainPath(ctx, el)
-  if (hasFill(el)) {
-    ctx.fillStyle = displayColor(el.fill, theme)
-    ctx.fill()
-  }
-  ctx.strokeStyle = displayColor(el.stroke, theme)
-  ctx.lineWidth = Math.max(1 / zoom, el.strokeWidth)
-  ctx.stroke()
-}
-
 function drawBitmap(
   ctx: CanvasRenderingContext2D, el: SketchElement, state: RenderState, cache: BitmapCache,
 ): void {
@@ -102,7 +70,7 @@ function drawBitmap(
 }
 
 /**
- * Draws visible elements (culled via the scene index) from cached per-element bitmaps,
+ * Draws visible elements (culled via the scene index, whose bounds include each kind's visual pad) from cached per-element bitmaps,
  * or plain paths below LOD_ZOOM. `skipIds` are omitted (e.g. elements being dragged).
  */
 export function renderStatic(
@@ -117,18 +85,14 @@ export function renderStatic(
   const s = state.dpr * vp.zoom
   const box = vp.visibleBox(state.widthCss, state.heightCss)
   if (state.grid) drawGrid(ctx, box, state)
-  const query = {
-    minX: box.minX - MAX_ROUGH_PAD, minY: box.minY - MAX_ROUGH_PAD,
-    maxX: box.maxX + MAX_ROUGH_PAD, maxY: box.maxY + MAX_ROUGH_PAD,
-  }
 
   const lod = vp.zoom < LOD_ZOOM
   let drawn = 0
-  for (const el of scene.queryBox(query)) {
+  for (const el of scene.queryBox(box)) {
     if (skipIds?.has(el.id)) continue
     ctx.globalAlpha = el.opacity
     enterElementFrame(ctx, el)
-    if (lod) drawLod(ctx, el, state.theme, vp.zoom)
+    if (lod) kindOf(el).drawLod(ctx, el, state.theme, vp.zoom)
     else drawBitmap(ctx, el, state, cache)
     ctx.setTransform(s, 0, 0, s, -vp.x * s, -vp.y * s)
     drawn++

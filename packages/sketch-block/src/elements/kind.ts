@@ -1,0 +1,73 @@
+import type { Point } from '../geometry/math'
+import type { ElementPatch, ElementType, ShapeType, SketchElement } from '../model/types'
+import type { Theme } from '../render/shapes'
+import { shapeKind } from './shape'
+
+/** Per-type behaviour. Renderer, SVG export, hit-testing, bounds and resize only talk to this. */
+export interface ElementKind<E extends SketchElement = SketchElement> {
+  /** Scene units beyond the box that ink can reach. */
+  visualPad(el: E): number
+  /** Changes iff the unrotated rendering changes (not x, y, angle, index, version, locked). */
+  shapeKey(el: E): string
+  /** Local frame, box (0,0)–(w,h), full fidelity. */
+  draw(ctx: CanvasRenderingContext2D, el: E, theme: Theme): void
+  /** Centered frame (origin at the box center), cheap plain paths for low zoom. */
+  drawLod(ctx: CanvasRenderingContext2D, el: E, theme: Theme, zoom: number): void
+  /** Markup in the local frame (no wrapping <g>). */
+  svg(el: E, theme: Theme): string
+  /** `local` is the point in the element's unrotated local frame (0,0)–(w,h); `tol` in scene units. */
+  hit(el: E, local: Point, tol: number): boolean
+  resize(el: E, next: { x: number; y: number; w: number; h: number }): ElementPatch
+}
+
+const registry = new Map<ElementType, ElementKind>()
+
+const SHAPE_TYPES: readonly ShapeType[] = ['rectangle', 'ellipse', 'diamond']
+let builtinsRegistered = false
+
+/**
+ * Built-in kinds are registered on first lookup, not at module init, so this module and the kind
+ * modules (which import helpers from here) can load in any order.
+ */
+function registerBuiltins(): void {
+  if (builtinsRegistered) return
+  builtinsRegistered = true
+  for (const t of SHAPE_TYPES) {
+    if (!registry.has(t)) registry.set(t, shapeKind as ElementKind)
+  }
+}
+
+export function registerKind(type: ElementType, kind: ElementKind): void {
+  registerBuiltins()
+  registry.set(type, kind)
+}
+
+export function kindOf(el: SketchElement): ElementKind {
+  registerBuiltins()
+  const kind = registry.get(el.type)
+  if (!kind) throw new Error(`sketch-block: no element kind registered for type "${el.type}"`)
+  return kind
+}
+
+const shapeKeys = new WeakMap<SketchElement, string>()
+
+/** `kindOf(el).shapeKey(el)`, memoized per element object (elements are immutable snapshots). */
+export function shapeKeyOf(el: SketchElement): string {
+  let k = shapeKeys.get(el)
+  if (k === undefined) shapeKeys.set(el, (k = kindOf(el).shapeKey(el)))
+  return k
+}
+
+/** cyrb53: fast 53-bit string hash, base36 (no ':' so it is safe inside cache keys). */
+export function hashString(s: string): string {
+  let h1 = 0xdeadbeef
+  let h2 = 0x41c6ce57
+  for (let i = 0; i < s.length; i++) {
+    const c = s.charCodeAt(i)
+    h1 = Math.imul(h1 ^ c, 2654435761)
+    h2 = Math.imul(h2 ^ c, 1597334677)
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909)
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909)
+  return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36)
+}

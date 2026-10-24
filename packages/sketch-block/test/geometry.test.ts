@@ -9,12 +9,13 @@ const el = (over: Partial<ShapeElement> = {}): SketchElement => ({
 const filled = { fill: '#f00', fillStyle: 'solid' as const }
 
 describe('bounds', () => {
-  it('elementBounds of rect rotated 90° swaps w/h', () => {
-    const b = elementBounds(el({ angle: Math.PI / 2, strokeWidth: 2 }))
-    expect(b.minX).toBeCloseTo(24, 3)
-    expect(b.minY).toBeCloseTo(-26, 3)
-    expect(b.maxX).toBeCloseTo(76, 3)
-    expect(b.maxY).toBeCloseTo(76, 3)
+  it('elementBounds of rect rotated 90° swaps w/h, padded by visualPad', () => {
+    // pad = strokeWidth 2 + roughness 1 * 4 = 6
+    const b = elementBounds(el({ angle: Math.PI / 2, strokeWidth: 2, roughness: 1 }))
+    expect(b.minX).toBeCloseTo(19, 3)
+    expect(b.minY).toBeCloseTo(-31, 3)
+    expect(b.maxX).toBeCloseTo(81, 3)
+    expect(b.maxY).toBeCloseTo(81, 3)
   })
   it('rotatePoint, intersect, contains', () => {
     const p = rotatePoint({ x: 1, y: 0 }, { x: 0, y: 0 }, Math.PI / 2)

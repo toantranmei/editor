@@ -1,9 +1,7 @@
-import rough from 'roughjs'
+import { kindOf } from '../elements/kind'
 import { boxCenter, elementBounds } from '../geometry/bounds'
 import type { SketchElement } from '../model/types'
-import { roughOptions, shapeFor } from '../render/shapes'
 
-const generator = rough.generator()
 const SVG_PREVIEW_LIMIT = 150_000
 const PNG_MAX_WIDTH = 1200
 
@@ -17,21 +15,14 @@ const num = (n: number): string => String(Math.round(n * 100) / 100)
 const esc = (s: string): string => s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;')
 
 function elementSvg(el: SketchElement): string {
-  const dash = roughOptions(el).strokeLineDash
-  const drawable = shapeFor(el)
-  // toPaths yields one path per set, in order; only 'path' sets are dashed (as on canvas)
-  const paths = generator.toPaths(drawable).map((p, i) => {
-    const dashAttr = dash && drawable.sets[i]?.type === 'path' ? ` stroke-dasharray="${dash.map(num).join(' ')}"` : ''
-    const strokeAttr = p.stroke ? ` stroke="${esc(p.stroke)}" stroke-width="${num(p.strokeWidth)}"` : ''
-    return `<path d="${esc(p.d)}"${strokeAttr} fill="${esc(p.fill || 'none')}"${dashAttr}/>`
-  })
+  const body = kindOf(el).svg(el, 'light')
   const attrs: string[] = []
   if (el.angle) {
     const c = boxCenter(el)
     attrs.push(`transform="rotate(${num((el.angle * 180) / Math.PI)} ${num(c.x)} ${num(c.y)})"`)
   }
   if (el.opacity < 1) attrs.push(`opacity="${num(el.opacity)}"`)
-  return `<g${attrs.length ? ` ${attrs.join(' ')}` : ''}><g transform="translate(${num(el.x)} ${num(el.y)})">${paths.join('')}</g></g>`
+  return `<g${attrs.length ? ` ${attrs.join(' ')}` : ''}><g transform="translate(${num(el.x)} ${num(el.y)})">${body}</g></g>`
 }
 
 /** Standalone SVG of the elements, in the given (z-)order. */

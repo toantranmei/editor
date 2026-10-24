@@ -12,9 +12,9 @@ describe('svg export', () => {
     expect(await makePreview([])).toBeNull()
   })
 
-  it('svg viewBox matches content bounds plus padding', () => {
+  it('svg viewBox matches content bounds (visual pad 6) plus padding', () => {
     const svg = exportSvg([el()])
-    expect(svg).toContain('viewBox="-17 -17 134 84"')
+    expect(svg).toContain('viewBox="-22 -22 144 94"')
     expect(svg).toContain('xmlns="http://www.w3.org/2000/svg"')
     expect(svg).toContain('<path')
   })

@@ -1,8 +1,7 @@
-import rough from 'roughjs'
+import { kindOf } from '../elements/kind'
 import { type Box, type Handle, handlePositions } from '../geometry'
 import type { Scene } from '../model/scene'
 import type { SketchElement } from '../model/types'
-import { shapeFor } from './shapes'
 import { applyViewTransform, type RenderState } from './static'
 
 export interface Overlay {
@@ -50,7 +49,7 @@ function outline(ctx: CanvasRenderingContext2D, el: SketchElement, gap: number):
   ctx.strokeRect(-el.w / 2 - gap, -el.h / 2 - gap, el.w + 2 * gap, el.h + 2 * gap)
 }
 
-/** Draws transient UI: the draft element (live roughjs, uncached), hover, selection, handles, marquee. */
+/** Draws transient UI: the draft element (its kind's full-fidelity draw), hover, selection, handles, marquee. */
 export function renderInteractive(
   ctx: CanvasRenderingContext2D,
   scene: Scene,
@@ -66,7 +65,7 @@ export function renderInteractive(
     ctx.globalAlpha = draft.opacity
     elementFrame(ctx, state, draft.x + draft.w / 2, draft.y + draft.h / 2, draft.angle)
     ctx.translate(-draft.w / 2, -draft.h / 2)
-    rough.canvas(ctx.canvas).draw(shapeFor(draft, state.theme))
+    kindOf(draft).draw(ctx, draft, state.theme)
     ctx.globalAlpha = 1
   }
 

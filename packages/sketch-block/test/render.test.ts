@@ -3,11 +3,13 @@ import * as Y from 'yjs'
 
 import { BoardStore } from '../src/model/store'
 import { Scene } from '../src/model/scene'
-import { DEFAULT_STYLE, type ShapeElement, type SketchElement } from '../src/model/types'
+import { DEFAULT_STYLE, type ShapeElement } from '../src/model/types'
 import { BitmapCache, bindCacheInvalidation, cacheKey, zoomBucket } from '../src/render/bitmap-cache'
 import { renderInteractive, resetAccentCache } from '../src/render/interactive'
 import { RenderScheduler, ZoomSettler } from '../src/render/scheduler'
-import { displayColor, roughOptions, shapeFor } from '../src/render/shapes'
+import { shapeKeyOf } from '../src/elements/kind'
+import { shapeFor } from '../src/elements/shape'
+import { displayColor, roughOptions } from '../src/render/shapes'
 import { type RenderState, renderStatic } from '../src/render/static'
 import { Viewport } from '../src/viewport'
 
@@ -54,7 +56,7 @@ afterEach(() => {
 
 const count = (ctx: FakeCtx, name: string) => ctx.calls.filter(c => c.name === name).length
 
-const el = (over: Partial<ShapeElement> = {}): SketchElement => ({
+const el = (over: Partial<ShapeElement> = {}): ShapeElement => ({
   id: 'a', type: 'rectangle', x: 0, y: 0, w: 100, h: 50, angle: 0, index: 'a0',
   ...DEFAULT_STYLE, label: '', seed: 42, version: 1, locked: false, ...over,
 })
@@ -100,10 +102,11 @@ describe('shapes', () => {
     expect(roughOptions(el(), 'dark').stroke).toBe('#e3e3e3')
   })
 
-  it('shapeFor caches by element identity', () => {
+  it('shapeFor caches by shapeKey + theme', () => {
     const a = el()
     expect(shapeFor(a)).toBe(shapeFor(a))
-    expect(shapeFor({ ...a })).not.toBe(shapeFor(a))
+    expect(shapeFor({ ...a })).toBe(shapeFor(a))
+    expect(shapeFor({ ...a, seed: 43 })).not.toBe(shapeFor(a))
     expect(shapeFor(a, 'dark')).not.toBe(shapeFor(a, 'light'))
   })
 
@@ -124,11 +127,12 @@ describe('bitmap cache', () => {
     expect(zoomBucket(1.4)).toBeCloseTo(Math.SQRT2)
   })
 
-  it('cacheKey changes with version, zoom bucket, dpr, theme', () => {
+  it('cacheKey changes with shapeKey, zoom bucket, dpr, theme (not version)', () => {
     const a = el()
     const base = cacheKey(a, 1, 1, 'light')
-    expect(base).toBe(`a:1:${zoomBucket(1)}:1:light`)
-    expect(cacheKey({ ...a, version: 2 }, 1, 1, 'light')).not.toBe(base)
+    expect(base).toBe(`a:${shapeKeyOf(a)}:${zoomBucket(1)}:1:light`)
+    expect(cacheKey({ ...a, version: 2 }, 1, 1, 'light')).toBe(base)
+    expect(cacheKey({ ...a, stroke: '#e03131' }, 1, 1, 'light')).not.toBe(base)
     expect(cacheKey(a, 2, 1, 'light')).not.toBe(base)
     expect(cacheKey(a, 1.05, 1, 'light')).toBe(base)
     expect(cacheKey(a, 1, 2, 'light')).not.toBe(base)
@@ -270,16 +274,16 @@ describe('renderStatic', () => {
     scene.destroy()
   })
 
-  it('culls with a box inflated by the max rough pad', () => {
+  it('culls by index bounds padded with the visual pad', () => {
     const store = new BoardStore(new Y.Doc())
-    // right edge -10; index maxX = -9 (strokeWidth/2); rough strokes reach -10 + (2 + 2*4) = 0
+    // right edge -10; index maxX = -10 + visualPad (2 + 2*4) = 0, where rough strokes reach
     store.create(init({ x: -110, y: 0, w: 100, h: 50, strokeWidth: 2, roughness: 2 }))
     const scene = new Scene(store)
     const vp = new Viewport()
-    vp.x = -4 // index misses (-9 < -4) but the stroke is on screen
+    vp.x = -4 // the stroke is on screen
     const { ctx } = newCanvas()
     expect(renderStatic(ctx, scene, state({ viewport: vp }), new BitmapCache()).drawn).toBe(1)
-    vp.x = 5 // more than 12 units beyond the index bounds → culled
+    vp.x = 5 // beyond the padded index bounds → culled
     expect(renderStatic(ctx, scene, state({ viewport: vp }), new BitmapCache()).drawn).toBe(0)
     scene.destroy()
   })

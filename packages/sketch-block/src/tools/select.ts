@@ -1,3 +1,4 @@
+import { kindOf } from '../elements/kind'
 import {
   type Box, boxCenter, boxContains, elementBounds, type Handle, handlePositions, type Point, resizeBox, rotateAngle,
 } from '../geometry'
@@ -123,7 +124,9 @@ export class SelectTool implements Tool {
         return
       }
       case 'resize':
-        this.writer.set({ [g.el.id]: resizeBox(g.el, g.handle, p, { keepRatio: e.shift, fromCenter: e.alt }) })
+        this.writer.set({
+          [g.el.id]: kindOf(g.el).resize(g.el, resizeBox(g.el, g.handle, p, { keepRatio: e.shift, fromCenter: e.alt })),
+        })
         return
       case 'rotate':
         this.writer.set({ [g.el.id]: { angle: rotateAngle(boxCenter(g.el), p, e.shift) } })

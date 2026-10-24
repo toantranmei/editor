@@ -182,9 +182,9 @@ describe('SketchBoard', () => {
 
   it('zoom controls step, reset and fit', async () => {
     const { wrapper, pct } = await setup({}, s => s.create(init()))
-    // content present → fitted on mount. Bounds include the stroke (w 100 + 2, h 50 + 2):
-    // min((800 - 80) / 102, (600 - 80) / 52) ≈ 7.06
-    expect(pct()).toBe('706%')
+    // content present → fitted on mount. Bounds include the visual pad 6 (w 100 + 12, h 50 + 12):
+    // min((800 - 80) / 112, (600 - 80) / 62) ≈ 6.43
+    expect(pct()).toBe('643%')
     await wrapper.find('.me-sketch-zoom-pct').trigger('click')
     expect(pct()).toBe('100%')
     await wrapper.find('[data-action="zoom-in"]').trigger('click')
@@ -193,7 +193,7 @@ describe('SketchBoard', () => {
     await wrapper.find('[data-action="zoom-out"]').trigger('click')
     expect(pct()).toBe('80%')
     await wrapper.find('[data-action="fit"]').trigger('click')
-    expect(pct()).toBe('706%')
+    expect(pct()).toBe('643%')
   })
 
   it('undo/redo buttons follow history and emit change', async () => {

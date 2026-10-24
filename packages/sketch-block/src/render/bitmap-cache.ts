@@ -1,7 +1,7 @@
-import rough from 'roughjs'
+import { kindOf, shapeKeyOf } from '../elements/kind'
 import type { Scene } from '../model/scene'
 import type { SketchElement } from '../model/types'
-import { shapeFor, type Theme } from './shapes'
+import type { Theme } from './shapes'
 
 export const MAX_BITMAP_SIDE = 4096
 const LOG_SQRT2 = Math.log(Math.SQRT2)
@@ -12,12 +12,12 @@ export function zoomBucket(zoom: number): number {
 }
 
 export function cacheKey(el: SketchElement, zoom: number, dpr: number, theme: Theme): string {
-  return `${el.id}:${el.version}:${zoomBucket(zoom)}:${dpr}:${theme}`
+  return `${el.id}:${shapeKeyOf(el)}:${zoomBucket(zoom)}:${dpr}:${theme}`
 }
 
-/** Scene-unit padding around the element box so rough strokes are not clipped. */
+/** Scene-unit padding around the element box so ink beyond it (rough strokes) is not clipped. */
 export function bitmapPad(el: SketchElement): number {
-  return el.strokeWidth + el.roughness * 4
+  return kindOf(el).visualPad(el)
 }
 
 /**
@@ -33,7 +33,7 @@ export function bitmapScale(el: SketchElement, zoom: number, dpr: number): numbe
   return longest > MAX_BITMAP_SIDE ? s * (MAX_BITMAP_SIDE / longest) : s
 }
 
-/** Rasterizes the unrotated element, box padded by `bitmapPad`, at `bitmapScale`. */
+/** Rasterizes the unrotated element (its kind's `draw`), box padded by `bitmapPad`, at `bitmapScale`. */
 export function buildBitmap(el: SketchElement, zoom: number, dpr: number, theme: Theme): HTMLCanvasElement {
   const pad = bitmapPad(el)
   const s = bitmapScale(el, zoom, dpr)
@@ -43,7 +43,7 @@ export function buildBitmap(el: SketchElement, zoom: number, dpr: number, theme:
   const ctx = canvas.getContext('2d')
   if (!ctx) return canvas
   ctx.setTransform(s, 0, 0, s, pad * s, pad * s)
-  rough.canvas(canvas).draw(shapeFor(el, theme))
+  kindOf(el).draw(ctx, el, theme)
   return canvas
 }
 
@@ -91,6 +91,15 @@ export class BitmapCache {
     for (const k of [...keys]) this.remove(k)
   }
 
+  /** Drops the keys of `id` that do not start with `keepPrefix` (e.g. bitmaps of an old shapeKey). */
+  pruneElement(id: string, keepPrefix: string): void {
+    const keys = this.byId.get(id)
+    if (!keys) return
+    for (const k of [...keys]) {
+      if (!k.startsWith(keepPrefix)) this.remove(k)
+    }
+  }
+
   clear(): void {
     this.map.clear()
     this.byId.clear()
@@ -109,9 +118,17 @@ export class BitmapCache {
   }
 }
 
-/** Drops cached bitmaps of every changed element (version alone can collide under concurrent edits). */
+/**
+ * Frees bitmaps that can no longer be hit: for changed elements those of an outdated shapeKey
+ * (moves and rotations keep theirs), for removed elements all of them. Keys are content-addressed,
+ * so correctness does not depend on this; it only bounds memory.
+ */
 export function bindCacheInvalidation(scene: Scene, cache: BitmapCache): () => void {
   return scene.onChange(ids => {
-    for (const id of ids) cache.deleteElement(id)
+    for (const id of ids) {
+      const el = scene.get(id)
+      if (el) cache.pruneElement(id, `${id}:${shapeKeyOf(el)}:`)
+      else cache.deleteElement(id)
+    }
   })
 }
