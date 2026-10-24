@@ -16,8 +16,13 @@ function segDist2(p: LocalPoint, a: LocalPoint, b: LocalPoint): number {
  * Keeps the first and last point; iterative, so long strokes cannot overflow the stack.
  */
 export function simplify(points: LocalPoint[], tolerance: number): LocalPoint[] {
+  return simplifyIndices(points, tolerance).map(i => points[i]!)
+}
+
+/** Ramer–Douglas–Peucker like `simplify`, returning the ascending indices of the kept points. */
+export function simplifyIndices(points: readonly LocalPoint[], tolerance: number): number[] {
   const n = points.length
-  if (n <= 2) return points.slice()
+  if (n <= 2) return Array.from({ length: n }, (_, i) => i)
   const keep = new Uint8Array(n)
   keep[0] = keep[n - 1] = 1
   const tol2 = tolerance * tolerance
@@ -38,5 +43,7 @@ export function simplify(points: LocalPoint[], tolerance: number): LocalPoint[] 
       stack.push([first, idx], [idx, last])
     }
   }
-  return points.filter((_, i) => keep[i] === 1)
+  const out: number[] = []
+  for (let i = 0; i < n; i++) if (keep[i]) out.push(i)
+  return out
 }

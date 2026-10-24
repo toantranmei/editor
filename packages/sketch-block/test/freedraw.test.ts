@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { outlineToPath, strokeOutline, strokeSize } from '../src/elements/freedraw'
 import { kindOf, shapeKeyOf } from '../src/elements/kind'
 import { polylineDistance } from '../src/geometry/math'
-import { simplify } from '../src/geometry/simplify'
+import { simplify, simplifyIndices } from '../src/geometry/simplify'
 import { DEFAULT_STYLE, type FreedrawElement, type LocalPoint } from '../src/model/types'
 import { type FakeCtx, stubCanvas } from './helpers/canvas'
 
@@ -31,6 +31,15 @@ function segDist(p: LocalPoint, a: LocalPoint, b: LocalPoint): number {
 }
 
 describe('simplify (RDP)', () => {
+  it('simplifyIndices returns the kept indices, matching simplify', () => {
+    const pts: [number, number][] = [[0, 0], [1, 0.01], [2, 0], [3, 5], [4, 0]]
+    const idx = simplifyIndices(pts, 0.5)
+    expect(idx).toEqual([0, 2, 3, 4])
+    expect(simplify(pts, 0.5)).toEqual(idx.map(i => pts[i]))
+    expect(simplifyIndices([[1, 1]], 0.5)).toEqual([0])
+    expect(simplifyIndices([], 0.5)).toEqual([])
+  })
+
   it('simplify keeps endpoints and stays within tolerance', () => {
     const pts: LocalPoint[] = Array.from({ length: 50 }, (_, i) => [i * 2, Math.sin(i / 4) * 10] as LocalPoint)
     const out = simplify(pts, 1)

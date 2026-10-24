@@ -25,8 +25,8 @@ type Gesture =
 class FrameWriter {
   private pending: Record<string, ElementPatch> | null = null
   private scheduled = false
-  /** Whether any patch reached the store since the last `reset`. */
-  wrote = false
+  /** Keys written to the store per element id since the last `reset`. */
+  readonly touched = new Map<string, Set<string>>()
 
   constructor(private readonly write: (patches: Record<string, ElementPatch>) => void) {}
 
@@ -47,7 +47,11 @@ class FrameWriter {
     const p = this.pending
     this.pending = null
     if (!p) return
-    this.wrote = true
+    for (const [id, patch] of Object.entries(p)) {
+      let keys = this.touched.get(id)
+      if (!keys) this.touched.set(id, keys = new Set())
+      for (const k of Object.keys(patch)) keys.add(k)
+    }
     this.write(p)
   }
 
@@ -57,16 +61,23 @@ class FrameWriter {
 
   reset(): void {
     this.pending = null
-    this.wrote = false
+    this.touched.clear()
   }
 }
 
-/** Patches restoring every stored prop of each origin snapshot. */
-function revertPatches(origins: SketchElement[]): Record<string, ElementPatch> {
+/**
+ * Patches restoring, from each origin snapshot, only the keys the gesture wrote, so concurrent remote edits
+ * to other props (and untouched arrays such as `points`) survive the cancel.
+ */
+function revertPatches(origins: SketchElement[], touched: Map<string, Set<string>>): Record<string, ElementPatch> {
   const out: Record<string, ElementPatch> = {}
   for (const el of origins) {
-    const { id, version: _v, type: _t, index: _i, ...props } = el
-    out[id] = props as ElementPatch
+    const keys = touched.get(el.id)
+    if (!keys?.size) continue
+    const src = el as unknown as Record<string, unknown>
+    const patch: Record<string, unknown> = {}
+    for (const k of keys) patch[k] = src[k]
+    out[el.id] = patch as ElementPatch
   }
   return out
 }
@@ -200,8 +211,8 @@ export class SelectTool implements Tool {
     this.writer.drop()
     if (this.writing) {
       const { store, history } = this.host.ctx
-      const origins = this.origins()
-      if (this.writer.wrote && origins.length) store.updateMany(revertPatches(origins))
+      const patches = revertPatches(this.origins(), this.writer.touched)
+      if (Object.keys(patches).length) store.updateMany(patches)
       this.writing = false
       history.discardGesture()
     }

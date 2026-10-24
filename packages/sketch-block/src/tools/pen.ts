@@ -1,6 +1,6 @@
 import { boxFromPoints } from '../elements/linear'
 import type { Point } from '../geometry'
-import { simplify } from '../geometry/simplify'
+import { simplifyIndices } from '../geometry/simplify'
 import type { FreedrawElement, LocalPoint } from '../model/types'
 import type { PointerInput, Tool, ToolHost } from './controller'
 
@@ -14,8 +14,15 @@ const MOUSE_PRESSURE = 0.5
  * of Y; pointerUp simplifies it and commits one element in one transaction (one undo step). The tool stays active.
  */
 export class PenTool implements Tool {
+  /** Absolute scene points of the stroke in progress (null = no stroke). */
   private points: LocalPoint[] | null = null
   private pressures: number[] = []
+  /** Some sample carried a pressure other than the mouse constant. */
+  private realPressure = false
+  private minX = 0
+  private minY = 0
+  private maxX = 0
+  private maxY = 0
   private seed = 0
 
   constructor(private readonly host: ToolHost, private readonly highlighter: boolean) {}
@@ -24,6 +31,9 @@ export class PenTool implements Tool {
     if (this.host.ctx.readonly()) return
     this.points = []
     this.pressures = []
+    this.realPressure = false
+    this.minX = this.maxX = p.x
+    this.minY = this.maxY = p.y
     this.seed = Math.floor(Math.random() * 2 ** 31)
     this.add(p, e.pressure)
     this.refreshDraft()
@@ -44,11 +54,23 @@ export class PenTool implements Tool {
     if (!this.points) return
     // pens report pressure 0 on release: keep the last real one
     this.add(p, e.pressure || this.pressures[this.pressures.length - 1]!)
-    const draft = this.makeDraft(true)
+    const abs = this.points
+    const kept = simplifyIndices(abs, SIMPLIFY_TOLERANCE)
+    const pressures = kept.map(i => this.pressures[i]!)
+    const init = {
+      ...this.styleProps(),
+      ...boxFromPoints(kept.map(i => abs[i]!)),
+      type: 'freedraw' as const,
+      // constant mouse pressure → store none, so the renderer simulates it
+      pressures: pressures.some(v => v !== MOUSE_PRESSURE) ? pressures : [],
+      highlighter: this.highlighter,
+      angle: 0,
+      seed: this.seed,
+      locked: false,
+    }
     this.cancel()
     const { store, history, readonly } = this.host.ctx
     if (readonly()) return
-    const { id: _id, index: _index, version: _v, ...init } = draft
     history.stopCapturing()
     store.create(init)
     history.stopCapturing()
@@ -63,37 +85,56 @@ export class PenTool implements Tool {
     }
   }
 
-  /** Appends a sample, skipping exact repeats (so a click stays a single-point dot). */
+  /** Appends a sample (O(1)), skipping exact repeats so a click stays a single-point dot. */
   private add(p: Point, pressure: number): void {
     const pts = this.points!
     const last = pts[pts.length - 1]
     if (last && last[0] === p.x && last[1] === p.y) return
     pts.push([p.x, p.y])
-    this.pressures.push(pressure || MOUSE_PRESSURE)
+    const v = pressure || MOUSE_PRESSURE
+    this.pressures.push(v)
+    if (v !== MOUSE_PRESSURE) this.realPressure = true
+    if (p.x < this.minX) this.minX = p.x
+    if (p.x > this.maxX) this.maxX = p.x
+    if (p.y < this.minY) this.minY = p.y
+    if (p.y > this.maxY) this.maxY = p.y
   }
 
-  private refreshDraft(): void {
-    this.host.draft = this.makeDraft(false)
-    this.host.ctx.invalidate()
-  }
-
-  private makeDraft(final: boolean): FreedrawElement {
-    let abs = this.points!
-    let pressures = this.pressures
-    if (final) {
-      const at = new Map(abs.map((pt, i) => [pt, i]))
-      abs = simplify(abs, SIMPLIFY_TOLERANCE)
-      pressures = abs.map(pt => this.pressures[at.get(pt)!]!)
-    }
-    // constant mouse pressure → store none, so the renderer simulates it
-    if (pressures.every(v => v === MOUSE_PRESSURE)) pressures = []
+  private styleProps() {
     const { stroke, fill, fillStyle, strokeWidth, strokeStyle, roughness, roundness, opacity } = this.host.ctx.style()
-    return {
-      stroke, fill, fillStyle, strokeWidth, strokeStyle, roughness, roundness, opacity,
-      ...boxFromPoints(abs),
+    return { stroke, fill, fillStyle, strokeWidth, strokeStyle, roughness, roundness, opacity }
+  }
+
+  /**
+   * O(1) per move: the box comes from the running bounds; local points and pressures are materialized
+   * lazily (once per draft snapshot) only when the overlay is actually drawn.
+   */
+  private refreshDraft(): void {
+    const abs = this.points!
+    const all = this.pressures
+    const n = abs.length
+    const { minX, minY } = this
+    const real = this.realPressure
+    let local: LocalPoint[] | null = null
+    let press: number[] | null = null
+    const draft: FreedrawElement = {
+      ...this.styleProps(),
+      x: minX,
+      y: minY,
+      w: this.maxX - minX,
+      h: this.maxY - minY,
+      get points() {
+        if (!local) {
+          local = new Array<LocalPoint>(n)
+          for (let i = 0; i < n; i++) local[i] = [abs[i]![0] - minX, abs[i]![1] - minY]
+        }
+        return local
+      },
+      get pressures() {
+        return press ??= real ? all.slice(0, n) : []
+      },
       id: 'draft',
       type: 'freedraw',
-      pressures: pressures.slice(),
       highlighter: this.highlighter,
       angle: 0,
       index: 'a0',
@@ -101,5 +142,7 @@ export class PenTool implements Tool {
       version: 1,
       locked: false,
     }
+    this.host.draft = draft
+    this.host.ctx.invalidate()
   }
 }

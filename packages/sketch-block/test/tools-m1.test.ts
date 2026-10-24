@@ -106,14 +106,31 @@ describe('pen and highlighter', () => {
       const y = Math.sin(i / 200) * 50 + 100
       abs.push([x, y])
     }
-    c.pointerDown(ptr(abs[0]![0], abs[0]![1]))
-    for (const [x, y] of abs.slice(1, -1)) c.pointerMove(ptr(x, y))
-    c.pointerUp(ptr(abs[4999]![0], abs[4999]![1]))
+    const pressureAt = (x: number) => Math.round((0.1 + (x / 500) * 0.8) * 1000) / 1000
+    c.pointerDown(ptr(abs[0]![0], abs[0]![1], { pressure: pressureAt(abs[0]![0]) }))
+    for (const [x, y] of abs.slice(1, -1)) c.pointerMove(ptr(x, y, { pressure: pressureAt(x) }))
+    c.pointerUp(ptr(abs[4999]![0], abs[4999]![1], { pressure: pressureAt(abs[4999]![0]) }))
     const [el] = freedraws(store)
     expect(el!.points.length).toBeLessThan(5000)
+    // each kept point keeps its own pressure
+    expect(el!.pressures).toHaveLength(el!.points.length)
+    el!.points.forEach(([x], i) => expect(el!.pressures[i]).toBe(pressureAt(x + el!.x)))
     expect(el!.points.length).toBeGreaterThan(2)
     const sceneOf = el!.points.map(([x, y]) => [x + el!.x, y + el!.y] as const)
     for (const [x, y] of abs) expect(polylineDistance(sceneOf, { x, y })).toBeLessThanOrEqual(0.5 + 1e-9)
+  })
+
+  it('pen draft tracks the stroke box and local points', () => {
+    const { c } = setup()
+    c.setTool('pen')
+    c.pointerDown(ptr(50, 50))
+    c.pointerMove(ptr(80, 20))
+    c.pointerMove(ptr(10, 60, { pressure: 0.7 }))
+    const d = c.overlay().draft as FreedrawElement
+    expect(d).toMatchObject({ x: 10, y: 20, w: 70, h: 40, highlighter: false })
+    expect(d.points).toEqual([[40, 30], [70, 0], [0, 40]])
+    expect(d.pressures).toEqual([0.5, 0.5, 0.7])
+    c.cancelGesture()
   })
 
   it('pen click creates a dot', () => {
@@ -184,6 +201,44 @@ describe('gesture-safe keys', () => {
     // undo stack unchanged: the next undo removes the rectangles
     history.undo()
     expect(store.all()).toHaveLength(0)
+  })
+
+  it('Escape during move keeps a concurrent remote edit and reverts x/y', () => {
+    const { c, doc, store, history } = setup()
+    const remote = new Y.Doc()
+    const sync = (from: Y.Doc, to: Y.Doc) => Y.applyUpdate(to, Y.encodeStateAsUpdate(from, Y.encodeStateVector(to)))
+    const a = rect(store, 0, 0, 50, 50)
+    history.stopCapturing()
+    sync(doc, remote)
+    c.setSelection([a.id])
+    c.pointerDown(ptr(25, 25))
+    c.pointerMove(ptr(75, 45))
+    flushFrames()
+    // collaborator recolors the element mid-drag
+    ;(remote.getMap('elements').get(a.id) as Y.Map<unknown>).set('stroke', '#e03131')
+    sync(remote, doc)
+    expect(store.get(a.id)!.stroke).toBe('#e03131')
+    c.keyDown(key('Escape'))
+    expect(store.get(a.id)).toMatchObject({ x: 0, y: 0, stroke: '#e03131' })
+  })
+
+  it('cancelling a freedraw move writes only x and y', () => {
+    const { c, doc, store, history } = setup()
+    const f = store.create({
+      type: 'freedraw', x: 0, y: 0, w: 40, h: 40, angle: 0, locked: false, ...DEFAULT_STYLE,
+      points: [[0, 0], [40, 40]], pressures: [], highlighter: false,
+    })
+    history.stopCapturing()
+    c.setSelection([f.id])
+    c.pointerDown(ptr(20, 20))
+    c.pointerMove(ptr(60, 30))
+    flushFrames()
+    const changed: string[] = []
+    const m = doc.getMap('elements').get(f.id) as Y.Map<unknown>
+    m.observe(ev => changed.push(...ev.keysChanged))
+    c.keyDown(key('Escape'))
+    expect(new Set(changed)).toEqual(new Set(['x', 'y', 'version']))
+    expect(store.get(f.id)).toMatchObject({ x: 0, y: 0 })
   })
 
   it('Escape during resize reverts the box', () => {
