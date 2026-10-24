@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, toRaw, watch } from 'vue'
 import type * as Y from 'yjs'
 import '../styles/sketch.css'
+import { parseClipboard, serializeClipboard } from '../io/clipboard'
 import { messages as allMessages } from '../messages'
 import { History } from '../model/history'
 import { Scene } from '../model/scene'
@@ -291,6 +292,8 @@ function onDprChange(): void {
 
 // ---------- input ----------
 let activePointer: number | null = null
+/** Last pointer position over the board (screen px; null = never entered), for paste-at-pointer. */
+let lastPointer: { x: number; y: number } | null = null
 
 function toInput(e: PointerEvent, rect: DOMRect): PointerInput {
   return {
@@ -321,6 +324,7 @@ function onPointerMove(e: PointerEvent): void {
   if (activePointer !== null && e.pointerId !== activePointer) return
   const rect = canvasRect()
   const input = toInput(e, rect)
+  lastPointer = input.screen
   // Pen/touch deliver several samples per frame: one move carries them all (drawing tools consume each).
   const samples = e.pointerType !== 'mouse' ? e.getCoalescedEvents?.() : undefined
   if (samples && samples.length > 1) {
@@ -369,6 +373,33 @@ function onKeyDown(e: KeyboardEvent): void {
   }
   const input = { key: e.key, code: e.code, mod: e.ctrlKey || e.metaKey, shift: e.shiftKey, alt: e.altKey }
   if (controller.keyDown(input)) e.preventDefault()
+}
+
+// ---------- clipboard ----------
+/** Copies (and for cut, deletes) the selection; text fields inside the board keep native copy/cut. */
+function onCopy(e: ClipboardEvent, cut = false): void {
+  if (isTextTarget(e.target) || editing.value || !e.clipboardData) return
+  if (cut && (props.readonly || controller.isGestureActive())) return
+  const els = controller.selectedElements()
+  if (!els.length) return
+  e.clipboardData.setData('text/plain', serializeClipboard(els))
+  e.preventDefault()
+  if (cut) controller.deleteSelection()
+}
+
+function onCut(e: ClipboardEvent): void {
+  onCopy(e, true)
+}
+
+/** Pastes sketch elements, or plain text as a text element, at the last pointer position. */
+function onPaste(e: ClipboardEvent): void {
+  if (isTextTarget(e.target) || editing.value || props.readonly || controller.isGestureActive()) return
+  const parsed = parseClipboard(e.clipboardData?.getData('text/plain') ?? '')
+  if (!parsed) return
+  e.preventDefault()
+  const at = lastPointer ? viewport.toScene(lastPointer) : null
+  if ('elements' in parsed) controller.pasteElements(parsed.elements, at)
+  else controller.pasteText(parsed.text, at ?? viewport.toScene(center()))
 }
 
 function onKeyUp(e: KeyboardEvent): void {
@@ -422,6 +453,9 @@ defineExpose({
     tabindex="0"
     @keydown="onKeyDown"
     @keyup="onKeyUp"
+    @copy="onCopy($event)"
+    @cut="onCut"
+    @paste="onPaste"
   >
     <canvas ref="staticCanvas" class="me-sketch-canvas" aria-hidden="true" />
     <canvas

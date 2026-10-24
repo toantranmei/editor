@@ -1,11 +1,12 @@
 import { type Ref, ref, shallowRef } from 'vue'
 import type { Box, Point } from '../geometry'
+import { elementCorners } from '../geometry/bounds'
 import { hitElement } from '../geometry/hit'
 import type { History } from '../model/history'
 import type { Scene } from '../model/scene'
 import type { BoardStore } from '../model/store'
 import { type CurrentStyle, INITIAL_STYLE, styleOf, stylePatchFor } from '../model/style'
-import type { ElementPatch, SketchElement, TextElement, TextStyle } from '../model/types'
+import type { ElementInit, ElementPatch, SketchElement, TextElement, TextStyle } from '../model/types'
 import { linearScenePoints } from '../elements/linear'
 import { editedTextBox } from '../elements/text'
 import { DEFAULT_STYLE, isLinear, isShape, isText } from '../model/types'
@@ -124,6 +125,8 @@ const TOOL_KEYS: Record<string, 'hand' | PointerToolName> = {
 }
 /** Non-creating tools that still show a crosshair. */
 const POINTERS = new Set<ToolName>(['eraser', 'laser', 'lasso', 'eyedropper'])
+/** Offset of pasted / duplicated elements from their originals when there is no pointer position, scene px. */
+const PASTE_OFFSET = 16
 /** Hit tolerance for picking the element to edit, in screen px. */
 const EDIT_HIT_PX = 6
 const NUDGE: Record<string, [number, number]> = {
@@ -361,6 +364,12 @@ export class ToolController implements ToolHost {
         this.selectAll()
         return true
       }
+      if (k === 'd' && !e.alt) {
+        // claimed even with nothing selected, so the browser's bookmark shortcut never fires on the board
+        if (ro) return false
+        this.duplicate()
+        return true
+      }
       return false
     }
     if (k === ' ') {
@@ -416,6 +425,75 @@ export class ToolController implements ToolHost {
     history.stopCapturing()
     store.remove(ids)
     history.stopCapturing()
+  }
+
+  /** Selected, existing elements in z-order (bottom first): what copy / cut put on the clipboard. */
+  selectedElements(): SketchElement[] {
+    const sel = this.selectedIds.value
+    return sel.size ? this.ctx.scene.elements.filter(el => sel.has(el.id)) : []
+  }
+
+  /**
+   * Creates copies of `inits` with new ids, keeping their relative layout and z-order, above everything else.
+   * The group's top-left lands at `at`, or +16,+16 from the originals when null. One undo step; selects them.
+   */
+  pasteElements(inits: ElementInit[], at: Point | null): void {
+    if (this.ctx.readonly() || this.isGestureActive() || !inits.length) return
+    let minX = Infinity
+    let minY = Infinity
+    for (const el of inits) {
+      for (const c of elementCorners(el)) {
+        minX = Math.min(minX, c.x)
+        minY = Math.min(minY, c.y)
+      }
+    }
+    const dx = at ? at.x - minX : PASTE_OFFSET
+    const dy = at ? at.y - minY : PASTE_OFFSET
+    const copies = inits.map(init => {
+      // new id; the store assigns index / version
+      const { id: _id, index: _index, version: _version, ...rest } = init as ElementInit & Partial<SketchElement>
+      const copy = { ...rest, x: init.x + dx, y: init.y + dy } as ElementInit
+      // fresh arrays: never share a source's arrays
+      if ('points' in copy) copy.points = copy.points.map(p => [p[0], p[1]])
+      if ('pressures' in copy) copy.pressures = [...copy.pressures]
+      return copy
+    })
+    this.insert(copies)
+  }
+
+  /** Creates an auto-sized text element (current text style) with its top-left at `at`; one undo step. */
+  pasteText(text: string, at: Point | null): void {
+    if (this.ctx.readonly() || this.isGestureActive()) return
+    const value = text.replace(/\r\n?/g, '\n')
+    if (!value.trim()) return
+    const p = at ?? this.ctx.viewport.toScene({ x: PASTE_OFFSET, y: PASTE_OFFSET })
+    const { stroke, strokeWidth, strokeStyle, roughness, roundness, opacity, ...style } = this.currentStyle.value
+    const { fill, fillStyle } = DEFAULT_STYLE
+    const font: TextStyle = { fontFamily: style.fontFamily, fontSize: style.fontSize, textAlign: style.textAlign }
+    const { w, h } = measureText(value, font, null)
+    this.insert([{
+      stroke, fill, fillStyle, strokeWidth, strokeStyle, roughness, roundness, opacity,
+      ...font, type: 'text', text: value, autoSize: true,
+      x: p.x, y: p.y, w, h, angle: 0, locked: false,
+    }])
+  }
+
+  /** Copies of the selected, unlocked elements, offset +16,+16 (mod+d). */
+  duplicate(): void {
+    const els = this.movableSelection()
+    if (!els.length) return
+    const order = new Set(els.map(el => el.id))
+    this.pasteElements(this.ctx.scene.elements.filter(el => order.has(el.id)), null)
+  }
+
+  /** Creates `inits` as one undo step and selects them (back to select from a drawing tool). */
+  private insert(inits: ElementInit[]): void {
+    const { history, store } = this.ctx
+    history.stopCapturing()
+    const created = store.createMany(inits)
+    history.stopCapturing()
+    if (CREATORS.has(this.tool.value)) this.setTool('select')
+    this.setSelection(created.map(el => el.id))
   }
 
   selectAll(): void {
