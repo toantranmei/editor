@@ -1,0 +1,102 @@
+/*
+ * Sketch board chrome. Only var(--me-…) tokens from @toantranmei/editor.
+ */
+@layer mei-editor {
+  .me-sketch-board {
+    /* read by the interactive canvas for selection / marquee color */
+    --me-accent: var(--me-color-accent);
+    position: relative;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: var(--me-color-bg);
+    color: var(--me-color-text);
+    outline: none;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+    overscroll-behavior: contain;
+  }
+  .me-sketch-board:focus-visible { box-shadow: inset 0 0 0 var(--me-border-width-thick) var(--me-input-focus-ring); }
+
+  .me-sketch-board .me-sketch-canvas {
+    position: absolute;
+    inset: 0;
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+
+  /* ── Floating panels ─────────────────────────────────────────── */
+  .me-sketch-board :is(.me-sketch-toolbar, .me-sketch-zoom) {
+    position: absolute;
+    display: flex;
+    align-items: center;
+    gap: var(--me-space-1);
+    padding: var(--me-space-1);
+    border-radius: var(--me-popover-radius);
+    background: var(--me-popover-bg);
+    box-shadow: var(--me-popover-shadow);
+    font-size: var(--me-font-size-sm);
+  }
+  .me-sketch-board .me-sketch-toolbar {
+    top: var(--me-space-4);
+    left: 50%;
+    transform: translateX(-50%);
+  }
+  .me-sketch-board .me-sketch-zoom {
+    right: var(--me-space-4);
+    bottom: var(--me-space-4);
+  }
+
+  /* Same look as the editor's .me-tool-btn, repeated so the board also works outside .me-scope. */
+  .me-sketch-board .me-tool-btn {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--me-space-1);
+    min-width: var(--me-toolbar-button-size);
+    height: var(--me-toolbar-button-size);
+    padding: 0 var(--me-space-3);
+    border: none;
+    border-radius: var(--me-toolbar-button-radius);
+    background: none;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+  }
+  .me-sketch-board .me-tool-btn:hover { background: var(--me-toolbar-button-hover); }
+  .me-sketch-board .me-tool-btn.is-active { color: var(--me-toolbar-active-color); background: var(--me-toolbar-button-hover); }
+  .me-sketch-board .me-tool-btn:disabled { opacity: var(--me-button-disabled-opacity); cursor: default; }
+  .me-sketch-board .me-tool-btn:disabled:hover { background: none; }
+  .me-sketch-board .me-tool-btn:focus-visible { outline: none; box-shadow: 0 0 0 var(--me-border-width-thick) var(--me-input-focus-ring); }
+
+  .me-sketch-board .me-sketch-tool { padding: 0 var(--me-space-2); }
+  .me-sketch-board .me-sketch-badge {
+    position: absolute;
+    right: var(--me-space-1);
+    bottom: 0;
+    font-size: var(--me-font-size-xs);
+    line-height: 1;
+    color: var(--me-color-text-faint);
+    pointer-events: none;
+    transform: scale(0.75);
+    transform-origin: bottom right;
+  }
+  .me-sketch-board .me-sketch-zoom-pct {
+    min-width: calc(var(--me-toolbar-button-size) * 1.75);
+    font-variant-numeric: tabular-nums;
+  }
+  .me-sketch-board .me-toolbar-divider {
+    width: var(--me-border-width-thin);
+    height: var(--me-font-size-lg);
+    margin: 0 var(--me-space-1);
+    background: var(--me-toolbar-divider-color);
+  }
+  .me-sketch-board .lucide {
+    width: var(--me-icon-size);
+    height: var(--me-icon-size);
+    stroke-width: var(--me-icon-stroke);
+  }
+}
