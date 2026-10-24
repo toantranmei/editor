@@ -2,7 +2,15 @@
   "name": "@toantranmei/sketch-block",
   "version": "0.0.0",
   "description": "Optional whiteboard block for @toantranmei/editor.",
-  "keywords": ["vue", "tiptap", "whiteboard", "sketch", "excalidraw", "editor", "block"],
+  "keywords": [
+    "vue",
+    "tiptap",
+    "whiteboard",
+    "sketch",
+    "excalidraw",
+    "editor",
+    "block"
+  ],
   "license": "MIT",
   "author": "toantranmei",
   "repository": {
@@ -15,7 +23,11 @@
     "url": "https://github.com/toantranmei/editor/issues"
   },
   "type": "module",
-  "files": ["dist", "README.md", "LICENSE"],
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "main": "./dist/index.js",
   "module": "./dist/index.js",
   "types": "./dist/types/index.d.ts",
@@ -30,7 +42,9 @@
     },
     "./style.css": "./dist/style.css"
   },
-  "sideEffects": ["**/*.css"],
+  "sideEffects": [
+    "**/*.css"
+  ],
   "scripts": {
     "build": "vite build && vue-tsc -p tsconfig.build.json && node scripts/check-entry.mjs",
     "dev": "vite build --watch",
@@ -45,6 +59,7 @@
     "@tiptap/vue-3": "3.32.0",
     "@toantranmei/editor": "^0.2.0",
     "vue": "^3.5.0",
+    "y-protocols": "^1.0.6",
     "yjs": "^13.6.0"
   },
   "dependencies": {
@@ -71,6 +86,7 @@
     "vitest": "5.0.5",
     "vue": "^3.5.0",
     "vue-tsc": "^3.0.0",
+    "y-protocols": "^1.0.6",
     "yjs": "^13.6.0"
   },
   "publishConfig": {
@@ -78,5 +94,10 @@
   },
   "engines": {
     "node": ">=20"
+  },
+  "peerDependenciesMeta": {
+    "y-protocols": {
+      "optional": true
+    }
   }
 }
