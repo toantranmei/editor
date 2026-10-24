@@ -75,7 +75,8 @@ function drawBitmap(
 
 /**
  * Draws visible elements (culled via the scene index, whose bounds include each kind's visual pad) from cached per-element bitmaps,
- * or plain paths below LOD_ZOOM. `skipIds` are omitted (e.g. elements being dragged).
+ * or plain paths below LOD_ZOOM. `skipIds` are omitted (e.g. elements being dragged); `substitutes` are drawn in
+ * place of the element with the same id (e.g. a shape without the label being edited).
  */
 export function renderStatic(
   ctx: CanvasRenderingContext2D,
@@ -83,6 +84,7 @@ export function renderStatic(
   state: RenderState,
   cache: BitmapCache,
   skipIds?: Set<string>,
+  substitutes?: ReadonlyMap<string, SketchElement>,
 ): { drawn: number } {
   const vp = state.viewport
   applyViewTransform(ctx, state)
@@ -92,8 +94,9 @@ export function renderStatic(
 
   const lod = vp.zoom < LOD_ZOOM
   let drawn = 0
-  for (const el of scene.queryBox(box)) {
-    if (skipIds?.has(el.id)) continue
+  for (const found of scene.queryBox(box)) {
+    if (skipIds?.has(found.id)) continue
+    const el = substitutes?.get(found.id) ?? found
     ctx.globalAlpha = el.opacity
     enterElementFrame(ctx, el)
     if (lod) kindOf(el).drawLod(ctx, el, state.theme, vp.zoom)

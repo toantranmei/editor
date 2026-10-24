@@ -47,6 +47,19 @@ export function svgTextBlock(b: TextBlock): string {
     + ` xml:space="preserve">${spans}</text>`
 }
 
+/** Share of a width change taken on the left, so the aligned edge (or center) stays put. */
+const ALIGN_SHIFT: Record<TextAlign, number> = { left: 0, center: 0.5, right: 1 }
+
+/**
+ * Box of `el` holding `text` instead of its current text. autoSize: sized to the text, keeping the aligned
+ * edge (or center) in place; otherwise the width is kept and the height fits the wrapped lines.
+ */
+export function editedTextBox(el: TextElement, text: string): { x: number; w: number; h: number } {
+  if (!el.autoSize) return { x: el.x, w: el.w, h: measureText(text, el, el.w).h }
+  const { w, h } = measureText(text, el, null)
+  return { x: el.x + (el.w - w) * ALIGN_SHIFT[el.textAlign], w, h }
+}
+
 function textBlock(el: TextElement, theme: Theme): TextBlock {
   return {
     lines: wrapText(el.text, el, el.autoSize ? null : el.w),

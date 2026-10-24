@@ -27,6 +27,23 @@
     height: 100%;
   }
 
+  /* ── Text editor overlay (position, size, font and color are set inline from the element) ── */
+  .me-sketch-board .me-sketch-text-editor {
+    position: absolute;
+    box-sizing: content-box;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    outline: none;
+    background: transparent;
+    resize: none;
+    overflow: hidden;
+    overflow-wrap: break-word;
+    caret-color: currentColor;
+    user-select: text;
+    -webkit-user-select: text;
+  }
+
   /* ── Floating panels ─────────────────────────────────────────── */
   .me-sketch-board :is(.me-sketch-toolbar, .me-sketch-zoom) {
     position: absolute;

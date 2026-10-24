@@ -9,12 +9,21 @@ import { drawTextBlock, svgTextBlock, type TextBlock } from './text'
 /** Horizontal padding between the shape box and its label. */
 const LABEL_PAD = 8
 
+/**
+ * Box of the label `text` in the shape's local frame: the padded box width, the wrapped block centered
+ * vertically. Shared by drawing and the label editor overlay.
+ */
+export function labelBox(el: ShapeElement, text: string): { x: number; y: number; w: number; h: number; lines: string[] } {
+  const w = Math.max(0, el.w - 2 * LABEL_PAD)
+  const { lines, h } = measureText(text, el, w)
+  return { x: LABEL_PAD, y: (el.h - h) / 2, w, h, lines }
+}
+
 /** Label lines wrapped to the padded box width, the block centered vertically in the box. */
 function labelBlock(el: ShapeElement, theme: Theme): TextBlock | null {
   if (el.label === '') return null
-  const w = Math.max(0, el.w - 2 * LABEL_PAD)
-  const { lines, h } = measureText(el.label, el, w)
-  return { lines, style: el, color: displayColor(el.stroke, theme), x: LABEL_PAD, y: (el.h - h) / 2, w }
+  const { lines, x, y, w } = labelBox(el, el.label)
+  return { lines, style: el, color: displayColor(el.stroke, theme), x, y, w }
 }
 
 function roundedRectPath(w: number, h: number, r: number): string {

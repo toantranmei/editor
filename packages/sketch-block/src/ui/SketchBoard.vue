@@ -6,7 +6,7 @@ import { messages as allMessages } from '../messages'
 import { History } from '../model/history'
 import { Scene } from '../model/scene'
 import { BoardStore } from '../model/store'
-import { DEFAULT_STYLE, type SketchElement } from '../model/types'
+import { DEFAULT_STYLE, isShape, type SketchElement } from '../model/types'
 import type { BoardConnection } from '../providers/types'
 import { BitmapCache, bindCacheInvalidation } from '../render/bitmap-cache'
 import { renderInteractive, resetAccentCache } from '../render/interactive'
@@ -14,6 +14,7 @@ import { RenderScheduler, ZoomSettler } from '../render/scheduler'
 import { type RenderState, renderStatic } from '../render/static'
 import { type PointerInput, ToolController, type ToolName } from '../tools/controller'
 import { Viewport } from '../viewport'
+import TextEditor from './TextEditor.vue'
 import Toolbar from './Toolbar.vue'
 import ZoomControls from './ZoomControls.vue'
 
@@ -56,6 +57,8 @@ let dpr = currentDpr()
 let placed = false
 const zoom = ref(viewport.zoom)
 const last = { x: viewport.x, y: viewport.y, zoom: viewport.zoom }
+/** Viewport snapshot for DOM overlays (the text editor) that follow pans and zooms. */
+const view = shallowRef({ x: viewport.x, y: viewport.y, zoom: viewport.zoom })
 
 function currentDpr(): number {
   return (typeof window !== 'undefined' && window.devicePixelRatio) || 1
@@ -73,7 +76,12 @@ function renderState(): RenderState {
 
 function drawStatic(): void {
   const ctx = staticCanvas.value?.getContext('2d')
-  if (ctx) renderStatic(ctx, scene, renderState(), cache)
+  if (!ctx) return
+  // the element being edited is drawn by the editor overlay: a text element is hidden, a shape loses its label
+  const el = editingEl.value
+  if (!el) renderStatic(ctx, scene, renderState(), cache)
+  else if (isShape(el)) renderStatic(ctx, scene, renderState(), cache, undefined, new Map([[el.id, { ...el, label: '' }]]))
+  else renderStatic(ctx, scene, renderState(), cache, new Set([el.id]))
 }
 
 function drawInteractive(): void {
@@ -101,6 +109,7 @@ function syncView(): void {
   last.y = vp.y
   last.zoom = vp.zoom
   zoom.value = vp.zoom
+  view.value = { x: vp.x, y: vp.y, zoom: vp.zoom }
   invalidateAll()
 }
 
@@ -117,11 +126,42 @@ const controller = new ToolController({
 const tool = controller.tool
 const toolLocked = controller.toolLocked
 const cursor = controller.cursor
+const editing = controller.editing
 const { canUndo, canRedo } = history
+
+// ---------- text editing ----------
+const editor = shallowRef<InstanceType<typeof TextEditor> | null>(null)
+/** Current state of the element being edited (null = not editing). */
+const editingEl = shallowRef<SketchElement | null>(null)
+
+function refreshEditing(): void {
+  const target = editing.value
+  const el = target ? scene.get(target.id) ?? null : null
+  if (el === editingEl.value) return
+  editingEl.value = el
+  scheduler.invalidateStatic()
+}
+
+watch(editing, refreshEditing, { flush: 'sync' })
+
+function onEditorCommit(value: string): void {
+  // a keyboard commit (Escape, Ctrl/Cmd+Enter) leaves focus on the removed textarea: hand it back to the board
+  const keyboard = editor.value?.$el === document.activeElement
+  controller.commitEditing(value)
+  if (keyboard) root.value?.focus({ preventScroll: true })
+}
+
+function onDblClick(e: MouseEvent): void {
+  // only the select tool routes double-clicks; the controller also checks the press began with it
+  if (tool.value !== 'select') return
+  const rect = canvasRect()
+  controller.doubleClick({ x: e.clientX - rect.left, y: e.clientY - rect.top })
+}
 
 const offs: Array<() => void> = []
 offs.push(bindCacheInvalidation(scene, cache))
 offs.push(scene.onChange(invalidateAll))
+offs.push(scene.onChange(refreshEditing))
 
 const onAfterTransaction = (tr: Y.Transaction) => {
   if (tr.local && tr.changed.size > 0) emit('change')
@@ -137,6 +177,7 @@ watch(() => props.theme, () => {
 
 watch(() => props.readonly, ro => {
   if (!ro) return
+  editor.value?.commit()
   toolLocked.value = false
   if (tool.value !== 'hand' && tool.value !== 'select') controller.setTool('select')
 })
@@ -315,6 +356,8 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  // keep what is being typed (the editor unmounts after the board's hook)
+  editor.value?.commit()
   root.value?.removeEventListener('wheel', onWheel)
   resizeObserver?.disconnect()
   resizeObserver = null
@@ -355,6 +398,18 @@ defineExpose({
       @pointermove="onPointerMove"
       @pointerup="onPointerUp"
       @pointercancel="onPointerUp"
+      @dblclick="onDblClick"
+    />
+    <TextEditor
+      v-if="editing && editingEl"
+      ref="editor"
+      :key="editing.id"
+      :element="editingEl"
+      :kind="editing.kind"
+      :view="view"
+      :theme="theme"
+      :label="t.tools.text"
+      @commit="onEditorCommit"
     />
     <Toolbar
       :tool="tool"
