@@ -2,6 +2,7 @@ import type { Point } from '../geometry/math'
 import type { ElementPatch, ElementType, ShapeType, SketchElement } from '../model/types'
 import type { Theme } from '../render/shapes'
 import { shapeKind } from './shape'
+import { textKind } from './text'
 
 /** Per-type behaviour. Renderer, SVG export, hit-testing, bounds and resize only talk to this. */
 export interface ElementKind<E extends SketchElement = SketchElement> {
@@ -35,6 +36,7 @@ function registerBuiltins(): void {
   for (const t of SHAPE_TYPES) {
     if (!registry.has(t)) registry.set(t, shapeKind as ElementKind)
   }
+  if (!registry.has('text')) registry.set('text', textKind as ElementKind)
 }
 
 export function registerKind(type: ElementType, kind: ElementKind): void {

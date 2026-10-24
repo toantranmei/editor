@@ -2,7 +2,20 @@ import rough from 'roughjs'
 import type { Drawable } from 'roughjs/bin/core'
 import type { ShapeElement } from '../model/types'
 import { cornerRadius, displayColor, hasFill, roughOptions, type Theme } from '../render/shapes'
+import { measureText } from '../text/measure'
 import { type ElementKind, hashString, shapeKeyOf } from './kind'
+import { drawTextBlock, svgTextBlock, type TextBlock } from './text'
+
+/** Horizontal padding between the shape box and its label. */
+const LABEL_PAD = 8
+
+/** Label lines wrapped to the padded box width, the block centered vertically in the box. */
+function labelBlock(el: ShapeElement, theme: Theme): TextBlock | null {
+  if (el.label === '') return null
+  const w = Math.max(0, el.w - 2 * LABEL_PAD)
+  const { lines, h } = measureText(el.label, el, w)
+  return { lines, style: el, color: displayColor(el.stroke, theme), x: LABEL_PAD, y: (el.h - h) / 2, w }
+}
 
 function roundedRectPath(w: number, h: number, r: number): string {
   return `M ${r} 0 L ${w - r} 0 Q ${w} 0, ${w} ${r} L ${w} ${h - r} Q ${w} ${h}, ${w - r} ${h}`
@@ -93,7 +106,7 @@ function shapeMetrics(type: ShapeElement['type'], dx: number, dy: number, hw: nu
 const num = (n: number): string => String(Math.round(n * 100) / 100)
 const esc = (s: string): string => s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;')
 
-/** rectangle / ellipse / diamond. The label is part of the key but drawn from Task 3 on. */
+/** rectangle / ellipse / diamond, with an optional centered label. */
 export const shapeKind: ElementKind<ShapeElement> = {
   visualPad: el => el.strokeWidth + el.roughness * 4,
 
@@ -101,6 +114,8 @@ export const shapeKind: ElementKind<ShapeElement> = {
 
   draw(ctx, el, theme) {
     rough.canvas(ctx.canvas).draw(shapeFor(el, theme))
+    const label = labelBlock(el, theme)
+    if (label) drawTextBlock(ctx, label)
   },
 
   drawLod(ctx, el, theme, zoom) {
@@ -118,11 +133,12 @@ export const shapeKind: ElementKind<ShapeElement> = {
     const dash = roughOptions(el, theme).strokeLineDash
     const drawable = shapeFor(el, theme)
     // toPaths yields one path per set, in order; only 'path' sets are dashed (as on canvas)
+    const label = labelBlock(el, theme)
     return generator.toPaths(drawable).map((p, i) => {
       const dashAttr = dash && drawable.sets[i]?.type === 'path' ? ` stroke-dasharray="${dash.map(num).join(' ')}"` : ''
       const strokeAttr = p.stroke ? ` stroke="${esc(p.stroke)}" stroke-width="${num(p.strokeWidth)}"` : ''
       return `<path d="${esc(p.d)}"${strokeAttr} fill="${esc(p.fill || 'none')}"${dashAttr}/>`
-    }).join('')
+    }).join('') + (label ? svgTextBlock(label) : '')
   },
 
   hit(el, local, tol) {
