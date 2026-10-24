@@ -5,6 +5,7 @@ import { cornerRadius, displayColor, hasFill, roughOptions, type Theme } from '.
 import { measureText } from '../text/measure'
 import { type ElementKind, hashString, shapeKeyOf } from './kind'
 import { drawTextBlock, svgTextBlock, type TextBlock } from './text'
+import { escXml } from '../io/xml'
 
 /** Horizontal padding between the shape box and its label. */
 const LABEL_PAD = 8
@@ -113,7 +114,6 @@ function shapeMetrics(type: ShapeElement['type'], dx: number, dy: number, hw: nu
 }
 
 const num = (n: number): string => String(Math.round(n * 100) / 100)
-const esc = (s: string): string => s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;')
 
 /** rectangle / ellipse / diamond, with an optional centered label. */
 export const shapeKind: ElementKind<ShapeElement> = {
@@ -145,8 +145,8 @@ export const shapeKind: ElementKind<ShapeElement> = {
     const label = labelBlock(el, theme)
     return generator.toPaths(drawable).map((p, i) => {
       const dashAttr = dash && drawable.sets[i]?.type === 'path' ? ` stroke-dasharray="${dash.map(num).join(' ')}"` : ''
-      const strokeAttr = p.stroke ? ` stroke="${esc(p.stroke)}" stroke-width="${num(p.strokeWidth)}"` : ''
-      return `<path d="${esc(p.d)}"${strokeAttr} fill="${esc(p.fill || 'none')}"${dashAttr}/>`
+      const strokeAttr = p.stroke ? ` stroke="${escXml(p.stroke)}" stroke-width="${num(p.strokeWidth)}"` : ''
+      return `<path d="${escXml(p.d)}"${strokeAttr} fill="${escXml(p.fill || 'none')}"${dashAttr}/>`
     }).join('') + (label ? svgTextBlock(label) : '')
   },
 

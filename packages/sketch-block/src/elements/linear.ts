@@ -4,6 +4,7 @@ import { type Point, polylineDistance, rotatePoint, scalePoints } from '../geome
 import { type Arrowhead, isLinear, type LinearElement, type LocalPoint, type SketchElement } from '../model/types'
 import { displayColor, roughOptions, type Theme } from '../render/shapes'
 import { type ElementKind, hashString, shapeKeyOf } from './kind'
+import { escXml } from '../io/xml'
 
 /** Points the shaft actually passes through, in the local frame. */
 export function routePoints(el: LinearElement): LocalPoint[] {
@@ -177,7 +178,6 @@ function plainPolyline(ctx: CanvasRenderingContext2D, pts: LocalPoint[], closed 
 }
 
 const num = (n: number): string => String(Math.round(n * 100) / 100)
-const esc = (s: string): string => s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;')
 
 /** line / arrow: a rough shaft along `routePoints` with optional heads at either end. */
 export const linearKind: ElementKind<LinearElement> = {
@@ -225,8 +225,8 @@ export const linearKind: ElementKind<LinearElement> = {
       // toPaths yields one path per set, in order; only 'path' sets are dashed (as on canvas)
       return generator.toPaths(drawable).map((p, i) => {
         const dashAttr = dash && drawable.sets[i]?.type === 'path' ? ` stroke-dasharray="${dash.map(num).join(' ')}"` : ''
-        const strokeAttr = p.stroke ? ` stroke="${esc(p.stroke)}" stroke-width="${num(p.strokeWidth)}"` : ''
-        return `<path d="${esc(p.d)}"${strokeAttr} fill="${esc(p.fill || 'none')}"${dashAttr}/>`
+        const strokeAttr = p.stroke ? ` stroke="${escXml(p.stroke)}" stroke-width="${num(p.strokeWidth)}"` : ''
+        return `<path d="${escXml(p.d)}"${strokeAttr} fill="${escXml(p.fill || 'none')}"${dashAttr}/>`
       }).join('')
     }).join('')
   },

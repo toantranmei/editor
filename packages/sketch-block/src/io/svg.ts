@@ -1,6 +1,7 @@
 import { kindOf } from '../elements/kind'
 import { boxCenter, elementBounds } from '../geometry/bounds'
 import type { SketchElement } from '../model/types'
+import { escXml } from './xml'
 
 const SVG_PREVIEW_LIMIT = 150_000
 const PNG_MAX_WIDTH = 1200
@@ -12,7 +13,6 @@ export interface PreviewOptions {
 }
 
 const num = (n: number): string => String(Math.round(n * 100) / 100)
-const esc = (s: string): string => s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;')
 
 function elementSvg(el: SketchElement): string {
   const body = kindOf(el).svg(el, 'light')
@@ -40,7 +40,7 @@ export function exportSvg(elements: readonly SketchElement[], opts: ExportSvgOpt
   const x = minX - padding, y = minY - padding
   const w = maxX - minX + padding * 2, h = maxY - minY + padding * 2
   const bg = opts.background
-    ? `<rect x="${num(x)}" y="${num(y)}" width="${num(w)}" height="${num(h)}" fill="${esc(opts.background)}"/>`
+    ? `<rect x="${num(x)}" y="${num(y)}" width="${num(w)}" height="${num(h)}" fill="${escXml(opts.background)}"/>`
     : ''
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${num(x)} ${num(y)} ${num(w)} ${num(h)}" width="${num(w)}" height="${num(h)}">${bg}${elements.map(elementSvg).join('')}</svg>`
 }

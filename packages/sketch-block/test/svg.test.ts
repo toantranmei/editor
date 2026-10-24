@@ -19,6 +19,19 @@ describe('svg export', () => {
     expect(svg).toContain('<path')
   })
 
+  it('XML-invalid control characters are stripped: the svg stays parseable', () => {
+    const text = {
+      id: 't', type: 'text', x: 0, y: 200, w: 80, h: 25, angle: 0, index: 'a1', seed: 1, version: 1, locked: false,
+      ...DEFAULT_STYLE, text: 'bell\u0007 tab\tnul\u0000 esc\u001b', autoSize: true,
+    } as SketchElement
+    const svg = exportSvg([el({ label: 'a\u0007b\u000bc' }), text])
+    expect(/[\x00-\x08\x0B\x0C\x0E-\x1F]/.test(svg)).toBe(false)
+    expect(svg).toContain('ab')
+    const doc = new DOMParser().parseFromString(svg, 'image/svg+xml')
+    expect(doc.querySelector('parsererror')).toBeNull()
+    expect(doc.documentElement.nodeName.toLowerCase()).toBe('svg')
+  })
+
   it('same seed gives identical svg', () => {
     expect(exportSvg([el()])).toBe(exportSvg([el()]))
   })

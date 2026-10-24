@@ -274,6 +274,18 @@ describe('text tool (controller)', () => {
     expect((store.all()[0] as TextElement).text).toBe('abc')
   })
 
+  it('commit strips XML-invalid control characters (text and label)', () => {
+    const { store, c } = setupController()
+    c.setTool('text')
+    clickAt(c, 50, 60)
+    c.commitEditing('a\u0007b\tc\nd')
+    expect((store.all()[0] as TextElement).text).toBe('ab\tc\nd')
+    const r = store.create(rect({ x: 400, y: 400 }))
+    c.startEditing(r.id, 'label')
+    c.commitEditing('x\u0000y\u001f')
+    expect((store.get(r.id) as ShapeElement).label).toBe('xy')
+  })
+
   it('cancelEditing on a new text removes it with no undo step; on an existing one changes nothing', () => {
     const { store, history, c } = setupController()
     c.setTool('text')

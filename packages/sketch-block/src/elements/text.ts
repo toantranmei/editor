@@ -3,6 +3,7 @@ import { displayColor, type Theme } from '../render/shapes'
 import { FONT_FAMILIES, LINE_HEIGHT } from '../text/fonts'
 import { fontString, measureText, wrapText } from '../text/measure'
 import { type ElementKind, hashString } from './kind'
+import { escXml } from '../io/xml'
 
 /** Where lines go: a box (x, y, w) in the local frame; lines start at `y`, one line height apart. */
 export interface TextBlock {
@@ -15,8 +16,6 @@ export interface TextBlock {
 }
 
 const num = (n: number): string => String(Math.round(n * 100) / 100)
-const escXml = (s: string): string =>
-  s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 
 function anchorX(align: TextAlign, x: number, w: number): number {
   return align === 'left' ? x : align === 'right' ? x + w : x + w / 2

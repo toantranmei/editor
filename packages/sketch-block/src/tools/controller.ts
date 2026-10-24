@@ -10,6 +10,7 @@ import type { ElementInit, ElementPatch, SketchElement, TextElement, TextStyle }
 import { linearScenePoints } from '../elements/linear'
 import { editedTextBox } from '../elements/text'
 import { DEFAULT_STYLE, isLinear, isShape, isText } from '../model/types'
+import { stripControl } from '../io/xml'
 import { measureText } from '../text/measure'
 import type { Overlay } from '../render/interactive'
 import type { Viewport } from '../viewport'
@@ -464,7 +465,7 @@ export class ToolController implements ToolHost {
   /** Creates an auto-sized text element (current text style) with its top-left at `at`; one undo step. */
   pasteText(text: string, at: Point | null): void {
     if (this.ctx.readonly() || this.isGestureActive()) return
-    const value = text.replace(/\r\n?/g, '\n')
+    const value = stripControl(text.replace(/\r\n?/g, '\n'))
     if (!value.trim()) return
     const p = at ?? this.ctx.viewport.toScene({ x: PASTE_OFFSET, y: PASTE_OFFSET })
     const { stroke, strokeWidth, strokeStyle, roughness, roundness, opacity, ...style } = this.currentStyle.value
@@ -578,9 +579,10 @@ export class ToolController implements ToolHost {
    * Ends the edit with the editor's value. Text: blank removes the element, else sets the text and refits the
    * box. Label: sets it. Creation plus commit is one undo step.
    */
-  commitEditing(value: string): void {
+  commitEditing(raw: string): void {
     const target = this.editing.value
     if (!target) return
+    const value = stripControl(raw)
     const created = this.closeEditor()
     const { store, scene, history } = this.ctx
     const el = scene.get(target.id)

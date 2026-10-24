@@ -3,6 +3,7 @@ import { polylineDistance, scalePoints } from '../geometry/math'
 import { type FreedrawElement, isFreedraw, type LocalPoint, type SketchElement } from '../model/types'
 import { displayColor, type Theme } from '../render/shapes'
 import { type ElementKind, hashString } from './kind'
+import { escXml } from '../io/xml'
 
 /** Highlighter ink opacity (multiplied with the element's opacity). */
 const HIGHLIGHTER_ALPHA = 0.4
@@ -48,7 +49,6 @@ export function strokeOutline(el: FreedrawElement, opts?: { live?: boolean }): n
 }
 
 const num = (n: number): string => String(Math.round(n * 100) / 100)
-const esc = (s: string): string => s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;')
 
 const mid = (a: number[], b: number[]): [number, number] => [(a[0]! + b[0]!) / 2, (a[1]! + b[1]!) / 2]
 
@@ -139,7 +139,7 @@ export const freedrawKind: ElementKind<FreedrawElement> = {
     const d = outlineToPath(strokeOutline(el))
     const blend = blendsMultiply(el, theme) ? ' style="mix-blend-mode:multiply"' : ''
     const ink = el.highlighter ? ` opacity="${HIGHLIGHTER_ALPHA}"${blend}` : ''
-    return `<path d="${esc(d)}" fill="${esc(displayColor(el.stroke, theme))}"${ink}/>`
+    return `<path d="${escXml(d)}" fill="${escXml(displayColor(el.stroke, theme))}"${ink}/>`
   },
 
   hit: (el, local, tol) => polylineDistance(el.points, local) <= tol + halfWidth(el),

@@ -249,6 +249,15 @@ describe('ToolController paste / duplicate', () => {
     expect(store.all()).toHaveLength(0)
   })
 
+  it('paste text strips XML-invalid control characters', () => {
+    const { c, store } = setup()
+    c.pasteText('he\u0007llo\u000b', { x: 0, y: 0 })
+    expect((store.all()[0] as TextElement).text).toBe('hello')
+    // nothing but control characters: no element
+    c.pasteText('\u0007\u0001', { x: 0, y: 0 })
+    expect(store.all()).toHaveLength(1)
+  })
+
   it('paste is a no-op when read-only', () => {
     const { c, store } = setup(true)
     c.pasteElements([rectInit()], null)
