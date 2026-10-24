@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { Editor, LocaleName, MentionItem, ThemeMode, ThemeTokens } from '@toantranmei/editor'
 import { defaultBlocks, emoji, file, html, math, mention, mermaid, toc } from '@toantranmei/editor'
+import { sketch } from '@toantranmei/sketch-block'
 
 // Demo people/pages for @mentions (a real app would query its API).
 const PEOPLE: MentionItem[] = [
@@ -20,6 +21,8 @@ const blocks = [
   html,
   emoji,
   file.configure({ maxSize: 2 }),
+  // Whiteboard; boards are kept in this browser's IndexedDB (the default provider).
+  sketch,
   mention.configure({
     search: q => PEOPLE.filter(p => normalize(p.label).includes(normalize(q))),
     reminderHelpUrl: 'https://www.notion.com/help/reminders',

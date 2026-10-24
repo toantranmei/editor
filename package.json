@@ -17,7 +17,9 @@
     "changeset": "changeset",
     "version-packages": "changeset version",
     "release": "pnpm build && changeset publish",
-    "bench": "node scripts/bench.mjs"
+    "bench": "node scripts/bench.mjs",
+    "e2e:sketch": "node scripts/e2e-sketch.mjs",
+    "bench:sketch": "node scripts/bench-sketch.mjs"
   },
   "devDependencies": {
     "@changesets/cli": "^3.0.3",
