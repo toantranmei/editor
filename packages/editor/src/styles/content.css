@@ -82,11 +82,11 @@
     display: flex;
     gap: var(--me-callout-gap);
     margin: var(--me-block-box-spacing) 0;
-    padding: var(--me-box-padding);
+    padding: var(--me-callout-padding);
     border-radius: var(--me-box-radius);
     background: var(--me-tint-bg, var(--me-callout-default-bg));
   }
-  .me-callout-icon-wrap { position: relative; user-select: none; }
+  .me-callout-icon-wrap { position: relative; flex-shrink: 0; align-self: flex-start; user-select: none; }
   .me-callout-icon {
     display: inline-flex;
     align-items: center;

@@ -284,6 +284,8 @@ export const component = {
   quote: { borderWidth: r('borderWidth.thick'), borderColor: 'currentColor', paddingLeft: r('space.6') },
   divider: { color: r('color.border'), spacing: r('space.6') },
   callout: {
+    /** Left matches top, so the icon sits evenly from both edges; right/bottom follow `box.padding`. */
+    padding: '12px 16px 12px 12px',
     gap: r('space.4'),
     iconSize: r('fontSize.lg'),
     iconBox: '28px',
