@@ -3,7 +3,7 @@ import * as Y from 'yjs'
 
 import { BoardStore } from '../src/model/store'
 import { Scene } from '../src/model/scene'
-import { DEFAULT_STYLE, type SketchElement } from '../src/model/types'
+import { DEFAULT_STYLE, type ShapeElement, type SketchElement } from '../src/model/types'
 import { BitmapCache, bindCacheInvalidation, cacheKey, zoomBucket } from '../src/render/bitmap-cache'
 import { renderInteractive, resetAccentCache } from '../src/render/interactive'
 import { RenderScheduler, ZoomSettler } from '../src/render/scheduler'
@@ -54,14 +54,14 @@ afterEach(() => {
 
 const count = (ctx: FakeCtx, name: string) => ctx.calls.filter(c => c.name === name).length
 
-const el = (over: Partial<SketchElement> = {}): SketchElement => ({
+const el = (over: Partial<ShapeElement> = {}): SketchElement => ({
   id: 'a', type: 'rectangle', x: 0, y: 0, w: 100, h: 50, angle: 0, index: 'a0',
-  ...DEFAULT_STYLE, seed: 42, version: 1, locked: false, ...over,
+  ...DEFAULT_STYLE, label: '', seed: 42, version: 1, locked: false, ...over,
 })
 
-const init = (over: Partial<SketchElement> = {}) => ({
+const init = (over: Partial<ShapeElement> = {}) => ({
   type: 'rectangle' as const, x: 0, y: 0, w: 100, h: 50, angle: 0, locked: false,
-  ...DEFAULT_STYLE, ...over,
+  ...DEFAULT_STYLE, label: '', ...over,
 })
 
 const state = (over: Partial<RenderState> = {}): RenderState => ({

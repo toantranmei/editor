@@ -1,44 +1,73 @@
 import { generateKeyBetween } from 'fractional-indexing'
 import { nanoid } from 'nanoid'
 import * as Y from 'yjs'
-import type { ElementPatch, SketchElement } from './types'
+import { type ElementInit, type ElementPatch, normalizeElement, type SketchElement } from './types'
 
 export const LOCAL_ORIGIN: unique symbol = Symbol('sketch-local')
 
-type CreateInit = Omit<SketchElement, 'id' | 'index' | 'seed' | 'version'> & Partial<Pick<SketchElement, 'id'>>
-
 function toPlain(m: Y.Map<unknown>): SketchElement {
-  return m.toJSON() as SketchElement
+  return normalizeElement(m.toJSON())
 }
 
 export class BoardStore {
   readonly doc: Y.Doc
   private readonly elements: Y.Map<Y.Map<unknown>>
+  /** Highest `index` currently in the doc (null = empty). Only valid while `topDirty` is false. */
+  private topIndex: string | null = null
+  private topDirty = true
 
   constructor(doc: Y.Doc) {
     this.doc = doc
     this.elements = doc.getMap('elements') as Y.Map<Y.Map<unknown>>
+    // Local writes keep the cache current themselves; anything else (remote, undo/redo) invalidates it.
+    this.elements.observeDeep((_events, tr) => {
+      if (tr.origin !== LOCAL_ORIGIN) this.topDirty = true
+    })
   }
 
-  create(init: CreateInit): SketchElement {
-    const { id: givenId, ...rest } = init
-    const id = givenId ?? nanoid(10)
-    let created!: SketchElement
+  create(init: ElementInit): SketchElement {
+    return this.createMany([init])[0]!
+  }
+
+  /** Creates all elements in one transaction, stacked in order above the current top. */
+  createMany(inits: ElementInit[]): SketchElement[] {
+    const out: SketchElement[] = []
+    if (!inits.length) return out
     this.doc.transact(() => {
-      const all = this.all()
-      const last = all.length ? all[all.length - 1]!.index : null
-      created = {
-        ...rest,
-        id,
-        index: generateKeyBetween(last, null),
-        seed: Math.floor(Math.random() * 2 ** 31),
-        version: 1,
-      } as SketchElement
-      const m = new Y.Map<unknown>()
-      for (const [k, v] of Object.entries(created)) m.set(k, v)
-      this.elements.set(id, m)
+      let top = this.top()
+      for (const init of inits) {
+        const { id: givenId, seed, ...rest } = init
+        const index = generateKeyBetween(top, null)
+        const created = {
+          ...rest,
+          id: givenId ?? nanoid(10),
+          index,
+          seed: seed ?? Math.floor(Math.random() * 2 ** 31),
+          version: 1,
+        } as SketchElement
+        const m = new Y.Map<unknown>()
+        for (const [k, v] of Object.entries(created)) m.set(k, v)
+        this.elements.set(created.id, m)
+        out.push(created)
+        top = index
+      }
+      this.topIndex = top
     }, LOCAL_ORIGIN)
-    return created
+    return out
+  }
+
+  /** Highest index in the doc; recomputed by an O(n) scan of `index` values only when dirty. */
+  private top(): string | null {
+    if (this.topDirty) {
+      let top: string | null = null
+      this.elements.forEach(m => {
+        const i = m.get('index')
+        if (typeof i === 'string' && (top === null || i > top)) top = i
+      })
+      this.topIndex = top
+      this.topDirty = false
+    }
+    return this.topIndex
   }
 
   update(id: string, patch: ElementPatch): void {
@@ -56,6 +85,11 @@ export class BoardStore {
     if (!m) return
     for (const [k, v] of Object.entries(patch)) {
       if (v !== undefined) m.set(k, v)
+    }
+    // Moving above the top raises it; any other index change may lower it, so rescan lazily.
+    if (patch.index !== undefined) {
+      if (!this.topDirty && this.topIndex !== null && patch.index > this.topIndex) this.topIndex = patch.index
+      else this.topDirty = true
     }
     m.set('version', ((m.get('version') as number) ?? 0) + 1)
   }

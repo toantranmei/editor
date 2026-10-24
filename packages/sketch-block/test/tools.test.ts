@@ -5,7 +5,7 @@ import { handlePositions } from '../src/geometry'
 import { History } from '../src/model/history'
 import { Scene } from '../src/model/scene'
 import { BoardStore } from '../src/model/store'
-import { DEFAULT_STYLE, type SketchElement } from '../src/model/types'
+import { DEFAULT_STYLE, type ShapeElement, type SketchElement } from '../src/model/types'
 import { type PointerInput, ToolController } from '../src/tools/controller'
 import { Viewport } from '../src/viewport'
 
@@ -61,9 +61,9 @@ function drag(c: ToolController, from: [number, number], to: [number, number], e
   c.pointerUp(ptr(to[0], to[1], extra))
 }
 
-function rect(store: BoardStore, x: number, y: number, w: number, h: number, patch: Partial<SketchElement> = {}) {
+function rect(store: BoardStore, x: number, y: number, w: number, h: number, patch: Partial<ShapeElement> = {}) {
   return store.create({
-    type: 'rectangle', x, y, w, h, angle: 0, locked: false, ...DEFAULT_STYLE,
+    type: 'rectangle', x, y, w, h, angle: 0, locked: false, ...DEFAULT_STYLE, label: '',
     fill: '#ffffff', fillStyle: 'solid', ...patch,
   })
 }

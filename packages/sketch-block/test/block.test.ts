@@ -129,7 +129,7 @@ function deferredSaves() {
 }
 
 const rect = () => ({
-  type: 'rectangle' as const, x: 0, y: 0, w: 100, h: 50, angle: 0, locked: false, ...DEFAULT_STYLE,
+  type: 'rectangle' as const, x: 0, y: 0, w: 100, h: 50, angle: 0, locked: false, ...DEFAULT_STYLE, label: '',
 })
 
 describe('sketch block', () => {

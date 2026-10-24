@@ -73,6 +73,7 @@ export class ShapeTool implements Tool {
       ...box,
       id: 'draft',
       type: this.type,
+      label: '',
       angle: 0,
       index: 'a0',
       seed: this.seed,

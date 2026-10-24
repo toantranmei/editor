@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { boxContains, boxesIntersect, elementBounds, handlePositions, hitElement, resizeBox, rotateAngle, rotatePoint } from '../src/geometry'
-import { DEFAULT_STYLE, type SketchElement } from '../src/model/types'
+import { DEFAULT_STYLE, type ShapeElement, type SketchElement } from '../src/model/types'
 
-const el = (over: Partial<SketchElement> = {}): SketchElement => ({
+const el = (over: Partial<ShapeElement> = {}): SketchElement => ({
   id: 'a', type: 'rectangle', x: 0, y: 0, w: 100, h: 50, angle: 0, index: 'a0',
-  seed: 1, version: 1, locked: false, ...DEFAULT_STYLE, ...over,
+  seed: 1, version: 1, locked: false, ...DEFAULT_STYLE, label: '', ...over,
 })
 const filled = { fill: '#f00', fillStyle: 'solid' as const }
 

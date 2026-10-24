@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { exportSvg, makePreview } from '../src/io/svg'
-import { DEFAULT_STYLE, type SketchElement } from '../src/model/types'
+import { DEFAULT_STYLE, type ShapeElement, type SketchElement } from '../src/model/types'
 
-const el = (over: Partial<SketchElement> = {}): SketchElement => ({
+const el = (over: Partial<ShapeElement> = {}): SketchElement => ({
   id: 'a', type: 'rectangle', x: 0, y: 0, w: 100, h: 50, angle: 0, index: 'a0', seed: 7, version: 1,
-  locked: false, ...DEFAULT_STYLE, ...over,
+  locked: false, ...DEFAULT_STYLE, label: '', ...over,
 })
 
 describe('svg export', () => {

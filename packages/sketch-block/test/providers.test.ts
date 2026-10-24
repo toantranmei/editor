@@ -4,7 +4,7 @@ import { DEFAULT_STYLE } from '../src/model/types'
 import { indexeddb, memory } from '../src/providers'
 
 const init = () => ({
-  type: 'rectangle' as const, x: 0, y: 0, w: 100, h: 50, angle: 0, locked: false, ...DEFAULT_STYLE,
+  type: 'rectangle' as const, x: 0, y: 0, w: 100, h: 50, angle: 0, locked: false, ...DEFAULT_STYLE, label: '',
 })
 
 describe('providers', () => {

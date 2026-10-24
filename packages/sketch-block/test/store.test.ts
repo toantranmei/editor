@@ -5,7 +5,7 @@ import { DEFAULT_STYLE } from '../src/model/types'
 
 const init = (over: Record<string, unknown> = {}) => ({
   type: 'rectangle' as const, x: 0, y: 0, w: 100, h: 50, angle: 0, locked: false,
-  ...DEFAULT_STYLE, ...over,
+  ...DEFAULT_STYLE, label: '', ...over,
 })
 
 describe('BoardStore', () => {

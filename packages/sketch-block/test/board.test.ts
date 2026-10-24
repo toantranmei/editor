@@ -28,7 +28,7 @@ afterEach(() => {
 })
 
 const init = (over: Record<string, unknown> = {}) => ({
-  type: 'rectangle' as const, x: 0, y: 0, w: 100, h: 50, angle: 0, locked: false, ...DEFAULT_STYLE, ...over,
+  type: 'rectangle' as const, x: 0, y: 0, w: 100, h: 50, angle: 0, locked: false, ...DEFAULT_STYLE, label: '', ...over,
 })
 
 /** happy-dom's WheelEvent ignores modifier/coordinate init fields, so define them on the instance. */
