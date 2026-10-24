@@ -1,4 +1,5 @@
-import { Node } from '@tiptap/core'
+import { Extension, Node } from '@tiptap/core'
+import { history, undo, undoDepth } from '@tiptap/pm/history'
 import { Editor, EditorContent } from '@tiptap/vue-3'
 import { MeiConfig } from '@toantranmei/editor'
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
@@ -15,6 +16,7 @@ import { stubCanvas, stubFrames } from './helpers/canvas'
 const Doc = Node.create({ name: 'doc', topNode: true, content: 'block+' })
 const Paragraph = Node.create({ name: 'paragraph', group: 'block', content: 'inline*', parseHTML: () => [{ tag: 'p' }], renderHTML: () => ['p', 0] })
 const Text = Node.create({ name: 'text', group: 'inline' })
+const History = Extension.create({ name: 'testHistory', addProseMirrorPlugins: () => [history({ newGroupDelay: 1 })] })
 
 const editors: Editor[] = []
 const wrappers: VueWrapper[] = []
@@ -52,16 +54,17 @@ interface SetupOpts {
   attrs?: Record<string, unknown>
   editable?: boolean
   config?: Parameters<typeof MeiConfig.configure>[0]
+  content?: Record<string, unknown>
 }
 
 async function setup(opts: SetupOpts = {}) {
   const block = sketch.configure({ provider: opts.provider ?? memory() })
   const editor = new Editor({
-    extensions: [Doc, Paragraph, Text, MeiConfig.configure(opts.config ?? {}), ...block.extensions],
+    extensions: [Doc, Paragraph, Text, History, MeiConfig.configure(opts.config ?? {}), ...block.extensions],
     editable: opts.editable ?? true,
-    content: opts.attrs
+    content: opts.content ?? (opts.attrs
       ? { type: 'doc', content: [{ type: 'sketch', attrs: opts.attrs }] }
-      : { type: 'doc', content: [{ type: 'paragraph' }] },
+      : { type: 'doc', content: [{ type: 'paragraph' }] }),
   })
   editors.push(editor)
   const wrapper = mount({ render: () => h(EditorContent, { editor }) }, { attachTo: document.body })
@@ -389,5 +392,28 @@ describe('sketch block', () => {
     window.dispatchEvent(new PointerEvent('pointermove', { clientY: -5000 }))
     window.dispatchEvent(new PointerEvent('pointerup', { clientY: -5000 }))
     expect(sketchNode(editor).attrs.height).toBe(240)
+  })
+
+  it('preview saves are not document undo steps; inserting the block still is', async () => {
+    const { provider, connections } = recording()
+    const { editor, wrapper } = await setup({ provider })
+    editor.commands.insertSketch()
+    await settle()
+    expect(undoDepth(editor.state)).toBe(1)
+    await enter(wrapper)
+    new BoardStore(connections[0]!.doc).create(rect())
+    await clickOutside()
+    await vi.waitFor(() => expect(sketchNode(editor).attrs.version).toBe(1))
+    // only the insert is in the history
+    expect(undoDepth(editor.state)).toBe(1)
+    undo(editor.state, editor.view.dispatch)
+    expect(sketchNode(editor)).toBeNull()
+  })
+
+  it('assigning a missing board id on open is not an undo step', async () => {
+    const { editor, wrapper } = await setup({ attrs: { boardId: null, preview: null, height: null, version: 0 } })
+    await enter(wrapper)
+    expect(sketchNode(editor).attrs.boardId).toMatch(/^bd_/)
+    expect(undoDepth(editor.state)).toBe(0)
   })
 })

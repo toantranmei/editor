@@ -81,7 +81,8 @@ async function open(): Promise<boolean> {
     // e.g. pasted HTML without an id: give it one (read-only shows the preview only)
     if (!editable.value) return false
     id = newBoardId()
-    props.updateAttributes({ boardId: id })
+    const assigned = id
+    setAttrs(node => ({ ...node.attrs, boardId: assigned }))
   }
   loading.value = true
   error.value = ''
@@ -186,10 +187,29 @@ function onChange() {
   timer = setTimeout(() => void save(snapshot()), SAVE_DELAY)
 }
 
+type SketchNodeT = typeof props.node
+
+/**
+ * Changes this node's attrs outside the document's undo history: editor undo only undoes
+ * inserting or deleting the block, never a board id, preview or version.
+ */
+function setAttrs(next: (node: SketchNodeT) => Record<string, unknown>) {
+  const { editor } = props
+  const pos = props.getPos()
+  if (editor.isDestroyed || typeof pos !== 'number') return
+  editor.commands.command(({ tr }) => {
+    const node = tr.doc.nodeAt(pos)
+    if (node?.type.name !== 'sketch') return false
+    tr.setNodeMarkup(pos, undefined, next(node)).setMeta('addToHistory', false)
+    return true
+  })
+}
+
 /** Writes preview/version to this node, or (after unmount) to every node showing this board. */
 function writeAttrs(attrs: { preview: string | null }, id: string) {
+  const bump = (node: SketchNodeT) => ({ ...node.attrs, ...attrs, version: ((node.attrs.version as number) ?? 0) + 1 })
   if (!disposed) {
-    props.updateAttributes({ ...attrs, version: ((props.node.attrs.version as number) ?? 0) + 1 })
+    setAttrs(bump)
     return
   }
   const { editor } = props
@@ -198,10 +218,11 @@ function writeAttrs(attrs: { preview: string | null }, id: string) {
     let changed = false
     tr.doc.descendants((node, pos) => {
       if (node.type.name === 'sketch' && node.attrs.boardId === id) {
-        tr.setNodeMarkup(pos, undefined, { ...node.attrs, ...attrs, version: (node.attrs.version ?? 0) + 1 })
+        tr.setNodeMarkup(pos, undefined, bump(node))
         changed = true
       }
     })
+    tr.setMeta('addToHistory', false)
     return changed
   })
 }
