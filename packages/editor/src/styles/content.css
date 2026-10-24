@@ -11,6 +11,8 @@
 
   /* Text blocks */
   .me-content p { margin: var(--me-block-gap) 0; padding: var(--me-block-padding-y) var(--me-block-padding-x); min-height: var(--me-block-min-height); }
+  /* Whole-block background (block menu / slash colors); inline highlights are <mark>. */
+  .me-content [data-bg-color]:not(mark) { border-radius: var(--me-block-radius); }
   .me-content :is(h1, h2, h3, h4) {
     padding: var(--me-block-padding-y) var(--me-block-padding-x);
     margin-bottom: var(--me-block-gap);
@@ -339,8 +341,30 @@
   .me-file-size { font-size: var(--me-font-size-xs); color: var(--me-file-size-color); }
 
   /* Mentions */
-  .me-content .me-mention { padding: var(--me-mention-padding); border-radius: var(--me-mention-radius); background: var(--me-mention-bg); color: var(--me-mention-color); white-space: nowrap; cursor: pointer; }
+  .me-content .me-mention {
+    --me-icon-size: var(--me-mention-avatar-size);
+    display: inline-flex;
+    align-items: baseline;
+    gap: var(--me-space-1);
+    padding: var(--me-mention-padding);
+    border-radius: var(--me-mention-radius);
+    background: var(--me-mention-bg);
+    color: var(--me-mention-color);
+    white-space: nowrap;
+    cursor: pointer;
+  }
+  .me-content .me-mention:hover, .me-content .me-mention.is-open { background: var(--me-mention-hover-bg); }
+  .me-content .me-mention.is-selected { box-shadow: 0 0 0 var(--me-border-width-medium) var(--me-color-accent); }
   .me-content .me-mention--page { background: none; text-decoration: underline; text-decoration-color: var(--me-mention-page-underline); text-underline-offset: var(--me-space-1); }
+  .me-content .me-mention-icon { align-self: center; color: var(--me-color-text-muted); }
+  .me-content .me-mention-avatar {
+    display: inline-block;
+    align-self: center;
+    width: var(--me-mention-avatar-size);
+    height: var(--me-mention-avatar-size);
+    border-radius: var(--me-mention-avatar-radius);
+    object-fit: cover;
+  }
   .me-avatar { padding: 0; object-fit: cover; border-radius: var(--me-mention-avatar-radius); }
 
   /* Unsupported blocks (type not loaded in this editor) */

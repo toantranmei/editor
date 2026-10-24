@@ -19,7 +19,12 @@ const blocks = [
   mermaid,
   emoji,
   file.configure({ maxSize: 2 }),
-  mention.configure({ search: q => PEOPLE.filter(p => normalize(p.label).includes(normalize(q))) }),
+  mention.configure({
+    search: q => PEOPLE.filter(p => normalize(p.label).includes(normalize(q))),
+    reminderHelpUrl: 'https://www.notion.com/help/reminders',
+    // A real app would schedule a notification on its backend here.
+    onRemind: reminder => console.info('[reminder]', reminder ? `${reminder.remind} → ${reminder.fireAt.toLocaleString()}` : 'cleared'),
+  }),
 ]
 
 const { title, content, status, error, loaded, setContent, reset } = useLocalPage()

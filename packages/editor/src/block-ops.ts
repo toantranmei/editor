@@ -195,25 +195,58 @@ export function turnBlocksInto(editor: Editor, range: BlockRange, block: BlockTy
   }
 }
 
+/**
+ * Colors whole blocks, like Notion: blocks that support it get a block color (the
+ * background fills the block, and empty blocks color what's typed later); others
+ * (callouts, code…) get the color on their text. Inline colors of the same kind are
+ * cleared so the block color shows.
+ */
 export function colorBlocks(editor: Editor, range: BlockRange, kind: 'text' | 'bg', color: ColorName) {
+  const attr = kind === 'text' ? 'blockColor' : 'blockBg'
+  const mark = editor.schema.marks[kind === 'text' ? 'textColor' : 'bgColor']
+  const value = color === 'default' ? null : color
   const wasBlocks = isBlockSelection(editor.state)
   editor.chain().focus().command(({ tr }) => {
-    selectText(tr, range.from, range.to)
+    for (const { node, pos } of blocksIn(tr.doc, range)) {
+      const end = pos + node.nodeSize
+      if (kind === 'bg' && node.type.name === 'callout') {
+        // A callout's background is its own color.
+        tr.setNodeAttribute(pos, 'color', value ?? 'gray')
+      }
+      else if (node.type.spec.attrs?.[attr]) {
+        tr.setNodeAttribute(pos, attr, value)
+        if (mark) tr.removeMark(pos, end, mark)
+      }
+      else if (mark) {
+        tr.removeMark(pos, end, mark)
+        if (value) tr.addMark(pos, end, mark.create({ color: value }))
+      }
+    }
     return true
-  })[kind === 'text' ? 'setTextColor' : 'setBgColor'](color).run()
+  }).run()
   if (wasBlocks) selectBlocks(editor, range)
 }
 
 /** Text/background color shared by all text in the range, if uniform. */
 export function rangeColors(state: EditorState, range: BlockRange) {
   const found = { text: new Set<string>(), bg: new Set<string>() }
-  let hasText = false
-  state.doc.nodesBetween(range.from, range.to, (node) => {
-    if (!node.isText) return
-    hasText = true
-    found.text.add(node.marks.find(m => m.type.name === 'textColor')?.attrs.color ?? 'default')
-    found.bg.add(node.marks.find(m => m.type.name === 'bgColor')?.attrs.color ?? 'default')
+  let any = false
+  // Inline mark wins, else the nearest colored block around the text.
+  const add = (pos: number, marks: readonly { type: { name: string }, attrs: Record<string, any> }[]) => {
+    const $pos = state.doc.resolve(pos)
+    const fromBlocks = (attr: string) => {
+      for (let d = $pos.depth; d > 0; d--) if ($pos.node(d).attrs[attr]) return $pos.node(d).attrs[attr] as string
+      return 'default'
+    }
+    any = true
+    found.text.add(marks.find(m => m.type.name === 'textColor')?.attrs.color ?? fromBlocks('blockColor'))
+    found.bg.add(marks.find(m => m.type.name === 'bgColor')?.attrs.color ?? fromBlocks('blockBg'))
+  }
+  state.doc.nodesBetween(range.from, range.to, (node, pos) => {
+    if (node.isText) add(pos, node.marks)
+    // An empty colored line still shows (and ticks) its color.
+    else if (node.isTextblock && !node.content.size) add(pos + 1, [])
   })
-  const single = (s: Set<string>): string | null => (hasText && s.size === 1 ? [...s][0]! : null)
+  const single = (s: Set<string>): string | null => (any && s.size === 1 ? [...s][0]! : null)
   return { text: single(found.text), bg: single(found.bg) }
 }

@@ -6,7 +6,7 @@ import { collectExtensions, type BlockDefinition } from '../define-block'
 import { BlockDrop } from './block-drop'
 import { BlockId } from './block-id'
 import { BlockSelection } from './block-selection'
-import { BgColor, TextColor } from './color-marks'
+import { BgColor, BlockColor, TextColor } from './color-marks'
 import { SlashCommand } from './slash-command'
 import { UnknownBlock, UnknownInline } from './unknown'
 
@@ -47,6 +47,7 @@ export function createExtensions({ blocks, ...config }: MeiExtensionsOptions): A
     }),
     TextColor,
     BgColor,
+    BlockColor,
     SlashCommand,
     BlockDrop,
     BlockSelection,

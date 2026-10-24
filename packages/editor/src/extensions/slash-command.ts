@@ -9,6 +9,8 @@ export const slashPluginKey = new PluginKey('slashCommand')
 
 export const SlashCommand = Extension.create({
   name: 'slashCommand',
+  // Above list/task keymaps, so Enter picks a menu item instead of splitting the item.
+  priority: 200,
 
   addProseMirrorPlugins() {
     let lastMatch = 0

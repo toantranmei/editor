@@ -33,7 +33,7 @@ export {
 } from './block-ops'
 export { BlockSelection, TURN_INTO_SHORTCUTS } from './extensions/block-selection'
 export { COLORS, type ColorName } from './colors'
-export { BgColor, TextColor } from './extensions/color-marks'
+export { BgColor, BlockColor, COLORABLE_BLOCKS, TextColor } from './extensions/color-marks'
 export {
   baseTokensCss,
   component as componentTokens,

@@ -1,7 +1,8 @@
 import type { Editor } from '@tiptap/core'
+import type { ResolvedPos } from '@tiptap/pm/model'
 import type { Component } from 'vue'
 import { type BlockType, blockTitle, enabledBlocks, groupLabel } from './block-items'
-import { colorBlocks, currentRange } from './block-ops'
+import { type BlockRange, colorBlocks, currentRange } from './block-ops'
 import { PALETTE_NAMES } from './theme/tokens'
 import { pushRecentBlock, pushRecentColor, recent } from './recent'
 
@@ -39,6 +40,14 @@ function blockItem(editor: Editor, block: BlockType, group: string, key = block.
   }
 }
 
+function listItemRange($pos: ResolvedPos): BlockRange | null {
+  for (let d = $pos.depth; d > 0; d--) {
+    const name = $pos.node(d).type.name
+    if (name === 'listItem' || name === 'taskItem') return { from: $pos.before(d), to: $pos.after(d), depth: d - 1 }
+  }
+  return null
+}
+
 function colorItems(editor: Editor): SlashItem[] {
   const m = editor.storage.meiConfig.messages
   return (['text', 'bg'] as const).flatMap(kind => PALETTE_NAMES.map((color): SlashItem => {
@@ -52,9 +61,10 @@ function colorItems(editor: Editor): SlashItem[] {
       terms: [title, name, color, kind === 'text' ? 'color mau chu' : 'background highlight nen'],
       apply: (ed) => {
         pushRecentColor({ kind, color })
-        const range = currentRange(ed.state)
-        if (!range) return
         const caret = ed.state.selection.from
+        // Inside a list, "/red" colors just that item (each item is its own block in Notion).
+        const range = listItemRange(ed.state.selection.$from) ?? currentRange(ed.state)
+        if (!range) return
         colorBlocks(ed, range, kind, color)
         ed.commands.setTextSelection(caret)
       },
@@ -77,7 +87,14 @@ export function slashItems(editor: Editor, query: string): SlashItem[] {
       .map(id => blocks.find(b => b.id === id))
       .filter((b): b is BlockType => !!b)
       .map(b => blockItem(editor, b, m.slash.recent, `recent-${b.id}`))
+    // The menu shows items grouped, and ↑/↓ follow this array — so keep each group
+    // contiguous (blocks from later definitions, e.g. `file`, join their group).
+    const rank = new Map<string, number>()
+    for (const item of [...recentItems, ...all]) if (!rank.has(item.group)) rank.set(item.group, rank.size)
     return [...recentItems, ...all]
+      .map((item, i) => ({ item, i }))
+      .sort((a, b) => rank.get(a.item.group)! - rank.get(b.item.group)! || a.i - b.i)
+      .map(x => x.item)
   }
 
   const score = (item: SlashItem) => {

@@ -218,7 +218,7 @@ export const component = {
     radius: r('radius.sm'),
     gap: r('space.1'),
   },
-  block: { paddingY: '3px', paddingX: r('space.1'), gap: '1px', minHeight: 'calc(var(--me-font-line-height) * 1em)' },
+  block: { paddingY: '3px', paddingX: r('space.1'), gap: '1px', radius: r('radius.sm'), minHeight: 'calc(var(--me-font-line-height) * 1em)' },
   heading: {
     weight: r('fontWeight.semibold'),
     lineHeight: r('lineHeight.snug'),
@@ -302,7 +302,28 @@ export const component = {
   mermaid: { padding: r('space.5'), border: r('color.border') },
   emojiMenu: { cell: '32px', columns: '8', size: r('fontSize.lg') },
   file: { rowBg: r('color.surface'), border: r('color.border'), radius: r('radius.md'), sizeColor: r('color.textFaint'), padding: '6px 10px' },
-  mention: { color: r('color.text'), bg: r('color.hover'), radius: r('radius.sm'), padding: '0 3px', pageUnderline: r('color.textFaint'), avatarRadius: r('rounded.full') },
+  mention: {
+    color: r('color.text'),
+    bg: r('color.hover'),
+    hoverBg: 'color-mix(in srgb, var(--me-color-text) 14%, transparent)',
+    radius: r('radius.sm'),
+    padding: '0 3px',
+    pageUnderline: r('color.textFaint'),
+    avatarRadius: r('rounded.full'),
+    avatarSize: '1.1em',
+    popoverWidth: '280px',
+  },
+  datepicker: {
+    width: '264px',
+    cell: '34px',
+    todayColor: r('color.accent'),
+    selectedBg: r('color.accent'),
+    selectedText: r('color.onAccent'),
+    rangeBg: 'color-mix(in srgb, var(--me-color-accent) 18%, transparent)',
+    outsideColor: r('color.textFaint'),
+    inputBg: r('color.surface'),
+  },
+  switch: { width: '28px', height: '16px', knob: '12px', off: r('color.border'), on: r('color.accent'), knobColor: r('color.bg') },
   unknown: { bg: r('color.surface'), border: r('color.border'), color: r('color.textMuted'), padding: '8px 12px', invalidBorder: r('palette.red.text'), invalidColor: r('palette.red.text') },
   /** Handle tooltip and toast: dark in both modes, like Notion. */
   tooltip: {

@@ -1,8 +1,13 @@
 import Mention from '@tiptap/extension-mention'
-import { mergeAttributes } from '@tiptap/core'
-import { Plugin, PluginKey } from '@tiptap/pm/state'
+import { type JSONContent, mergeAttributes } from '@tiptap/core'
+import { PluginKey } from '@tiptap/pm/state'
 import type { SuggestionOptions } from '@tiptap/suggestion'
 import MentionMenu from '../components/MentionMenu.vue'
+import { blockNodeView } from '../nodeviews/renderer'
+import MentionView from '../nodeviews/MentionView.vue'
+import { type DateValue, isoDate, reminderTime } from '../date-utils'
+
+export { formatDateValue, formatMentionDate, isoDate, parseIsoDate, reminderTime, type DateFormat, type DateValue, type TimeFormat } from '../date-utils'
 import { suggestionRenderer } from './suggestion-renderer'
 
 export type MentionKind = 'user' | 'page' | 'date'
@@ -19,17 +24,48 @@ export interface MentionItem {
   description?: string
 }
 
+export interface MentionReminder {
+  /** Start date of the mention (`YYYY-MM-DD`). */
+  date: string
+  time: string | null
+  /** Preset, e.g. `'1d'`, `'30m'`. */
+  remind: string
+  /** When to notify. */
+  fireAt: Date
+}
+
 export interface MentionOptions {
   /** Finds people/pages for `@query`. Dates (today, tomorrow…) are built in. */
   search: ((query: string) => MentionItem[] | Promise<MentionItem[]>) | null
-  /** Called when a mention is clicked. */
+  /** Called when a mention is clicked (read-only editors). */
   onClick: ((item: MentionItem) => void) | null
+  /**
+   * Called when a date mention's reminder is set or cleared. The editor can't send
+   * notifications itself — schedule them on your backend (see `getMentionReminders`).
+   */
+  onRemind: ((reminder: MentionReminder | null, value: DateValue) => void) | null
+  /** "Learn about reminders" link in the date picker (hidden when not set). */
+  reminderHelpUrl: string | null
+}
+
+/** All reminders in a document, for scheduling notifications server-side. */
+export function getMentionReminders(doc: JSONContent): MentionReminder[] {
+  const out: MentionReminder[] = []
+  const visit = (node: JSONContent) => {
+    const a = node.attrs ?? {}
+    if (node.type === 'mention' && a.kind === 'date' && a.remind && a.remind !== 'none') {
+      const fireAt = reminderTime({ start: a.id, time: a.time, remind: a.remind })
+      if (fireAt) out.push({ date: a.id, time: a.time ?? null, remind: a.remind, fireAt })
+    }
+    node.content?.forEach(visit)
+  }
+  visit(doc)
+  return out
 }
 
 export const mentionPluginKey = new PluginKey('mention')
 
-const pad = (n: number) => String(n).padStart(2, '0')
-const iso = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+const iso = isoDate
 
 /** Date suggestions: today/tomorrow/yesterday, plus a typed date like 25/12 or 2026-12-25. */
 function dateItems(query: string, labels: { today: string, tomorrow: string, yesterday: string }, locale: string): MentionItem[] {
@@ -58,16 +94,29 @@ function dateItems(query: string, labels: { today: string, tomorrow: string, yes
 /** `@` mentions of people, pages and dates. */
 export const MentionNode = Mention.extend<MentionOptions & Record<string, any>>({
   addOptions() {
-    return { ...this.parent?.(), search: null, onClick: null }
+    return { ...this.parent?.(), search: null, onClick: null, onRemind: null, reminderHelpUrl: null }
   },
 
   addAttributes() {
-    const attr = (name: string) => ({
+    // `key` is the attribute name in JSON, `data` its `data-*` name in HTML.
+    const attr = (key: string, data = key) => ({
       default: null,
-      parseHTML: (el: HTMLElement) => el.getAttribute(`data-${name}`),
-      renderHTML: (attrs: Record<string, any>) => (attrs[name] ? { [`data-${name}`]: attrs[name] } : {}),
+      parseHTML: (el: HTMLElement) => el.getAttribute(`data-${data}`),
+      renderHTML: (attrs: Record<string, any>) => (attrs[key] ? { [`data-${data}`]: attrs[key] } : {}),
     })
-    return { ...this.parent?.(), kind: attr('kind'), href: attr('href'), avatar: attr('avatar') }
+    return {
+      ...this.parent?.(),
+      kind: attr('kind'),
+      href: attr('href'),
+      avatar: attr('avatar'),
+      // Date mentions (id = start date): see DateValue.
+      end: attr('end'),
+      time: attr('time'),
+      endTime: attr('endTime', 'end-time'),
+      format: attr('format'),
+      timeFormat: attr('timeFormat', 'time-format'),
+      remind: attr('remind'),
+    }
   },
 
   renderHTML({ node, HTMLAttributes }) {
@@ -79,29 +128,9 @@ export const MentionNode = Mention.extend<MentionOptions & Record<string, any>>(
     return `${node.attrs.kind === 'page' ? '' : '@'}${node.attrs.label ?? node.attrs.id}`
   },
 
-  addProseMirrorPlugins() {
-    const options = this.options
-    return [
-      ...(this.parent?.() ?? []),
-      new Plugin({
-        key: new PluginKey('mentionClick'),
-        props: {
-          handleClickOn(_view, _pos, node, _nodePos, event) {
-            if (node.type.name !== 'mention') return false
-            const item = node.attrs as MentionItem
-            if (options.onClick) {
-              options.onClick(item)
-              return true
-            }
-            if (item.href && (event.metaKey || event.ctrlKey)) {
-              window.open(item.href, '_blank', 'noopener')
-              return true
-            }
-            return false
-          },
-        },
-      }),
-    ]
+  // Clickable chip: date picker for dates, people/page picker otherwise (read-only: onClick/href).
+  addNodeView() {
+    return blockNodeView(MentionView)
   },
 }).configure({ suggestion: mentionSuggestion() })
 

@@ -1,4 +1,4 @@
-import { Mark, mergeAttributes } from '@tiptap/core'
+import { Extension, Mark, mergeAttributes } from '@tiptap/core'
 
 declare module '@tiptap/core' {
   interface Commands<ReturnType> {
@@ -63,5 +63,31 @@ export const BgColor = Mark.create({
       setBgColor: color => ({ commands }) =>
         isDefault(color) ? commands.unsetMark(this.name) : commands.setMark(this.name, { color }),
     }
+  },
+})
+
+/** Blocks that take a whole-block color (Notion's block menu / "/red" colors). */
+export const COLORABLE_BLOCKS = ['paragraph', 'heading', 'blockquote', 'bulletList', 'orderedList', 'taskList', 'listItem', 'taskItem', 'details']
+
+/**
+ * Whole-block text/background color, stored by palette name as `blockColor` / `blockBg`.
+ * Renders the same `data-text-color` / `data-bg-color` attributes as the marks, so one
+ * set of palette rules styles both. New blocks split off with Enter start uncolored.
+ */
+export const BlockColor = Extension.create({
+  name: 'blockColor',
+  addGlobalAttributes() {
+    const attr = (data: string) => ({
+      default: null,
+      keepOnSplit: false,
+      parseHTML: (el: HTMLElement) => (el.tagName === 'SPAN' || el.tagName === 'MARK' ? null : el.getAttribute(data)),
+    })
+    return [{
+      types: COLORABLE_BLOCKS,
+      attributes: {
+        blockColor: { ...attr('data-text-color'), renderHTML: a => (a.blockColor ? { 'data-text-color': a.blockColor } : {}) },
+        blockBg: { ...attr('data-bg-color'), renderHTML: a => (a.blockBg ? { 'data-bg-color': a.blockBg } : {}) },
+      },
+    }]
   },
 })

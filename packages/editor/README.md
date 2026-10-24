@@ -120,7 +120,7 @@ App-wide: `app.use(MeiEditorPlugin, { blocks })`, or in Nuxt `meiEditor: { block
 | `mermaid` | – | Optional peer `mermaid`; code blocks in `mermaid` show a live diagram |
 | `emoji` | – | Type `:` + 2 letters; data loads on first use (vi/en search) |
 | `file` | – | File, audio, video; `upload`, `maxSize` (MB, base64 when no `upload`) |
-| `mention` | – | `@` people/pages via `search`; dates (today, 25/12…) built in |
+| `mention` | – | `@` people/pages via `search`; dates (today, 25/12…) built in. Click a date for a Notion-style picker (typed date/time, end date, date & time formats, reminders, clear); click a person/page to search and switch (read-only: `onClick` / page link). Reminders: `onRemind`, `getMentionReminders(doc)`, `reminderHelpUrl` |
 
 ### Custom blocks
 

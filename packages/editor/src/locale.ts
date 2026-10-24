@@ -88,7 +88,22 @@ export interface EditorMessages {
     uploading: string
     download: string
   }
-  mention: { today: string, tomorrow: string, yesterday: string, people: string, pages: string, dates: string, empty: string }
+  datePicker: {
+    endDate: string
+    dateFormat: string
+    includeTime: string
+    timeFormat: string
+    hour12: string
+    hour24: string
+    remind: string
+    clear: string
+    learnReminders: string
+    prevMonth: string
+    nextMonth: string
+    formats: Record<'full' | 'short' | 'mdy' | 'dmy' | 'ymd' | 'relative', string>
+    reminders: Record<string, string>
+  }
+  mention: { today: string, tomorrow: string, yesterday: string, people: string, pages: string, dates: string, empty: string, searchPlaceholder: string, noSearch: string, openPage: string, prevMonth: string, nextMonth: string }
 }
 
 export const vi: EditorMessages = {
@@ -215,7 +230,35 @@ export const vi: EditorMessages = {
     uploading: 'Đang tải lên...',
     download: 'Tải xuống',
   },
-  mention: { today: 'Hôm nay', tomorrow: 'Ngày mai', yesterday: 'Hôm qua', people: 'Người', pages: 'Trang', dates: 'Ngày', empty: 'Không tìm thấy' },
+  datePicker: {
+    endDate: 'Ngày kết thúc',
+    dateFormat: 'Định dạng ngày',
+    includeTime: 'Bao gồm giờ',
+    timeFormat: 'Định dạng giờ',
+    hour12: '12 giờ',
+    hour24: '24 giờ',
+    remind: 'Nhắc nhở',
+    clear: 'Xoá',
+    learnReminders: 'Tìm hiểu về nhắc nhở',
+    prevMonth: 'Tháng trước',
+    nextMonth: 'Tháng sau',
+    formats: { full: 'Ngày đầy đủ', short: 'Ngày rút gọn', mdy: 'Tháng/Ngày/Năm', dmy: 'Ngày/Tháng/Năm', ymd: 'Năm/Tháng/Ngày', relative: 'Tương đối' },
+    reminders: {
+      'none': 'Không',
+      'day': 'Trong ngày (9:00)',
+      'at': 'Đúng giờ',
+      '5m': 'Trước 5 phút',
+      '10m': 'Trước 10 phút',
+      '15m': 'Trước 15 phút',
+      '30m': 'Trước 30 phút',
+      '1h': 'Trước 1 giờ',
+      '2h': 'Trước 2 giờ',
+      '1d': 'Trước 1 ngày',
+      '2d': 'Trước 2 ngày',
+      '1w': 'Trước 1 tuần',
+    },
+  },
+  mention: { today: 'Hôm nay', tomorrow: 'Ngày mai', yesterday: 'Hôm qua', people: 'Người', pages: 'Trang', dates: 'Ngày', empty: 'Không tìm thấy', searchPlaceholder: 'Tìm người hoặc trang...', noSearch: 'Chưa cấu hình tìm kiếm (mention.configure({ search }))', openPage: 'Mở trang', prevMonth: 'Tháng trước', nextMonth: 'Tháng sau' },
 }
 
 export const en: EditorMessages = {
@@ -342,7 +385,35 @@ export const en: EditorMessages = {
     uploading: 'Uploading...',
     download: 'Download',
   },
-  mention: { today: 'Today', tomorrow: 'Tomorrow', yesterday: 'Yesterday', people: 'People', pages: 'Pages', dates: 'Dates', empty: 'No results' },
+  datePicker: {
+    endDate: 'End date',
+    dateFormat: 'Date format',
+    includeTime: 'Include time',
+    timeFormat: 'Time format',
+    hour12: '12 hour',
+    hour24: '24 hour',
+    remind: 'Remind',
+    clear: 'Clear',
+    learnReminders: 'Learn about reminders',
+    prevMonth: 'Previous month',
+    nextMonth: 'Next month',
+    formats: { full: 'Full date', short: 'Short date', mdy: 'Month/Day/Year', dmy: 'Day/Month/Year', ymd: 'Year/Month/Day', relative: 'Relative' },
+    reminders: {
+      'none': 'None',
+      'day': 'On day of event (9:00 AM)',
+      'at': 'At time of event',
+      '5m': '5 minutes before',
+      '10m': '10 minutes before',
+      '15m': '15 minutes before',
+      '30m': '30 minutes before',
+      '1h': '1 hour before',
+      '2h': '2 hours before',
+      '1d': '1 day before',
+      '2d': '2 days before',
+      '1w': '1 week before',
+    },
+  },
+  mention: { today: 'Today', tomorrow: 'Tomorrow', yesterday: 'Yesterday', people: 'People', pages: 'Pages', dates: 'Dates', empty: 'No results', searchPlaceholder: 'Search people or pages...', noSearch: 'Search is not configured (mention.configure({ search }))', openPage: 'Open page', prevMonth: 'Previous month', nextMonth: 'Next month' },
 }
 
 export const locales = { vi, en }

@@ -80,7 +80,7 @@ export const file = defineBlock<FileBlockOptions>({
 /** `@` mentions: dates built in; people/pages via `mention.configure({ search })`. */
 export const mention = defineBlock<MentionOptions>({
   name: 'mention',
-  defaults: { search: null, onClick: null },
+  defaults: { search: null, onClick: null, onRemind: null, reminderHelpUrl: null },
   extensions: o => [MentionNode.configure(o)],
   items: () => [{
     id: 'mention',
