@@ -21,19 +21,25 @@ export function bitmapPad(el: SketchElement): number {
 }
 
 /**
- * Rasterizes the unrotated element (box padded by `bitmapPad`) at `zoomBucket(zoom) * dpr`,
- * scaled down so neither side exceeds MAX_BITMAP_SIDE.
+ * Binding rule: elements always have w, h >= 0 — tools normalize them before writing —
+ * so bitmap sizing does not take absolute values.
  */
+
+/** Device-pixel scale of an element's bitmap: zoomBucket(zoom) * dpr, reduced so no side exceeds MAX_BITMAP_SIDE. */
+export function bitmapScale(el: SketchElement, zoom: number, dpr: number): number {
+  const pad = bitmapPad(el)
+  const s = zoomBucket(zoom) * dpr
+  const longest = Math.max(el.w + 2 * pad, el.h + 2 * pad) * s
+  return longest > MAX_BITMAP_SIDE ? s * (MAX_BITMAP_SIDE / longest) : s
+}
+
+/** Rasterizes the unrotated element, box padded by `bitmapPad`, at `bitmapScale`. */
 export function buildBitmap(el: SketchElement, zoom: number, dpr: number, theme: Theme): HTMLCanvasElement {
   const pad = bitmapPad(el)
-  const sw = Math.abs(el.w) + 2 * pad
-  const sh = Math.abs(el.h) + 2 * pad
-  let s = zoomBucket(zoom) * dpr
-  const longest = Math.max(sw, sh) * s
-  if (longest > MAX_BITMAP_SIDE) s *= MAX_BITMAP_SIDE / longest
+  const s = bitmapScale(el, zoom, dpr)
   const canvas = document.createElement('canvas')
-  canvas.width = Math.max(1, Math.min(MAX_BITMAP_SIDE, Math.ceil(sw * s)))
-  canvas.height = Math.max(1, Math.min(MAX_BITMAP_SIDE, Math.ceil(sh * s)))
+  canvas.width = Math.max(1, Math.min(MAX_BITMAP_SIDE, Math.ceil((el.w + 2 * pad) * s)))
+  canvas.height = Math.max(1, Math.min(MAX_BITMAP_SIDE, Math.ceil((el.h + 2 * pad) * s)))
   const ctx = canvas.getContext('2d')
   if (!ctx) return canvas
   ctx.setTransform(s, 0, 0, s, pad * s, pad * s)

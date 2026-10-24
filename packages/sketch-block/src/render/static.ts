@@ -2,7 +2,7 @@ import type { Scene } from '../model/scene'
 import type { SketchElement } from '../model/types'
 import type { Box } from '../geometry'
 import type { Viewport } from '../viewport'
-import { type BitmapCache, bitmapPad, buildBitmap, cacheKey } from './bitmap-cache'
+import { type BitmapCache, bitmapPad, bitmapScale, buildBitmap, cacheKey } from './bitmap-cache'
 import { cornerRadius, displayColor, hasFill, type Theme } from './shapes'
 
 export interface RenderState {
@@ -12,9 +12,13 @@ export interface RenderState {
   dpr: number
   theme: Theme
   grid: boolean
+  /** Zoom the bitmaps are rasterized for (defaults to viewport.zoom). Held fixed while zooming so bitmaps are scaled, not rebuilt. */
+  cacheZoom?: number
 }
 
 export const LOD_ZOOM = 0.3
+/** Largest rough-stroke overshoot beyond the element box: strokeWidth 4 + roughness 2 * 4. Index bounds only pad strokeWidth / 2. */
+const MAX_ROUGH_PAD = 4 + 2 * 4
 const GRID = 20
 const GRID_MIN_PX = 8
 
@@ -84,7 +88,7 @@ function drawLod(ctx: CanvasRenderingContext2D, el: SketchElement, theme: Theme,
 function drawBitmap(
   ctx: CanvasRenderingContext2D, el: SketchElement, state: RenderState, cache: BitmapCache,
 ): void {
-  const { zoom } = state.viewport
+  const zoom = state.cacheZoom ?? state.viewport.zoom
   const key = cacheKey(el, zoom, state.dpr, state.theme)
   let bmp = cache.get(key)
   if (!bmp) {
@@ -92,7 +96,9 @@ function drawBitmap(
     cache.set(key, bmp)
   }
   const pad = bitmapPad(el)
-  ctx.drawImage(bmp, -el.w / 2 - pad, -el.h / 2 - pad, el.w + 2 * pad, el.h + 2 * pad)
+  const s = bitmapScale(el, zoom, state.dpr)
+  // exact pixel size / scale: ceil() in buildBitmap must not stretch the bitmap
+  ctx.drawImage(bmp, -el.w / 2 - pad, -el.h / 2 - pad, bmp.width / s, bmp.height / s)
 }
 
 /**
@@ -111,10 +117,14 @@ export function renderStatic(
   const s = state.dpr * vp.zoom
   const box = vp.visibleBox(state.widthCss, state.heightCss)
   if (state.grid) drawGrid(ctx, box, state)
+  const query = {
+    minX: box.minX - MAX_ROUGH_PAD, minY: box.minY - MAX_ROUGH_PAD,
+    maxX: box.maxX + MAX_ROUGH_PAD, maxY: box.maxY + MAX_ROUGH_PAD,
+  }
 
   const lod = vp.zoom < LOD_ZOOM
   let drawn = 0
-  for (const el of scene.queryBox(box)) {
+  for (const el of scene.queryBox(query)) {
     if (skipIds?.has(el.id)) continue
     ctx.globalAlpha = el.opacity
     enterElementFrame(ctx, el)

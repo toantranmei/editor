@@ -5,8 +5,8 @@ import { BoardStore } from '../src/model/store'
 import { Scene } from '../src/model/scene'
 import { DEFAULT_STYLE, type SketchElement } from '../src/model/types'
 import { BitmapCache, bindCacheInvalidation, cacheKey, zoomBucket } from '../src/render/bitmap-cache'
-import { renderInteractive } from '../src/render/interactive'
-import { RenderScheduler } from '../src/render/scheduler'
+import { renderInteractive, resetAccentCache } from '../src/render/interactive'
+import { RenderScheduler, ZoomSettler } from '../src/render/scheduler'
 import { displayColor, roughOptions, shapeFor } from '../src/render/shapes'
 import { type RenderState, renderStatic } from '../src/render/static'
 import { Viewport } from '../src/viewport'
@@ -223,6 +223,67 @@ describe('renderStatic', () => {
     scene.destroy()
   })
 
+  it('reuses bitmaps (scaled) while cacheZoom is held during zoom', () => {
+    const scene = spreadScene(4)
+    const cache = new BitmapCache()
+    const { ctx } = newCanvas()
+    const vp = new Viewport()
+    renderStatic(ctx, scene, state({ viewport: vp, widthCss: 1000, cacheZoom: 1 }), cache)
+    vp.zoom = 2.5 // different bucket
+    const created = vi.spyOn(document, 'createElement')
+    ctx.calls.length = 0
+    const { drawn } = renderStatic(ctx, scene, state({ viewport: vp, widthCss: 1000, cacheZoom: 1 }), cache)
+    expect(created).not.toHaveBeenCalled()
+    expect(drawn).toBeGreaterThan(0)
+    expect(count(ctx, 'drawImage')).toBe(drawn)
+    scene.destroy()
+  })
+
+  it('draws bitmaps at their exact pixel size / scale, centered on the element', () => {
+    const store = new BoardStore(new Y.Doc())
+    // pad = 2 + 1*4 = 6; sw = 112.3 → 113 px at s = 1
+    store.create(init({ x: 10, y: 20, w: 100.3, h: 50, angle: 0.5 }))
+    const scene = new Scene(store)
+    const { ctx } = newCanvas()
+    renderStatic(ctx, scene, state(), new BitmapCache())
+    const di = ctx.calls.find(c => c.name === 'drawImage')!
+    const img = di.args[0] as HTMLCanvasElement
+    expect(img.width).toBe(113)
+    expect(img.height).toBe(62)
+    expect(di.args.slice(1)).toEqual([-100.3 / 2 - 6, -25 - 6, 113, 62])
+    expect(ctx.calls.find(c => c.name === 'translate')!.args).toEqual([10 + 100.3 / 2, 45])
+    expect(ctx.calls.find(c => c.name === 'rotate')!.args).toEqual([0.5])
+    scene.destroy()
+  })
+
+  it('draws bitmap dimensions divided by the bitmap scale', () => {
+    const store = new BoardStore(new Y.Doc())
+    store.create(init({ w: 100.3, h: 50 }))
+    const scene = new Scene(store)
+    const { ctx } = newCanvas()
+    renderStatic(ctx, scene, state({ dpr: 2 }), new BitmapCache())
+    const di = ctx.calls.find(c => c.name === 'drawImage')!
+    const img = di.args[0] as HTMLCanvasElement
+    expect(img.width).toBe(Math.ceil(112.3 * 2))
+    expect(di.args[3]).toBe(img.width / 2)
+    expect(di.args[4]).toBe(img.height / 2)
+    scene.destroy()
+  })
+
+  it('culls with a box inflated by the max rough pad', () => {
+    const store = new BoardStore(new Y.Doc())
+    // right edge -10; index maxX = -9 (strokeWidth/2); rough strokes reach -10 + (2 + 2*4) = 0
+    store.create(init({ x: -110, y: 0, w: 100, h: 50, strokeWidth: 2, roughness: 2 }))
+    const scene = new Scene(store)
+    const vp = new Viewport()
+    vp.x = -4 // index misses (-9 < -4) but the stroke is on screen
+    const { ctx } = newCanvas()
+    expect(renderStatic(ctx, scene, state({ viewport: vp }), new BitmapCache()).drawn).toBe(1)
+    vp.x = 5 // more than 12 units beyond the index bounds → culled
+    expect(renderStatic(ctx, scene, state({ viewport: vp }), new BitmapCache()).drawn).toBe(0)
+    scene.destroy()
+  })
+
   it('skips ids in skipIds', () => {
     const scene = spreadScene(4)
     const { ctx } = newCanvas()
@@ -319,6 +380,20 @@ describe('renderInteractive', () => {
     scene.destroy()
   })
 
+  it('reads the accent once per canvas until reset', () => {
+    const { scene, a } = sceneWith()
+    const { ctx } = newCanvas()
+    const spy = vi.spyOn(window, 'getComputedStyle')
+    resetAccentCache()
+    renderInteractive(ctx, scene, state(), overlay({ selectedIds: new Set([a.id]) }))
+    renderInteractive(ctx, scene, state(), overlay({ selectedIds: new Set([a.id]) }))
+    expect(spy).toHaveBeenCalledTimes(1)
+    resetAccentCache()
+    renderInteractive(ctx, scene, state(), overlay())
+    expect(spy).toHaveBeenCalledTimes(2)
+    scene.destroy()
+  })
+
   it('draws the marquee and the draft element', () => {
     const { scene } = sceneWith()
     const { ctx } = newCanvas()
@@ -368,5 +443,33 @@ describe('RenderScheduler', () => {
     expect(s).not.toHaveBeenCalled()
     sched.invalidateStatic()
     expect(frames.length).toBe(0)
+  })
+})
+
+describe('ZoomSettler', () => {
+  it('settles cacheZoom 150ms after the last update', () => {
+    vi.useFakeTimers()
+    try {
+      const onSettle = vi.fn()
+      const z = new ZoomSettler(onSettle)
+      z.update(1)
+      expect(z.cacheZoom).toBe(1)
+      z.update(1.5)
+      vi.advanceTimersByTime(100)
+      z.update(2)
+      vi.advanceTimersByTime(149)
+      expect(z.cacheZoom).toBe(1)
+      expect(onSettle).not.toHaveBeenCalled()
+      vi.advanceTimersByTime(1)
+      expect(z.cacheZoom).toBe(2)
+      expect(onSettle).toHaveBeenCalledTimes(1)
+      z.update(3)
+      z.destroy()
+      vi.advanceTimersByTime(500)
+      expect(z.cacheZoom).toBe(2)
+      expect(onSettle).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

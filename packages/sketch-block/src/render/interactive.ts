@@ -16,13 +16,25 @@ const FALLBACK_ACCENT = '#2383e2'
 const HANDLE_PX = 8
 const SELECTION_GAP_PX = 4
 
+let accentCache = new WeakMap<HTMLCanvasElement, string>()
+
+/** Forget cached accent colors (call on theme change). */
+export function resetAccentCache(): void {
+  accentCache = new WeakMap()
+}
+
+/** `--me-accent` of the canvas, read once per canvas (getComputedStyle forces style recalc). */
 function readAccent(canvas: HTMLCanvasElement | undefined): string {
   if (!canvas || typeof getComputedStyle !== 'function') return FALLBACK_ACCENT
+  let accent = accentCache.get(canvas)
+  if (accent !== undefined) return accent
   try {
-    return getComputedStyle(canvas).getPropertyValue('--me-accent').trim() || FALLBACK_ACCENT
+    accent = getComputedStyle(canvas).getPropertyValue('--me-accent').trim() || FALLBACK_ACCENT
   } catch {
-    return FALLBACK_ACCENT
+    accent = FALLBACK_ACCENT
   }
+  accentCache.set(canvas, accent)
+  return accent
 }
 
 /** Sets the element's rotated, centered frame on top of the view transform `s`. */
