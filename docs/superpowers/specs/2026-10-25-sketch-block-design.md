@@ -182,12 +182,12 @@ Cập nhật 2026-10-25: M0 (0.1.0) đã xong. Danh mục công cụ đã chọn
 - **Model:** mở rộng `SketchElement` thành discriminated union theo `type`:
   - `line` và `arrow`: `points` trong toạ độ local; `startArrowhead`/`endArrowhead`; `routing` là `straight`, `elbow` hoặc `curved`.
   - `freedraw`: `points` kèm `pressures`; `highlighter: boolean` (vẽ với opacity thấp, blend multiply).
-  - `text`: `text`, `fontFamily` (hand/normal/code), `fontSize` (S/M/L/XL), `align`; `containerId` để ghi chữ trong shape.
+  - `text`: `text`, `fontFamily` (hand/normal/code), `fontSize` (S/M/L/XL), `align`; chữ trong shape lưu bằng thuộc tính `label` của chính shape (không dùng `containerId`, đơn giản hơn và merge tốt khi collab).
   - Ghi `points` một lần khi kết thúc nét (đúng như spec). Trong lúc vẽ, nét chỉ là draft local.
 - **Render:**
   - freedraw dùng `perfect-freehand@1.2.3`, thành `Path2D`, rồi đưa vào cache bitmap như shape.
   - line/arrow dùng roughjs `linearPath`/`curve`, đầu mũi tên vẽ riêng.
-  - Text dùng `fillText` với font tay **Excalifont** (OFL, tự host, nạp lazy bằng `FontFace` cùng engine).
+  - Text dùng `fillText` với font tay **Patrick Hand** (OFL, có tiếng Việt; Excalifont thiếu gần hết ký tự tiếng Việt), tự host, nạp lazy bằng `FontFace` cùng engine.
   - `exportSvg` và preview hỗ trợ đủ các kiểu mới.
 - **Tools:**
   - pen/highlighter: lấy điểm bằng `getCoalescedEvents` (vòng lặp này đã có sẵn trong board).
@@ -198,7 +198,7 @@ Cập nhật 2026-10-25: M0 (0.1.0) đã xong. Danh mục công cụ đã chọn
   - lasso: polygon tự do, chọn phần tử nằm trọn bên trong.
 - **UI:**
   - Toolbar thêm các tool trên, phím tắt kiểu Excalidraw (P pen, L line, A arrow, T text, E eraser, K laser).
-  - StylePanel theo ngữ cảnh: màu từ `COLORS` của editor, kiểu tô, độ dày, kiểu nét, độ nhám, góc, opacity, đầu mũi tên, font. Hút màu bằng phím I.
+  - StylePanel theo ngữ cảnh: bảng màu hex cố định kiểu Excalidraw (màu thật, để preview SVG và collab hiển thị đúng ở mọi nơi), kiểu tô, độ dày, kiểu nét, độ nhám, góc, opacity, đầu mũi tên, font. Hút màu bằng phím I.
   - Copy/paste qua clipboard (MIME riêng, có fallback JSON text). Copy/paste style bằng Ctrl+Alt+C/V. Duplicate bằng Ctrl+D.
   - Zen mode (Alt+Z) và view mode (Alt+R).
 - **Nợ kỹ thuật từ M0** (theo kết quả review cuối):
@@ -210,7 +210,7 @@ Cập nhật 2026-10-25: M0 (0.1.0) đã xong. Danh mục công cụ đã chọn
   - Thêm test resize khi đã xoay.
   - Trả focus về editor sau khi thoát board.
   - Xem lại `MAX_ROUGH_PAD` khi style panel cho chỉnh độ dày.
-- **Dependency mới:** `perfect-freehand 1.2.3`, font Excalifont (kiểm tra license OFL khi thêm).
+- **Dependency mới:** `perfect-freehand 1.2.3`, `@fontsource/patrick-hand` (OFL-1.1, chỉ để lấy file woff2).
 
 ## File cần sửa ngoài package mới
 - `package.json` (root): `build` và `release` chạy cho mọi package (`pnpm -r --filter "./packages/*" build`), thêm `dev:sketch`.
