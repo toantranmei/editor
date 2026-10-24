@@ -78,7 +78,7 @@ Bố cục giống Excalidraw: **thanh công cụ chính** ở giữa phía trê
 | Khoá tool | Q | Giữ nguyên tool sau khi vẽ xong (mặc định quay về Select) | M0 |
 
 ### 2. Panel style (theo tool hoặc phần tử đang chọn)
-- **Nét**: màu nét (bảng màu `COLORS` của editor và ô chọn màu tự do); độ dày (mảnh, vừa, đậm); kiểu nét (liền, gạch, chấm).
+- **Nét**: màu nét (bảng màu hex cố định kiểu Excalidraw và ô chọn màu tự do); độ dày (mảnh, vừa, đậm); kiểu nét (liền, gạch, chấm).
 - **Nền**: màu nền; kiểu tô (hachure, cross-hatch, solid, không tô).
 - **Độ "tay"** (sloppiness, chỉ số roughness của rough.js): Architect (thẳng), Artist, Cartoonist (rất nguệch ngoạc).
 - **Góc**: vuông / bo tròn.
@@ -161,7 +161,7 @@ sketch.configure({ provider: websocket({
 4. **Culling + rbush**: chỉ vẽ element giao với viewport. Hit-test chạy rbush trước, rồi mới kiểm tra hình học chính xác.
 5. **LOD khi zoom xa** (< ~0.3×): vẽ hình đơn giản, không chạy rough, text thành khối. Cache chỉ dựng lại khi ngừng zoom khoảng 150ms (trong lúc zoom thì scale bitmap cũ).
 6. **Input**: Pointer Events + `getCoalescedEvents()` để nét bút mượt, `setPointerCapture`, pinch và wheel để zoom quanh con trỏ, xử lý devicePixelRatio đúng.
-7. **Font tay**: tự host Excalifont/Virgil (OFL, kiểm lại license khi thêm), nạp lazy bằng `FontFace` cùng engine, không lấy từ CDN.
+7. **Font tay**: tự host Patrick Hand (OFL, có tiếng Việt), nạp lazy bằng `FontFace` cùng engine, không lấy từ CDN.
 8. Để dành cho sau (chỉ làm nếu benchmark cho thấy cần): dựng bitmap bằng OffscreenCanvas trong worker.
 
 ## Các mốc (mỗi mốc là một bản publish 0.x qua changesets)
