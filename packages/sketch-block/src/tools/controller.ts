@@ -11,7 +11,10 @@ import { DEFAULT_STYLE, isLinear, isShape, isText } from '../model/types'
 import { measureText } from '../text/measure'
 import type { Overlay } from '../render/interactive'
 import type { Viewport } from '../viewport'
+import { EraserTool } from './eraser'
 import { HandTool } from './hand'
+import { LASER_FADE_MS, type LaserPoint, LaserTool } from './laser'
+import { LassoTool } from './lasso'
 import { LinearTool } from './linear'
 import { PenTool } from './pen'
 import { SelectTool } from './select'
@@ -25,6 +28,7 @@ export type ToolName =
 /** Tools with an implementation (besides `hand`); later tasks register theirs here and in TOOL_KEYS. */
 type PointerToolName =
   | 'select' | 'rectangle' | 'ellipse' | 'diamond' | 'pen' | 'highlighter' | 'line' | 'arrow' | 'text'
+  | 'eraser' | 'laser' | 'lasso'
 
 /** The element whose text (a text element) or label (a shape) is open in the editor overlay. */
 export interface EditingTarget {
@@ -51,6 +55,8 @@ export interface ToolControllerContext {
   readonly: () => boolean
   style: () => typeof DEFAULT_STYLE
   invalidate: () => void
+  /** Clock for the laser trail, in ms (defaults to `performance.now`). */
+  now?: () => number
 }
 
 /** Shared state the individual tools act on. */
@@ -65,6 +71,14 @@ export interface ToolHost {
   draft: SketchElement | null
   /** In-progress multi-point segment (last placed point → pointer), scene coords. */
   previewSegment: [Point, Point] | null
+  /** Ids marked by the eraser sweep in progress; replaced by a new Set whenever it changes. */
+  erasing: Set<string>
+  /** Laser trail (scene coords, host clock times), oldest first. */
+  readonly laser: LaserPoint[]
+  /** Lasso polygon in progress (scene coords). */
+  lasso: Point[] | null
+  /** Host clock in ms. */
+  now(): number
   setSelection(ids: Iterable<string>): void
   setTool(t: ToolName): void
   /** Restores the idle cursor for the current tool / pan state. */
@@ -90,12 +104,17 @@ export interface Tool {
 
 /** Tools that create elements: crosshair cursor, clear the selection, unavailable when read-only. */
 const CREATORS = new Set<ToolName>(['rectangle', 'ellipse', 'diamond', 'pen', 'highlighter', 'line', 'arrow', 'text'])
+/** Tools that write (creators plus the eraser): unavailable when read-only. */
+const WRITERS = new Set<ToolName>([...CREATORS, 'eraser'])
 const TOOL_KEYS: Record<string, 'hand' | PointerToolName> = {
   v: 'select', 1: 'select', h: 'hand',
   r: 'rectangle', 2: 'rectangle', d: 'diamond', 3: 'diamond', o: 'ellipse', 4: 'ellipse',
   a: 'arrow', 5: 'arrow', l: 'line', 6: 'line',
   p: 'pen', 7: 'pen', m: 'highlighter', t: 'text', 8: 'text',
+  e: 'eraser', 0: 'eraser', k: 'laser',
 }
+/** Non-creating tools that still show a crosshair. */
+const POINTERS = new Set<ToolName>(['eraser', 'laser', 'lasso'])
 /** Hit tolerance for picking the element to edit, in screen px. */
 const EDIT_HIT_PX = 6
 const NUDGE: Record<string, [number, number]> = {
@@ -112,6 +131,9 @@ export class ToolController implements ToolHost {
   hoverId: string | null = null
   draft: SketchElement | null = null
   previewSegment: [Point, Point] | null = null
+  erasing: Set<string> = new Set()
+  readonly laser: LaserPoint[] = []
+  lasso: Point[] | null = null
   /** Text / label being edited in the overlay (null = none). Editing counts as an active gesture. */
   readonly editing: Ref<EditingTarget | null> = shallowRef(null)
 
@@ -138,6 +160,9 @@ export class ToolController implements ToolHost {
       line: new LinearTool(this, 'line'),
       arrow: new LinearTool(this, 'arrow'),
       text: new TextTool(this),
+      eraser: new EraserTool(this),
+      laser: new LaserTool(this),
+      lasso: new LassoTool(this),
     }
     this.off = ctx.scene.onChange(() => this.pruneSelection())
   }
@@ -150,7 +175,27 @@ export class ToolController implements ToolHost {
       draft: this.draft,
       pointHandles: this.pointHandles(),
       previewSegment: this.previewSegment,
+      erasing: this.erasing,
+      laser: this.laserTrail() as LaserPoint[],
+      lasso: this.lasso,
+      now: this.now(),
     }
+  }
+
+  now(): number {
+    return this.ctx.now ? this.ctx.now() : performance.now()
+  }
+
+  /** The live laser trail (points older than the fade time are dropped first). */
+  laserTrail(): readonly LaserPoint[] {
+    const trail = this.laser
+    if (trail.length) {
+      const cutoff = this.now() - LASER_FADE_MS
+      let n = 0
+      while (n < trail.length && trail[n]!.t <= cutoff) n++
+      if (n) trail.splice(0, n)
+    }
+    return trail
   }
 
   /** Scene points of the single selected, unlocked line/arrow (editable), else null. */
@@ -187,7 +232,7 @@ export class ToolController implements ToolHost {
     const t = this.tool.value
     this.cursor.value = this.spaceHeld || t === 'hand'
       ? 'grab'
-      : t === 'text' ? 'text' : CREATORS.has(t) ? 'crosshair' : 'default'
+      : t === 'text' ? 'text' : CREATORS.has(t) || POINTERS.has(t) ? 'crosshair' : 'default'
   }
 
   // ---------- pointer ----------
@@ -296,7 +341,7 @@ export class ToolController implements ToolHost {
     }
     const t = TOOL_KEYS[k]
     if (t) {
-      if (ro && CREATORS.has(t)) return false
+      if (ro && WRITERS.has(t)) return false
       this.setTool(t)
       return true
     }

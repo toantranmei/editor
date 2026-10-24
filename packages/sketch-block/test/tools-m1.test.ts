@@ -170,8 +170,8 @@ describe('pen and highlighter', () => {
 
   it('unimplemented tools are not reachable by key or setTool', () => {
     const { c } = setup()
-    expect(c.keyDown(key('e'))).toBe(false)
-    c.setTool('eraser')
+    expect(c.keyDown(key('i'))).toBe(false)
+    c.setTool('eyedropper')
     expect(c.tool.value).toBe('select')
   })
 })

@@ -263,4 +263,44 @@ describe('SketchBoard', () => {
     expect((el as { points: unknown[] }).points).toHaveLength(4)
     expect((el as { pressures: number[] }).pressures).toEqual([0.3, 0.4, 0.6, 0.5])
   })
+
+  it('eraser: marked elements are skipped on static and drawn faded on interactive, then removed', async () => {
+    const { wrapper, key, pointer, store } = await setup()
+    // empty board: scene origin at the canvas center (400, 300)
+    store.create(init({ fill: '#ffffff', fillStyle: 'solid' }))
+    frames.flush()
+    const [st, it] = wrapper.findAll('canvas').map(c => ctxOf(c.element as HTMLCanvasElement))
+    expect(st!.calls.some(c => c.name === 'drawImage')).toBe(true)
+    await key('e')
+    pointer('pointerdown', 380, 325)
+    pointer('pointermove', 520, 325, { buttons: 1 })
+    st!.calls.length = 0
+    it!.calls.length = 0
+    frames.flush()
+    // marking redraws the static layer without the marked element
+    expect(st!.calls.some(c => c.name === 'clearRect')).toBe(true)
+    expect(st!.calls.some(c => c.name === 'drawImage')).toBe(false)
+    expect(it!.calls.some(c => c.name === 'set:globalAlpha' && c.args[0] === 0.3)).toBe(true)
+    pointer('pointerup', 520, 325)
+    expect(store.all()).toHaveLength(0)
+  })
+
+  it('laser keeps scheduling interactive frames until its trail fades', async () => {
+    let t = 1000
+    vi.spyOn(performance, 'now').mockImplementation(() => t)
+    const { key, pointer, store } = await setup()
+    await key('k')
+    pointer('pointerdown', 100, 100)
+    pointer('pointermove', 150, 120, { buttons: 1 })
+    pointer('pointerup', 150, 120)
+    for (let i = 0; i < 3; i++) {
+      frames.flush()
+      expect(frames.pending).toBe(1)
+      t += 100
+    }
+    t += 1000
+    frames.flush()
+    expect(frames.pending).toBe(0)
+    expect(store.all()).toHaveLength(0)
+  })
 })

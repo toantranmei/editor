@@ -396,6 +396,7 @@ describe('renderInteractive', () => {
   }
   const overlay = (over = {}) => ({
     selectedIds: new Set<string>(), marquee: null, hoverId: null, draft: null, pointHandles: null, previewSegment: null,
+    erasing: new Set<string>(), laser: [], lasso: null,
     ...over,
   })
   const lineInit = (n: number) => ({
@@ -499,6 +500,34 @@ describe('renderInteractive', () => {
     expect(count(ctx, 'fillRect')).toBeGreaterThanOrEqual(1)
     expect(count(ctx, 'bezierCurveTo')).toBeGreaterThan(0) // roughjs strokes
     expect(count(ctx, 'clearRect')).toBe(1)
+    scene.destroy()
+  })
+
+  it('draws erase-marked elements at 0.3 opacity', () => {
+    const { scene, a } = sceneWith()
+    const { ctx } = newCanvas()
+    renderInteractive(ctx, scene, state(), overlay({ erasing: new Set([a.id]) }))
+    const alphas = ctx.calls.filter(c => c.name === 'set:globalAlpha').map(c => c.args[0])
+    expect(alphas).toContain(0.3 * a.opacity)
+    expect(count(ctx, 'bezierCurveTo')).toBeGreaterThan(0)
+    scene.destroy()
+  })
+
+  it('draws the laser trail in red, fading with age, and the lasso path', () => {
+    const { scene } = sceneWith()
+    const { ctx } = newCanvas()
+    renderInteractive(ctx, scene, state(), overlay({
+      laser: [{ x: 0, y: 0, t: 0, start: true }, { x: 10, y: 0, t: 500 }, { x: 20, y: 0, t: 900 }],
+      now: 1000,
+      lasso: [{ x: 0, y: 0 }, { x: 50, y: 0 }, { x: 50, y: 50 }],
+    }))
+    const strokes = ctx.calls.filter(c => c.name === 'set:strokeStyle').map(c => c.args[0])
+    expect(strokes).toContain('#e03131')
+    const alphas = ctx.calls.filter(c => c.name === 'set:globalAlpha').map(c => c.args[0] as number)
+    // segment alphas follow the newer point's age: 1 - 500/1000, 1 - 100/1000
+    expect(alphas).toContain(0.5)
+    expect(alphas.some(v => Math.abs(v - 0.9) < 1e-9)).toBe(true)
+    expect(count(ctx, 'closePath')).toBeGreaterThanOrEqual(1)
     scene.destroy()
   })
 })

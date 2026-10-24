@@ -1,7 +1,7 @@
 import { kindOf } from '../elements/kind'
 import { hasTransformHandles, linearScenePoints, movePointPatch } from '../elements/linear'
 import {
-  type Box, boxCenter, boxContains, elementBounds, type Handle, handlePositions, type Point, resizeBox, rotateAngle,
+  type Box, boxCenter, elementCorners, type Handle, handlePositions, type Point, resizeBox, rotateAngle,
   snapSegment,
 } from '../geometry'
 import { type ElementPatch, isLinear, type LinearElement, type SketchElement } from '../model/types'
@@ -188,8 +188,11 @@ export class SelectTool implements Tool {
         }
         this.host.marquee = box
         const next = new Set(g.base)
+        // containment uses the unpadded rotated box (rough-ink padding would make it stricter)
         for (const el of this.host.ctx.scene.queryBox(box)) {
-          if (boxContains(box, elementBounds(el))) next.add(el.id)
+          if (elementCorners(el).every(c => c.x >= box.minX && c.x <= box.maxX && c.y >= box.minY && c.y <= box.maxY)) {
+            next.add(el.id)
+          }
         }
         this.host.setSelection(next)
         this.host.ctx.invalidate()

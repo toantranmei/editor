@@ -15,7 +15,21 @@ export interface Overlay {
   pointHandles: Point[] | null
   /** Multi-point line/arrow in progress: last placed point → pointer (scene coords). */
   previewSegment: [Point, Point] | null
+  /** Elements marked by the eraser: hidden on the static layer, drawn faded here. */
+  erasing: Set<string>
+  /** Laser trail (scene coords; `t` in ms on the clock `now` comes from; `start` begins a stroke). */
+  laser: { x: number; y: number; t: number; start?: boolean }[]
+  /** Lasso polygon in progress (scene coords). */
+  lasso: Point[] | null
+  /** Current clock time for the laser fade (defaults to `performance.now()`). */
+  now?: number
 }
+
+/** Opacity factor of erase-marked elements. */
+export const ERASING_ALPHA = 0.3
+export const LASER_COLOR = '#e03131'
+const LASER_FADE_MS = 1000
+const LASER_WIDTH_PX = 4
 
 const FALLBACK_ACCENT = '#2383e2'
 const HANDLE_PX = 8
@@ -51,6 +65,59 @@ function elementFrame(ctx: CanvasRenderingContext2D, state: RenderState, cx: num
   if (angle) ctx.rotate(angle)
 }
 
+/** Draws `el` with its kind's full-fidelity draw, in its element frame, at `alpha`. */
+function drawElement(
+  ctx: CanvasRenderingContext2D, state: RenderState, el: SketchElement, alpha: number,
+): void {
+  ctx.globalAlpha = alpha
+  elementFrame(ctx, state, el.x + el.w / 2, el.y + el.h / 2, el.angle)
+  ctx.translate(-el.w / 2, -el.h / 2)
+  const multiply = blendsMultiply(el, state.theme)
+  if (multiply) ctx.globalCompositeOperation = 'multiply'
+  kindOf(el).draw(ctx, el, state.theme)
+  if (multiply) ctx.globalCompositeOperation = 'source-over'
+  ctx.globalAlpha = 1
+}
+
+/** Laser trail: each segment fades linearly with the age of its newer point; a lone stroke start is a dot. */
+function drawLaser(ctx: CanvasRenderingContext2D, state: RenderState, trail: Overlay['laser'], now: number): void {
+  const zoom = state.viewport.zoom
+  elementFrame(ctx, state, 0, 0, 0)
+  ctx.strokeStyle = LASER_COLOR
+  ctx.fillStyle = LASER_COLOR
+  ctx.lineWidth = LASER_WIDTH_PX / zoom
+  ctx.lineCap = 'round'
+  ctx.lineJoin = 'round'
+  ctx.setLineDash([])
+  const alphaOf = (t: number) => Math.max(0, Math.min(1, 1 - (now - t) / LASER_FADE_MS))
+  for (let i = 0; i < trail.length; i++) {
+    const p = trail[i]!
+    const next = trail[i + 1]
+    if (i === 0 || p.start) {
+      if (next && !next.start) continue
+      // a stroke of one point
+      const a = alphaOf(p.t)
+      if (a <= 0) continue
+      ctx.globalAlpha = a
+      ctx.beginPath()
+      ctx.arc(p.x, p.y, LASER_WIDTH_PX / zoom / 2, 0, Math.PI * 2)
+      ctx.fill()
+      continue
+    }
+    const a = alphaOf(p.t)
+    if (a <= 0) continue
+    const prev = trail[i - 1]!
+    ctx.globalAlpha = a
+    ctx.beginPath()
+    ctx.moveTo(prev.x, prev.y)
+    ctx.lineTo(p.x, p.y)
+    ctx.stroke()
+  }
+  ctx.globalAlpha = 1
+  ctx.lineCap = 'butt'
+  ctx.lineJoin = 'miter'
+}
+
 function outline(ctx: CanvasRenderingContext2D, el: SketchElement, gap: number): void {
   ctx.strokeRect(-el.w / 2 - gap, -el.h / 2 - gap, el.w + 2 * gap, el.h + 2 * gap)
 }
@@ -69,17 +136,15 @@ export function renderInteractive(
   const accent = readAccent(ctx.canvas)
   applyViewTransform(ctx, state)
 
-  const { draft } = overlay
-  if (draft) {
-    ctx.globalAlpha = draft.opacity
-    elementFrame(ctx, state, draft.x + draft.w / 2, draft.y + draft.h / 2, draft.angle)
-    ctx.translate(-draft.w / 2, -draft.h / 2)
-    const multiply = blendsMultiply(draft, state.theme)
-    if (multiply) ctx.globalCompositeOperation = 'multiply'
-    kindOf(draft).draw(ctx, draft, state.theme)
-    if (multiply) ctx.globalCompositeOperation = 'source-over'
-    ctx.globalAlpha = 1
+  // erase-marked elements are skipped on the static layer and drawn faded here, in z-order
+  if (overlay.erasing.size) {
+    for (const el of scene.elements) {
+      if (overlay.erasing.has(el.id)) drawElement(ctx, state, el, el.opacity * ERASING_ALPHA)
+    }
   }
+
+  const { draft } = overlay
+  if (draft) drawElement(ctx, state, draft, draft.opacity)
 
   ctx.strokeStyle = accent
   ctx.lineWidth = 1 / zoom
@@ -139,6 +204,30 @@ export function renderInteractive(
       ctx.fill()
       ctx.stroke()
     }
+  }
+
+  const lasso = overlay.lasso
+  if (lasso && lasso.length > 1) {
+    elementFrame(ctx, state, 0, 0, 0)
+    ctx.strokeStyle = accent
+    ctx.lineWidth = 1 / zoom
+    ctx.setLineDash([4 / zoom, 4 / zoom])
+    ctx.beginPath()
+    ctx.moveTo(lasso[0]!.x, lasso[0]!.y)
+    for (let i = 1; i < lasso.length; i++) ctx.lineTo(lasso[i]!.x, lasso[i]!.y)
+    ctx.closePath()
+    ctx.fillStyle = accent
+    ctx.globalAlpha = 0.1
+    ctx.fill()
+    ctx.globalAlpha = 1
+    ctx.stroke()
+    ctx.setLineDash([])
+  }
+
+  if (overlay.laser.length) {
+    drawLaser(ctx, state, overlay.laser, overlay.now ?? performance.now())
+    ctx.strokeStyle = accent
+    ctx.lineWidth = 1 / zoom
   }
 
   const m = overlay.marquee
