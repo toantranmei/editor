@@ -41,7 +41,7 @@ function startResize(e: PointerEvent) {
 </script>
 
 <template>
-  <NodeViewWrapper class="me-media">
+  <NodeViewWrapper class="me-media" :class="{ 'is-readonly-empty': !editable && !safeSrc }">
     <form v-if="!safeSrc" class="me-media-empty" contenteditable="false" @submit.prevent="submit">
       <div class="me-hint">
         {{ m.hint }}

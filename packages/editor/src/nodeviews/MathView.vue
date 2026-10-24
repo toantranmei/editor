@@ -2,9 +2,11 @@
 import { NodeViewWrapper, nodeViewProps } from '@tiptap/vue-3'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useClickOutside } from '../composables/useClickOutside'
+import { useEditable } from '../composables/useEditable'
 import { loadKatex } from '../lazy'
 
 const props = defineProps(nodeViewProps)
+const editable = useEditable(props.editor)
 
 const m = computed(() => props.editor.storage.meiConfig.messages.math)
 const inline = computed(() => props.node.type.name === 'mathInline')
@@ -55,6 +57,13 @@ function onKeydown(e: KeyboardEvent) {
 }
 useClickOutside(root, editing, commit)
 
+// Switching to read-only closes the editor, keeping what was typed (no deletes then).
+watch(editable, (value) => {
+  if (value || !editing.value) return
+  editing.value = false
+  if (draft.value !== props.node.attrs.latex) props.updateAttributes({ latex: draft.value })
+})
+
 // A freshly inserted empty equation opens straight into editing.
 onMounted(() => {
   if (!props.node.attrs.latex) open()
@@ -66,7 +75,7 @@ onBeforeUnmount(commit)
   <NodeViewWrapper
     ref="root"
     :as="inline ? 'span' : 'div'"
-    :class="[inline ? 'me-math-inline' : 'me-math-block', { 'is-selected': selected, 'is-editing': editing }]"
+    :class="[inline ? 'me-math-inline' : 'me-math-block', { 'is-selected': selected, 'is-editing': editing, 'is-readonly-empty': !editable && !node.attrs.latex }]"
     contenteditable="false"
   >
     <span v-if="rendered" class="me-math-render" @click="open" v-html="rendered" />

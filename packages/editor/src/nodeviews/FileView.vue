@@ -2,9 +2,11 @@
 import { NodeViewWrapper, nodeViewProps } from '@tiptap/vue-3'
 import { AudioLines, Download, File as FileIcon, Film, Link as LinkIcon, Upload } from '@lucide/vue'
 import { computed, ref } from 'vue'
+import { useEditable } from '../composables/useEditable'
 import type { FileBlockOptions, FileKind } from '../extensions/file-block'
 
 const props = defineProps(nodeViewProps)
+const editable = useEditable(props.editor)
 
 const options = computed(() => props.extension.options as FileBlockOptions)
 const kind = computed(() => (props.node.attrs.kind ?? 'file') as FileKind)
@@ -77,7 +79,7 @@ const sizeLabel = computed(() => {
 </script>
 
 <template>
-  <NodeViewWrapper class="me-media">
+  <NodeViewWrapper class="me-media" :class="{ 'is-readonly-empty': !editable && !node.attrs.src }">
     <div v-if="!node.attrs.src" class="me-media-empty" contenteditable="false" @dragover.prevent @drop="onDrop">
       <div class="me-tabs">
         <button v-for="t in (['upload', 'link'] as const)" :key="t" type="button" class="me-tab" :class="{ 'is-active': tab === t }" @click="tab = t">

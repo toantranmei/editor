@@ -494,6 +494,9 @@
   .me-content :is(.me-callout-content, .me-column, [data-type="detailsContent"], blockquote) > :first-child { margin-top: 0; }
   .me-content :is(.me-callout-content, .me-column, [data-type="detailsContent"], blockquote) > :last-child { margin-bottom: 0; }
 
+  /* Read-only: empty media/embed/HTML/equation blocks show nothing (like Notion); the node stays in the document. */
+  .me-content .is-readonly-empty { display: none; }
+
   /* Misc */
   .me-content .ProseMirror-selectednode:not(hr) { outline: none; }
   .me-content .suggestion { border-radius: var(--me-radius-sm); background: var(--me-color-hover); }

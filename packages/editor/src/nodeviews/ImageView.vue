@@ -183,7 +183,7 @@ const cropStyle = computed(() => {
 </script>
 
 <template>
-  <NodeViewWrapper class="me-media">
+  <NodeViewWrapper class="me-media" :class="{ 'is-readonly-empty': !editable && !node.attrs.src }">
     <div v-if="!node.attrs.src" class="me-media-empty" contenteditable="false" @dragover.prevent @drop="onDrop">
       <div class="me-tabs">
         <button
