@@ -13,6 +13,12 @@ import { memory } from '../src/providers/memory'
 import type { BoardConnection } from '../src/providers/types'
 import { stubCanvas, stubFrames } from './helpers/canvas'
 
+// the real loader warns (no FontFace in happy-dom)
+vi.mock('../src/text/fonts', async orig => ({
+  ...(await orig<typeof import('../src/text/fonts')>()),
+  loadFonts: () => Promise.resolve(),
+}))
+
 const Doc = Node.create({ name: 'doc', topNode: true, content: 'block+' })
 const Paragraph = Node.create({ name: 'paragraph', group: 'block', content: 'inline*', parseHTML: () => [{ tag: 'p' }], renderHTML: () => ['p', 0] })
 const Text = Node.create({ name: 'text', group: 'inline' })
@@ -334,7 +340,7 @@ describe('sketch block', () => {
     await enter(wrapper)
     const board = document.querySelector('.me-sketch-board')!
     expect(board.getAttribute('data-theme')).toBe('dark')
-    expect(board.querySelector('.me-sketch-toolbar button')!.getAttribute('title')).toBe(messages.en.tools.hand)
+    expect(board.querySelector('[data-tool="hand"]')!.getAttribute('title')).toBe(messages.en.tools.hand)
   })
 
   it('follows the app dark class unless the editor scope forces light', async () => {
@@ -503,5 +509,84 @@ describe('sketch block', () => {
     pending[0]!.resolve('https://cdn/x')
     await settle()
     expect(sketchNode(editor).attrs).toMatchObject({ boardId: 'bd_x', preview: 'https://cdn/x', version: 1 })
+  })
+  it('undo stack survives inline→fullscreen', async () => {
+    const { provider, connections } = recording()
+    const { wrapper } = await setup({ provider, attrs: { boardId: 'bd_x', preview: null, height: null, version: 0 } })
+    await enter(wrapper)
+    const board = document.querySelector('.me-sketch-board') as HTMLElement
+    board.dispatchEvent(new KeyboardEvent('keydown', { key: 'r', bubbles: true, cancelable: true }))
+    const canvas = board.querySelectorAll('canvas')[1]!
+    const pointer = (type: string, x: number, y: number) =>
+      canvas.dispatchEvent(new PointerEvent(type, { clientX: x, clientY: y, button: 0, buttons: 1, pointerId: 1, pointerType: 'mouse', bubbles: true }))
+    pointer('pointerdown', 100, 100)
+    pointer('pointermove', 200, 160)
+    pointer('pointerup', 200, 160)
+    const store = new BoardStore(connections[0]!.doc)
+    expect(store.all()).toHaveLength(1)
+
+    await wrapper.find('.me-sketch-expand').trigger('click')
+    await settle()
+    const undoBtn = document.querySelector('.me-sketch-modal [data-action="undo"]') as HTMLButtonElement
+    expect(undoBtn).not.toBeNull()
+    expect(undoBtn.disabled).toBe(false)
+    undoBtn.click()
+    expect(store.all()).toHaveLength(0)
+    await nextTick()
+    const redoBtn = document.querySelector('.me-sketch-modal [data-action="redo"]') as HTMLButtonElement
+    expect(redoBtn.disabled).toBe(false)
+  })
+
+  it('one session per connection: destroyed with it on unmount and on board id change', async () => {
+    const { History: BoardHistory } = await import('../src/model/history')
+    // boards given a session never destroy its history: every call here is a session going away
+    const destroy = vi.spyOn(BoardHistory.prototype, 'destroy')
+    const { editor, wrapper } = await setup({ attrs: { boardId: 'bd_a', preview: null, height: null, version: 0 } })
+    await enter(wrapper)
+    await wrapper.find('.me-sketch-expand').trigger('click')
+    await settle()
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    await settle()
+    await enter(wrapper)
+    expect(destroy).not.toHaveBeenCalled()
+    // board id change: the session goes with the connection
+    editor.commands.command(({ tr }) => {
+      tr.setNodeMarkup(0, undefined, { boardId: 'bd_b', preview: null, height: null, version: 0 })
+      return true
+    })
+    await settle()
+    expect(destroy).toHaveBeenCalledTimes(1)
+    await enter(wrapper)
+    editor.destroy()
+    await settle()
+    expect(destroy).toHaveBeenCalledTimes(2)
+  })
+
+  it('focus returns to editor on leave', async () => {
+    const { editor, wrapper } = await setup({
+      content: { type: 'doc', content: [{ type: 'paragraph' }, { type: 'sketch', attrs: { boardId: 'bd_x', preview: null, height: null, version: 0 } }] },
+    })
+    await enter(wrapper)
+    const board = document.querySelector('.me-sketch-board') as HTMLElement
+    expect(document.activeElement).toBe(board)
+    board.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))
+    await settle()
+    expect(document.querySelector('.me-sketch-board')).toBeNull()
+    const sel = editor.state.selection as unknown as { node?: { type: { name: string } }, from: number }
+    expect(sel.node?.type.name).toBe('sketch')
+    expect(sel.from).toBe(2)
+    expect(document.activeElement).toBe(editor.view.dom)
+  })
+
+  it('leave does not throw once the editor is destroyed', async () => {
+    const { editor, wrapper } = await setup({ attrs: { boardId: 'bd_x', preview: null, height: null, version: 0 } })
+    await enter(wrapper)
+    const focus = vi.spyOn(editor.view, 'focus')
+    const destroyed = vi.spyOn(editor, 'isDestroyed', 'get').mockReturnValue(true)
+    const board = document.querySelector('.me-sketch-board') as HTMLElement
+    expect(() => board.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))).not.toThrow()
+    await settle()
+    expect(focus).not.toHaveBeenCalled()
+    destroyed.mockRestore()
   })
 })

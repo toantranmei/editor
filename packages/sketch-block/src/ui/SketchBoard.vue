@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, toRaw, watch } from 'vue'
 import type * as Y from 'yjs'
 import '../styles/sketch.css'
+import type { BoardSession } from '../engine'
 import { parseClipboard, serializeClipboard } from '../io/clipboard'
 import { messages as allMessages } from '../messages'
 import { History } from '../model/history'
@@ -13,6 +14,7 @@ import { BitmapCache, bindCacheInvalidation } from '../render/bitmap-cache'
 import { renderInteractive, resetAccentCache } from '../render/interactive'
 import { RenderScheduler, ZoomSettler } from '../render/scheduler'
 import { type RenderState, renderStatic } from '../render/static'
+import { loadFonts } from '../text/fonts'
 import { type CurrentStyle, type PointerInput, ToolController, type ToolName } from '../tools/controller'
 import { Viewport } from '../viewport'
 import StylePanel from './StylePanel.vue'
@@ -25,7 +27,9 @@ const props = withDefaults(defineProps<{
   readonly?: boolean
   locale?: 'vi' | 'en'
   theme?: 'light' | 'dark'
-}>(), { readonly: false, locale: 'vi', theme: 'light' })
+  /** Store + history shared across mounts (inline ↔ fullscreen). Owned by the caller: never destroyed here. */
+  session?: BoardSession
+}>(), { readonly: false, locale: 'vi', theme: 'light', session: undefined })
 
 const emit = defineEmits<{
   /** Any local edit (including undo/redo); the caller debounces preview generation. */
@@ -43,13 +47,16 @@ const interactiveCanvas = shallowRef<HTMLCanvasElement | null>(null)
 const t = computed(() => allMessages[props.locale] ?? allMessages.vi)
 
 // ---------- model ----------
-// The connection is owned by the caller and assumed fixed for the board's lifetime.
+// The connection (and session) are owned by the caller and assumed fixed for the board's lifetime.
 // toRaw: a connection passed through reactive state would hand out Proxy-wrapped Yjs types,
 // which breaks identity checks inside Yjs (UndoManager scope, transaction origins).
-const doc = toRaw(toRaw(props.connection).doc)
-const store = new BoardStore(doc)
+const session = props.session ? toRaw(props.session) : null
+const store = session ? toRaw(session.store) : new BoardStore(toRaw(toRaw(props.connection).doc))
+const doc = store.doc
 const scene = new Scene(store)
-const history = new History(store)
+const history = session ? toRaw(session.history) : new History(store)
+// a shared history may hold an open capture from the previous mount: start a fresh undo step
+history.stopCapturing()
 const viewport = new Viewport()
 const cache = new BitmapCache()
 
@@ -124,9 +131,15 @@ function syncView(): void {
 // ---------- tools ----------
 /** Eraser marks the static layer last skipped (the controller replaces the Set whenever marks change). */
 let drawnErasing: Set<string> = new Set()
+// ---------- zen / view mode (local UI state, not persisted) ----------
+const zen = ref(false)
+const viewMode = ref(false)
+/** Read-only for editing: the `readonly` prop or view mode. */
+const locked = computed(() => props.readonly || viewMode.value)
+
 const controller = new ToolController({
   store, scene, history, viewport,
-  readonly: () => props.readonly,
+  readonly: () => locked.value,
   invalidate: () => {
     scheduler.invalidateInteractive()
     if (controller.erasing !== drawnErasing) scheduler.invalidateStatic()
@@ -212,8 +225,25 @@ watch(() => props.readonly, ro => {
   if (!ro) return
   editor.value?.commit()
   toolLocked.value = false
-  if (tool.value !== 'hand' && tool.value !== 'select') controller.setTool('select')
+  if (tool.value !== 'hand' && tool.value !== 'select') controller.setTool(viewMode.value ? 'hand' : 'select')
 })
+
+watch(viewMode, on => {
+  if (!on) return
+  editor.value?.commit()
+  controller.cancelGesture()
+  toolLocked.value = false
+  controller.setTool('hand')
+})
+
+function toggleZen(): void {
+  zen.value = !zen.value
+}
+
+function exitZen(): void {
+  zen.value = false
+  root.value?.focus({ preventScroll: true })
+}
 
 // ---------- view commands ----------
 const center = () => ({ x: widthCss / 2, y: heightCss / 2 })
@@ -344,15 +374,25 @@ function onPointerUp(e: PointerEvent): void {
   controller.pointerUp(toInput(e, canvasRect()))
 }
 
+/** CSS px per wheel delta unit: pixels, lines (16 px) or pages (the canvas height). */
+function wheelScale(e: WheelEvent): number {
+  if (e.deltaMode === 1) return 16
+  if (e.deltaMode === 2) return heightCss
+  return 1
+}
+
 function onWheel(e: WheelEvent): void {
   // the style panel scrolls natively
   if (e.target instanceof Element && e.target.closest('.me-sketch-style')) return
   e.preventDefault()
+  const scale = wheelScale(e)
+  const dx = e.deltaX * scale
+  const dy = e.deltaY * scale
   if (e.ctrlKey || e.metaKey) {
     const rect = canvasRect()
-    viewport.zoomAt({ x: e.clientX - rect.left, y: e.clientY - rect.top }, viewport.zoom * Math.exp(-e.deltaY * 0.01))
+    viewport.zoomAt({ x: e.clientX - rect.left, y: e.clientY - rect.top }, viewport.zoom * Math.exp(-dy * 0.01))
   } else {
-    viewport.panBy(-e.deltaX, -e.deltaY)
+    viewport.panBy(-dx, -dy)
   }
   syncView()
 }
@@ -366,6 +406,21 @@ function onKeyDown(e: KeyboardEvent): void {
   if (isTextTarget(e.target)) return
   // let focused toolbar buttons keep their native Space/Enter activation
   if (e.target instanceof HTMLButtonElement && (e.key === ' ' || e.key === 'Enter')) return
+  // Alt composes `key` on macOS (Alt+Z → Ω): match the physical key
+  if (e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey && (e.code === 'KeyZ' || e.code === 'KeyR')) {
+    e.preventDefault()
+    if (e.code === 'KeyZ') toggleZen()
+    else viewMode.value = !viewMode.value
+    return
+  }
+  if (
+    e.key === 'Escape' && zen.value && controller.selectedIds.value.size === 0
+    && activePointer === null && !controller.isGestureActive()
+  ) {
+    e.preventDefault()
+    zen.value = false
+    return
+  }
   if (e.key === 'Escape' && controller.selectedIds.value.size === 0 && activePointer === null) {
     e.preventDefault()
     emit('exit')
@@ -379,7 +434,7 @@ function onKeyDown(e: KeyboardEvent): void {
 /** Copies (and for cut, deletes) the selection; text fields inside the board keep native copy/cut. */
 function onCopy(e: ClipboardEvent, cut = false): void {
   if (isTextTarget(e.target) || editing.value || !e.clipboardData) return
-  if (cut && (props.readonly || controller.isGestureActive())) return
+  if (cut && (locked.value || controller.isGestureActive())) return
   const els = controller.selectedElements()
   if (!els.length) return
   e.clipboardData.setData('text/plain', serializeClipboard(els))
@@ -393,7 +448,7 @@ function onCut(e: ClipboardEvent): void {
 
 /** Pastes sketch elements, or plain text as a text element, at the last pointer position. */
 function onPaste(e: ClipboardEvent): void {
-  if (isTextTarget(e.target) || editing.value || props.readonly || controller.isGestureActive()) return
+  if (isTextTarget(e.target) || editing.value || locked.value || controller.isGestureActive()) return
   const parsed = parseClipboard(e.clipboardData?.getData('text/plain') ?? '')
   if (!parsed) return
   e.preventDefault()
@@ -408,7 +463,15 @@ function onKeyUp(e: KeyboardEvent): void {
 }
 
 // ---------- lifecycle ----------
+let unmounted = false
+
 onMounted(() => {
+  // the hand font changes text metrics and glyphs: drop cached bitmaps and redraw once it is in
+  void loadFonts().then(() => {
+    if (unmounted) return
+    cache.clear()
+    invalidateAll()
+  })
   const el = root.value!
   el.addEventListener('wheel', onWheel, { passive: false })
   measure()
@@ -422,6 +485,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  unmounted = true
   // keep what is being typed (the editor unmounts after the board's hook)
   editor.value?.commit()
   root.value?.removeEventListener('wheel', onWheel)
@@ -433,7 +497,8 @@ onBeforeUnmount(() => {
   settler.destroy()
   scheduler.destroy()
   controller.destroy()
-  history.destroy()
+  // a shared session's history outlives this mount
+  if (!session) history.destroy()
   scene.destroy()
   cache.clear()
 })
@@ -448,7 +513,7 @@ defineExpose({
   <div
     ref="root"
     class="me-sketch-board"
-    :class="{ 'is-readonly': readonly }"
+    :class="{ 'is-readonly': locked, 'is-zen': zen }"
     :data-theme="theme"
     tabindex="0"
     @keydown="onKeyDown"
@@ -467,6 +532,8 @@ defineExpose({
       @pointermove="onPointerMove"
       @pointerup="onPointerUp"
       @pointercancel="onPointerUp"
+      @lostpointercapture="onPointerUp"
+      @contextmenu.prevent
       @dblclick="onDblClick"
     />
     <TextEditor
@@ -487,22 +554,45 @@ defineExpose({
       :messages="t"
       :theme="theme"
       :readonly="readonly"
+      :hidden="zen || viewMode"
       @apply="applyStyle"
       @layer="reorder"
     />
     <Toolbar
+      v-if="!zen"
       :tool="tool"
       :locked="toolLocked"
       :readonly="readonly"
+      :view-mode="viewMode"
       :messages="t"
       @select="selectTool"
       @toggle-lock="toggleLock"
     />
+    <button
+      v-if="zen"
+      type="button"
+      class="me-tool-btn me-sketch-exit-zen"
+      :title="`${t.zen} (Alt+Z)`"
+      @click="exitZen"
+    >
+      {{ t.exitZen }}
+    </button>
+    <button
+      v-if="viewMode && !zen"
+      type="button"
+      class="me-tool-btn me-sketch-view-mode"
+      :title="`${t.viewMode} (Alt+R)`"
+      :aria-pressed="true"
+      @click="viewMode = false"
+    >
+      {{ t.viewMode }}
+    </button>
     <ZoomControls
+      v-if="!zen"
       :zoom="zoom"
       :can-undo="canUndo"
       :can-redo="canRedo"
-      :readonly="readonly"
+      :readonly="locked"
       :messages="t"
       @undo="undo"
       @redo="redo"

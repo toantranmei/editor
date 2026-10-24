@@ -3,14 +3,21 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
 import * as Y from 'yjs'
 
-import { SketchBoard } from '../src/engine'
+import { createBoardSession, SketchBoard } from '../src/engine'
 import { messages } from '../src/messages'
 import { BoardStore } from '../src/model/store'
 import { DEFAULT_STYLE } from '../src/model/types'
 import { memory } from '../src/providers/memory'
 import type { BoardConnection } from '../src/providers/types'
 import { BitmapCache } from '../src/render/bitmap-cache'
+import { loadFonts } from '../src/text/fonts'
 import { ctxOf, stubCanvas, stubFrames } from './helpers/canvas'
+
+// the real loader warns (no FontFace in happy-dom) and caches one promise; tests control it instead
+vi.mock('../src/text/fonts', async orig => ({
+  ...(await orig<typeof import('../src/text/fonts')>()),
+  loadFonts: vi.fn(() => Promise.resolve()),
+}))
 
 let frames: ReturnType<typeof stubFrames>
 const wrappers: VueWrapper[] = []
@@ -32,9 +39,9 @@ const init = (over: Record<string, unknown> = {}) => ({
 })
 
 /** happy-dom's WheelEvent ignores modifier/coordinate init fields, so define them on the instance. */
-function wheel(init: { deltaX?: number; deltaY?: number; ctrlKey?: boolean; clientX?: number; clientY?: number }) {
+function wheel(init: { deltaX?: number; deltaY?: number; deltaMode?: number; ctrlKey?: boolean; clientX?: number; clientY?: number }) {
   const e = new WheelEvent('wheel', { deltaX: init.deltaX ?? 0, deltaY: init.deltaY ?? 0, cancelable: true, bubbles: true })
-  for (const k of ['ctrlKey', 'clientX', 'clientY'] as const) {
+  for (const k of ['ctrlKey', 'clientX', 'clientY', 'deltaMode'] as const) {
     if (init[k] !== undefined) Object.defineProperty(e, k, { value: init[k] })
   }
   return e
@@ -71,25 +78,45 @@ async function setup(props: Record<string, unknown> = {}, seed?: (store: BoardSt
 }
 
 describe('SketchBoard', () => {
-  it('mounts with a memory connection and renders toolbar with 6 buttons', async () => {
+  it('mounts with a memory connection and renders the toolbar', async () => {
     const { wrapper } = await setup()
     expect(wrapper.findAll('canvas')).toHaveLength(2)
     expect(wrapper.find('.me-sketch-board').attributes('tabindex')).toBe('0')
-    const buttons = wrapper.findAll('.me-sketch-toolbar button')
-    expect(buttons).toHaveLength(6)
-    expect(buttons.map(b => b.attributes('title'))).toEqual([
-      messages.vi.tools.hand, messages.vi.tools.select, messages.vi.tools.rectangle,
-      messages.vi.tools.diamond, messages.vi.tools.ellipse, messages.vi.tools.lock,
-    ])
+    expect(wrapper.find('.me-sketch-toolbar').attributes('aria-label')).toBeTruthy()
     // select is the default tool
-    expect(buttons[1]!.classes()).toContain('is-active')
+    expect(wrapper.find('[data-tool="select"]').classes()).toContain('is-active')
     expect(wrapper.find('.me-sketch-zoom-pct').text()).toBe('100%')
+  })
+
+  it('toolbar renders 15 tools in order with letter badges', async () => {
+    const { wrapper } = await setup()
+    const toolbar = wrapper.find('.me-sketch-toolbar')
+    const buttons = toolbar.findAll('button')
+    const order = [
+      'lock', 'hand', 'select', 'lasso', 'rectangle', 'diamond', 'ellipse', 'arrow', 'line',
+      'pen', 'highlighter', 'text', 'eraser', 'laser', 'eyedropper',
+    ] as const
+    expect(buttons).toHaveLength(15)
+    expect(buttons.map(b => b.attributes('data-tool'))).toEqual([...order])
+    expect(buttons.map(b => b.attributes('title'))).toEqual(order.map(n => messages.vi.tools[n]))
+    const badges = buttons.map(b => b.find('.me-sketch-badge').exists() ? b.find('.me-sketch-badge').text() : '')
+    expect(badges).toEqual(['Q', 'H', 'V', '', 'R', 'D', 'O', 'A', 'L', 'P', 'M', 'T', 'E', 'K', 'I'])
+    // every badge is the letter the tooltip names
+    for (const [i, b] of buttons.entries()) {
+      const key = /\(([A-Z])\)$/.exec(b.attributes('title')!)?.[1] ?? ''
+      expect(badges[i]).toBe(key)
+    }
+    // groups: lock | hand select lasso | shapes & lines | pen highlighter text | eraser laser eyedropper
+    const kids = [...toolbar.element.children].map(c => (c.classList.contains('me-toolbar-divider') ? '|' : c.getAttribute('data-tool')))
+    expect(kids.join(' ')).toBe(
+      'lock | hand select lasso | rectangle diamond ellipse arrow line | pen highlighter text | eraser laser eyedropper',
+    )
   })
 
   it('pressing r then dragging creates an element and emits change', async () => {
     const { wrapper, key, drag, store } = await setup()
     await key('r')
-    expect(wrapper.findAll('.me-sketch-toolbar button')[2]!.classes()).toContain('is-active')
+    expect(wrapper.find('[data-tool="rectangle"]').classes()).toContain('is-active')
     drag(100, 100, 200, 160)
     const els = store.all()
     expect(els).toHaveLength(1)
@@ -131,14 +158,14 @@ describe('SketchBoard', () => {
     root.element.dispatchEvent(ev)
     expect(ev.defaultPrevented).toBe(true)
 
-    await wrapper.findAll('.me-sketch-toolbar button')[1]!.trigger('click')
+    await wrapper.find('[data-tool="select"]').trigger('click')
     const input = document.createElement('input')
     root.element.appendChild(input)
     const ev2 = new KeyboardEvent('keydown', { key: 'r', bubbles: true, cancelable: true })
     input.dispatchEvent(ev2)
     expect(ev2.defaultPrevented).toBe(false)
     await nextTick()
-    expect(wrapper.findAll('.me-sketch-toolbar button')[1]!.classes()).toContain('is-active')
+    expect(wrapper.find('[data-tool="select"]').classes()).toContain('is-active')
   })
 
   it('readonly hides creation tools', async () => {
@@ -154,17 +181,18 @@ describe('SketchBoard', () => {
 
   it('toolbar buttons switch tools and toggle the lock', async () => {
     const { wrapper } = await setup()
-    const btn = (i: number) => wrapper.findAll('.me-sketch-toolbar button')[i]!
-    await btn(4).trigger('click')
-    expect(btn(4).classes()).toContain('is-active')
-    expect(btn(5).attributes('aria-pressed')).toBe('false')
-    await btn(5).trigger('click')
-    expect(btn(5).attributes('aria-pressed')).toBe('true')
+    const btn = (name: string) => wrapper.find(`[data-tool="${name}"]`)
+    await btn('ellipse').trigger('click')
+    expect(btn('ellipse').classes()).toContain('is-active')
+    expect(btn('lock').attributes('aria-pressed')).toBe('false')
+    await btn('lock').trigger('click')
+    expect(btn('lock').attributes('aria-pressed')).toBe('true')
   })
 
   it('uses en messages when locale is en', async () => {
     const { wrapper } = await setup({ locale: 'en' })
-    expect(wrapper.findAll('.me-sketch-toolbar button')[0]!.attributes('title')).toBe(messages.en.tools.hand)
+    expect(wrapper.find('[data-tool="hand"]').attributes('title')).toBe(messages.en.tools.hand)
+    expect(wrapper.find('[data-tool="lock"]').attributes('title')).toBe(messages.en.tools.lock)
   })
 
   it('ctrl+wheel zooms at the pointer, plain wheel pans; both prevent default', async () => {
@@ -302,5 +330,150 @@ describe('SketchBoard', () => {
     frames.flush()
     expect(frames.pending).toBe(0)
     expect(store.all()).toHaveLength(0)
+  })
+  it('board does not destroy a provided session', async () => {
+    const connection = await connect()
+    const session = createBoardSession(connection)
+    const destroy = vi.spyOn(session.history, 'destroy')
+    const wrapper = mount(SketchBoard, { props: { connection, session }, attachTo: document.body })
+    await nextTick()
+    const top = wrapper.findAll('canvas')[1]!.element as HTMLCanvasElement
+    const pointer = (type: string, x: number, y: number) =>
+      top.dispatchEvent(new PointerEvent(type, { clientX: x, clientY: y, button: 0, pointerId: 1, pointerType: 'mouse', bubbles: true, buttons: 1 }))
+    await wrapper.find('.me-sketch-board').trigger('keydown', { key: 'r' })
+    pointer('pointerdown', 100, 100)
+    pointer('pointermove', 200, 160)
+    pointer('pointerup', 200, 160)
+    // the board edits through the session's store and records in its history
+    expect(session.store.all()).toHaveLength(1)
+    expect(session.history.canUndo.value).toBe(true)
+    wrapper.unmount()
+    expect(destroy).not.toHaveBeenCalled()
+    session.history.undo()
+    expect(session.store.all()).toHaveLength(0)
+    session.destroy()
+    expect(destroy).toHaveBeenCalled()
+  })
+
+  it('without a session the board destroys its own history on unmount', async () => {
+    const { History } = await import('../src/model/history')
+    const destroy = vi.spyOn(History.prototype, 'destroy')
+    const { wrapper } = await setup()
+    wrapper.unmount()
+    wrappers.splice(wrappers.indexOf(wrapper), 1)
+    expect(destroy).toHaveBeenCalledTimes(1)
+  })
+
+  it('lostpointercapture ends gesture (a later pointerdown works)', async () => {
+    const { key, pointer, store } = await setup()
+    await key('r')
+    pointer('pointerdown', 100, 100)
+    pointer('pointermove', 200, 160, { buttons: 1 })
+    pointer('lostpointercapture', 200, 160)
+    expect(store.all()).toHaveLength(1)
+    await key('r')
+    pointer('pointerdown', 300, 300, { pointerId: 2 })
+    pointer('pointermove', 380, 360, { pointerId: 2, buttons: 1 })
+    pointer('pointerup', 380, 360, { pointerId: 2 })
+    expect(store.all()).toHaveLength(2)
+  })
+
+  it('contextmenu prevented', async () => {
+    const { top } = await setup()
+    const ev = new MouseEvent('contextmenu', { bubbles: true, cancelable: true })
+    top.dispatchEvent(ev)
+    expect(ev.defaultPrevented).toBe(true)
+  })
+
+  it('deltaMode 1 scales pan by 16', async () => {
+    const drawAt = async (mode?: number) => {
+      const { root, key, drag, store, wrapper } = await setup()
+      if (mode !== undefined) root.element.dispatchEvent(wheel({ deltaY: 2, deltaMode: mode }))
+      await key('r')
+      drag(100, 100, 200, 160)
+      const y = store.all()[0]!.y
+      wrapper.unmount()
+      wrappers.splice(wrappers.indexOf(wrapper), 1)
+      return y
+    }
+    const base = await drawAt()
+    expect(await drawAt(0)).toBeCloseTo(base + 2)
+    expect(await drawAt(1)).toBeCloseTo(base + 32)
+    // pages: the canvas css height (600)
+    expect(await drawAt(2)).toBeCloseTo(base + 1200)
+  })
+
+  it('fonts loaded clears cache', async () => {
+    let resolve!: () => void
+    vi.mocked(loadFonts).mockImplementationOnce(() => new Promise<void>(r => (resolve = r)))
+    const { wrapper } = await setup({}, s => s.create(init()))
+    expect(loadFonts).toHaveBeenCalled()
+    frames.flush()
+    const clear = vi.spyOn(BitmapCache.prototype, 'clear')
+    await flushPromises()
+    expect(clear).not.toHaveBeenCalled()
+    resolve()
+    await flushPromises()
+    expect(clear).toHaveBeenCalledTimes(1)
+    expect(frames.pending).toBeGreaterThan(0)
+    const [st, it] = wrapper.findAll('canvas').map(c => ctxOf(c.element as HTMLCanvasElement))
+    st!.calls.length = 0
+    it!.calls.length = 0
+    frames.flush()
+    expect(st!.calls.some(c => c.name === 'clearRect')).toBe(true)
+    expect(it!.calls.some(c => c.name === 'clearRect')).toBe(true)
+  })
+
+  it('Alt+Z hides toolbar and Esc restores', async () => {
+    const { wrapper, key, drag } = await setup()
+    const shown = () => ({
+      toolbar: wrapper.find('.me-sketch-toolbar').exists(),
+      zoom: wrapper.find('.me-sketch-zoom').exists(),
+      exit: wrapper.find('.me-sketch-exit-zen').exists(),
+    })
+    expect(shown()).toEqual({ toolbar: true, zoom: true, exit: false })
+    // Alt composes `key` on macOS (Alt+Z → Ω): match the physical key
+    await key('Ω', { code: 'KeyZ', altKey: true })
+    expect(shown()).toEqual({ toolbar: false, zoom: false, exit: true })
+    expect(wrapper.find('.me-sketch-exit-zen').text()).toBe(messages.vi.exitZen)
+    // a selected element: Escape clears the selection first, staying in zen
+    await key('r')
+    drag(100, 100, 200, 160)
+    await key('Escape')
+    expect(shown().exit).toBe(true)
+    // with nothing selected Escape leaves zen instead of exiting the board
+    const ev = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })
+    wrapper.find('.me-sketch-board').element.dispatchEvent(ev)
+    await nextTick()
+    expect(ev.defaultPrevented).toBe(true)
+    expect(shown()).toEqual({ toolbar: true, zoom: true, exit: false })
+    expect(wrapper.emitted('exit')).toBeUndefined()
+    // the button exits zen too
+    await key('Ω', { code: 'KeyZ', altKey: true })
+    await wrapper.find('.me-sketch-exit-zen').trigger('click')
+    expect(shown().toolbar).toBe(true)
+    // zen hides the style panel
+    await key('Ω', { code: 'KeyZ', altKey: true })
+    expect(wrapper.findComponent({ name: 'StylePanel' }).props('hidden')).toBe(true)
+  })
+
+  it('Alt+R blocks drawing', async () => {
+    const { wrapper, key, drag, store } = await setup()
+    await key('r')
+    await key('®', { code: 'KeyR', altKey: true })
+    // view mode: only hand on the toolbar, the hand tool active, no undo/redo, no style panel
+    expect(wrapper.findAll('.me-sketch-toolbar button').map(b => b.attributes('data-tool'))).toEqual(['hand'])
+    expect(wrapper.find('[data-tool="hand"]').classes()).toContain('is-active')
+    expect(wrapper.find('[data-action="undo"]').exists()).toBe(false)
+    expect(wrapper.findComponent({ name: 'StylePanel' }).props('hidden')).toBe(true)
+    await key('r')
+    drag(100, 100, 200, 160)
+    expect(store.all()).toHaveLength(0)
+    // Alt+R again: drawing works again
+    await key('®', { code: 'KeyR', altKey: true })
+    expect(wrapper.findAll('.me-sketch-toolbar button')).toHaveLength(15)
+    await key('r')
+    drag(100, 100, 200, 160)
+    expect(store.all()).toHaveLength(1)
   })
 })

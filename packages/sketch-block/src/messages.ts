@@ -17,6 +17,11 @@ export interface SketchMessages {
   zoomOut: string
   resetZoom: string
   fit: string
+  /** Accessible name of the tool bar. */
+  toolbar: string
+  zen: string
+  viewMode: string
+  exitZen: string
   style: StyleMessages
 }
 
@@ -112,6 +117,10 @@ export const messages: Record<'vi' | 'en', SketchMessages> = {
     zoomOut: 'Thu nhỏ',
     resetZoom: 'Đặt lại thu phóng',
     fit: 'Vừa khung nhìn',
+    toolbar: 'Công cụ vẽ',
+    zen: 'Chế độ tập trung',
+    viewMode: 'Chế độ xem',
+    exitZen: 'Thoát chế độ tập trung',
     style: {
       panel: 'Kiểu dáng',
       collapse: 'Thu gọn bảng kiểu dáng',
@@ -203,6 +212,10 @@ export const messages: Record<'vi' | 'en', SketchMessages> = {
     zoomOut: 'Zoom out',
     resetZoom: 'Reset zoom',
     fit: 'Zoom to fit',
+    toolbar: 'Drawing tools',
+    zen: 'Zen mode',
+    viewMode: 'View mode',
+    exitZen: 'Exit zen mode',
     style: {
       panel: 'Style',
       collapse: 'Collapse style panel',

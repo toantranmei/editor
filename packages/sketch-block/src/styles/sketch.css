@@ -65,6 +65,22 @@
     right: var(--me-space-4);
     bottom: var(--me-space-4);
   }
+  /* Zen mode's way out, and the view-mode pill (click leaves view mode). */
+  .me-sketch-board :is(.me-sketch-exit-zen, .me-sketch-view-mode) {
+    position: absolute;
+    border-radius: var(--me-popover-radius);
+    background: var(--me-popover-bg);
+    box-shadow: var(--me-popover-shadow);
+    font-size: var(--me-font-size-sm);
+  }
+  .me-sketch-board .me-sketch-exit-zen {
+    right: var(--me-space-4);
+    bottom: var(--me-space-4);
+  }
+  .me-sketch-board .me-sketch-view-mode {
+    left: var(--me-space-4);
+    top: var(--me-space-4);
+  }
 
   /* Same look as the editor's .me-tool-btn, repeated so the board also works outside .me-scope. */
   .me-sketch-board .me-tool-btn {

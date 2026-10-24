@@ -2,7 +2,8 @@
 /**
  * Whiteboard block. Shows the stored preview image until "Interact" (like the HTML block);
  * only then is the board engine loaded and the board opened from its provider. The inline
- * board and the fullscreen modal share one connection.
+ * board and the fullscreen modal share one connection and one board session (so undo survives
+ * switching between them).
  */
 import { Maximize2, PenTool, Pointer, X } from '@lucide/vue'
 import { NodeViewWrapper, nodeViewProps } from '@tiptap/vue-3'
@@ -15,6 +16,7 @@ import { liveViews } from './live'
 import { newBoardId, SKETCH_MAX_HEIGHT, SKETCH_MIN_HEIGHT, type SketchOptions } from './node'
 
 type Engine = typeof import('../engine')
+type BoardSession = import('../engine').BoardSession
 interface BoardHandle { getElements(): readonly SketchElement[], fit(): void }
 
 declare global {
@@ -65,13 +67,15 @@ const board = shallowRef<BoardHandle | null>(null)
 // Held raw: Vue proxies around Yjs types break Yjs identity checks.
 const engine = shallowRef<Engine | null>(null)
 const connection = shallowRef<BoardConnection | null>(null)
+/** Store + undo history over `connection`; created and destroyed with it. */
+const session = shallowRef<BoardSession | null>(null)
 const notOnDevice = ref(false)
 let provider: SketchProvider | null = null
 let opening: Promise<boolean> | null = null
 let disposed = false
 
 function ensureOpen(): Promise<boolean> {
-  if (engine.value && connection.value) return Promise.resolve(true)
+  if (engine.value && connection.value && session.value) return Promise.resolve(true)
   return (opening ??= open().finally(() => (opening = null)))
 }
 
@@ -96,6 +100,7 @@ async function open(): Promise<boolean> {
     provider = prov
     engine.value = markRaw(mod)
     connection.value = markRaw(conn)
+    session.value = markRaw(mod.createBoardSession(conn))
     // The board isn't stored here (another device, cleared storage): say so, keep the preview.
     notOnDevice.value = !conn.existed && !!preview.value
     return true
@@ -112,10 +117,17 @@ async function open(): Promise<boolean> {
 
 function closeConnection() {
   const conn = connection.value
+  const sess = session.value
   connection.value = null
+  session.value = null
   notOnDevice.value = false
-  // Let the board unmount (and drop its listeners) before the doc goes away.
-  if (conn) nextTick(() => conn.destroy())
+  // Let the board unmount (and drop its listeners) before the session and doc go away.
+  if (conn || sess) {
+    nextTick(() => {
+      sess?.destroy()
+      conn?.destroy()
+    })
+  }
 }
 
 async function enter() {
@@ -139,6 +151,17 @@ function leave() {
   interacting.value = false
   fullscreen.value = false
   void save(elements)
+  focusEditor()
+}
+
+/** Hands the keyboard back to the document, with this block selected. */
+function focusEditor() {
+  const { editor } = props
+  if (disposed || editor.isDestroyed) return
+  const pos = props.getPos()
+  if (typeof pos !== 'number') return
+  editor.commands.setNodeSelection(pos)
+  editor.view.focus()
 }
 
 useClickOutside(root, interacting, leave)
@@ -309,7 +332,10 @@ onBeforeUnmount(() => {
 })
 onUnmounted(() => {
   const conn = connection.value
+  const sess = session.value
   connection.value = null
+  session.value = null
+  sess?.destroy()
   conn?.destroy()
 })
 
@@ -343,10 +369,11 @@ onMounted(() => {
       <div class="me-sketch-body" :style="{ height: `${shownHeight}px` }">
         <component
           :is="engine.SketchBoard"
-          v-if="interacting && engine && connection"
+          v-if="interacting && engine && connection && session"
           :key="boardId ?? ''"
           ref="board"
           :connection="connection"
+          :session="session"
           :readonly="!editable"
           :locale="locale"
           :theme="theme"
@@ -371,7 +398,7 @@ onMounted(() => {
     </div>
 
     <Teleport to="body">
-      <div v-if="fullscreen && engine && connection" v-bind="scope" class="me-sketch-modal" @mousedown.self="leave">
+      <div v-if="fullscreen && engine && connection && session" v-bind="scope" class="me-sketch-modal" @mousedown.self="leave">
         <div class="me-sketch-modal-panel">
           <div class="me-block-bar me-sketch-bar">
             <PenTool />
@@ -389,6 +416,7 @@ onMounted(() => {
               :key="boardId ?? ''"
               ref="board"
               :connection="connection"
+              :session="session"
               :readonly="!editable"
               :locale="locale"
               :theme="theme"
