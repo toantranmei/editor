@@ -168,7 +168,7 @@ const SANDBOX = 'allow-scripts allow-forms allow-modals allow-popups allow-point
 </script>
 
 <template>
-  <NodeViewWrapper class="me-html" :class="{ 'is-selected': selected }">
+  <NodeViewWrapper class="me-html" :class="{ 'is-selected': selected, 'is-readonly-empty': !editable && !code }">
     <div ref="root" class="me-html-frame" contenteditable="false">
       <div class="me-block-bar me-html-bar">
         <CodeXml />
