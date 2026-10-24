@@ -175,6 +175,7 @@ watch(board, (b) => {
 let edited = false
 let timer: ReturnType<typeof setTimeout> | undefined
 let warned = false
+let saveSeq = 0
 
 function snapshot(): readonly SketchElement[] | null {
   return board.value ? [...board.value.getElements()] : null
@@ -205,10 +206,13 @@ function setAttrs(next: (node: SketchNodeT) => Record<string, unknown>) {
   })
 }
 
-/** Writes preview/version to this node, or (after unmount) to every node showing this board. */
+/**
+ * Writes preview/version for board `id`: to this node while it still shows that board, else
+ * (after unmount, or once the view shows another board) to every node showing it.
+ */
 function writeAttrs(attrs: { preview: string | null }, id: string) {
   const bump = (node: SketchNodeT) => ({ ...node.attrs, ...attrs, version: ((node.attrs.version as number) ?? 0) + 1 })
-  if (!disposed) {
+  if (!disposed && boardId.value === id) {
     setAttrs(bump)
     return
   }
@@ -233,13 +237,17 @@ async function save(elements: readonly SketchElement[] | null) {
   const id = boardId.value
   if (!edited || !editable.value || !elements || !engine.value || !id) return
   edited = false
+  // Saves can overlap (debounce, then leave, with a slow savePreview): only the newest lands.
+  const seq = ++saveSeq
   try {
     const result = await engine.value.makePreview(elements)
     let next: string | null = null
     if (result) next = provider?.savePreview ? await provider.savePreview(id, result.blob) : result.dataUrl
+    if (seq !== saveSeq) return
     writeAttrs({ preview: next }, id)
   }
   catch (err) {
+    if (seq !== saveSeq) return
     // Keep the old preview; try again on the next edit.
     edited = true
     if (!warned) {

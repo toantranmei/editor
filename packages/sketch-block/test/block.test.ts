@@ -112,6 +112,22 @@ async function clickOutside() {
   await settle()
 }
 
+/** All sketch nodes' attrs, in document order. */
+const sketchNodes = (editor: Editor) => {
+  const out: Array<Record<string, unknown>> = []
+  editor.state.doc.descendants((n) => {
+    if (n.type.name === 'sketch') out.push(n.attrs)
+  })
+  return out
+}
+
+/** A savePreview whose calls resolve only when the test says so. */
+function deferredSaves() {
+  const pending: Array<{ id: string, resolve: (url: string) => void }> = []
+  const savePreview = vi.fn((id: string) => new Promise<string>(resolve => pending.push({ id, resolve })))
+  return { pending, savePreview }
+}
+
 const rect = () => ({
   type: 'rectangle' as const, x: 0, y: 0, w: 100, h: 50, angle: 0, locked: false, ...DEFAULT_STYLE,
 })
@@ -415,5 +431,77 @@ describe('sketch block', () => {
     await enter(wrapper)
     expect(sketchNode(editor).attrs.boardId).toMatch(/^bd_/)
     expect(undoDepth(editor.state)).toBe(0)
+  })
+
+  it('a slow save finishing after a newer one does not overwrite the newer preview', async () => {
+    const base = memory()
+    const { pending, savePreview } = deferredSaves()
+    const { provider, connections } = recording({ connect: base.connect, savePreview })
+    const { editor, wrapper } = await setup({ provider, attrs: { boardId: 'bd_x', preview: null, height: null, version: 0 } })
+    await enter(wrapper)
+    const store = new BoardStore(connections[0]!.doc)
+    vi.useFakeTimers()
+    try {
+      store.create(rect())
+      await vi.advanceTimersByTimeAsync(2100) // debounced save #1 starts
+    } finally {
+      vi.useRealTimers()
+    }
+    await vi.waitFor(() => expect(pending).toHaveLength(1))
+    store.create(rect())
+    await clickOutside() // save #2 on leave
+    await vi.waitFor(() => expect(pending).toHaveLength(2))
+    pending[1]!.resolve('https://cdn/new')
+    await settle()
+    pending[0]!.resolve('https://cdn/old')
+    await settle()
+    expect(sketchNode(editor).attrs.preview).toBe('https://cdn/new')
+    expect(sketchNode(editor).attrs.version).toBe(1)
+  })
+
+  it('a save finishing after the node changed board writes to the node that still has the old id', async () => {
+    const base = memory()
+    const { pending, savePreview } = deferredSaves()
+    const { provider, connections } = recording({ connect: base.connect, savePreview })
+    const { editor, wrapper } = await setup({ provider, attrs: { boardId: 'bd_a', preview: null, height: null, version: 0 } })
+    await enter(wrapper)
+    new BoardStore(connections[0]!.doc).create(rect())
+    await clickOutside()
+    await vi.waitFor(() => expect(pending).toHaveLength(1))
+    // the view now shows another board; the old board lives on in another node
+    editor.commands.command(({ tr }) => {
+      tr.setNodeMarkup(0, undefined, { boardId: 'bd_b', preview: null, height: null, version: 7 })
+      tr.insert(tr.doc.content.size, editor.schema.nodes.sketch!.create({ boardId: 'bd_a', preview: null, height: null, version: 2 }))
+      return true
+    })
+    await settle()
+    pending[0]!.resolve('https://cdn/a')
+    await settle()
+    const [current, old] = sketchNodes(editor)
+    expect(current).toMatchObject({ boardId: 'bd_b', preview: null, version: 7 })
+    expect(old).toMatchObject({ boardId: 'bd_a', preview: 'https://cdn/a', version: 3 })
+    expect(undoDepth(editor.state)).toBe(1) // only the test's own edit
+  })
+
+  it('a save finishing after the view unmounted still updates the node', async () => {
+    const base = memory()
+    const { pending, savePreview } = deferredSaves()
+    const { provider, connections } = recording({ connect: base.connect, savePreview })
+    const attrs = { boardId: 'bd_x', preview: null, height: null, version: 0 }
+    const { editor, wrapper } = await setup({ provider, attrs })
+    await enter(wrapper)
+    new BoardStore(connections[0]!.doc).create(rect())
+    await clickOutside()
+    await vi.waitFor(() => expect(pending).toHaveLength(1))
+    // move the block: its view is destroyed and a new one made
+    editor.commands.command(({ tr }) => {
+      tr.delete(0, tr.doc.content.size)
+      tr.insert(0, [editor.schema.nodes.paragraph!.create(), editor.schema.nodes.sketch!.create(attrs)])
+      return true
+    })
+    await settle()
+    pending[0]!.resolve('https://cdn/x')
+    await settle()
+    expect(sketchNode(editor).attrs).toMatchObject({ boardId: 'bd_x', preview: 'https://cdn/x', version: 1 })
   })
 })
