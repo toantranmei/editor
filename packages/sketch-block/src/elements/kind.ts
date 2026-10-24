@@ -49,6 +49,12 @@ export function registerKind(type: ElementType, kind: ElementKind): void {
   registry.set(type, kind)
 }
 
+/** Whether `type` has a registered kind (types without one are hidden by the store and skipped on paste). */
+export function hasKind(type: string): type is ElementType {
+  registerBuiltins()
+  return registry.has(type as ElementType)
+}
+
 export function kindOf(el: SketchElement): ElementKind {
   registerBuiltins()
   const kind = registry.get(el.type)

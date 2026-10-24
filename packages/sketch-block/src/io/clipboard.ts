@@ -1,3 +1,4 @@
+import { hasKind } from '../elements/kind'
 import { ELEMENT_TYPES, type ElementInit, normalizeElement, type SketchElement } from '../model/types'
 
 export const CLIPBOARD_TYPE = 'mei-sketch/clipboard'
@@ -16,6 +17,10 @@ const MAX_SIZE = 1e5
 const POINT_SLACK = 10
 /** Points kept per element. */
 const MAX_POINTS = 20_000
+/** Group ids kept per element (nesting depth). */
+const MAX_GROUP_IDS = 16
+/** Characters kept per group id. */
+const MAX_GROUP_ID_CHARS = 64
 
 const KNOWN_TYPES: ReadonlySet<string> = new Set<string>(ELEMENT_TYPES)
 
@@ -119,7 +124,8 @@ function sanitizePoints(v: unknown, w: number, h: number): { points: [number, nu
 function sanitizeElement(raw: unknown): ElementInit | null {
   if (!isRecord(raw)) return null
   const type = raw.type
-  if (typeof type !== 'string' || !KNOWN_TYPES.has(type)) return null
+  // types whose kind is not registered yet cannot be rendered: skip them
+  if (typeof type !== 'string' || !KNOWN_TYPES.has(type) || !hasKind(type)) return null
   const { x, y, w, h, angle } = raw
   if (!finite(x) || !finite(y) || !finite(w) || !finite(h) || !finite(angle)) return null
   const bw = clamp(w, 0, MAX_SIZE)
@@ -153,6 +159,14 @@ function sanitizeElement(raw: unknown): ElementInit | null {
   }
   for (const k of ['text', 'label'] as const) {
     if (typeof out[k] === 'string') out[k] = (out[k] as string).slice(0, MAX_TEXT_CHARS)
+  }
+  const g = raw.groupIds
+  if (Array.isArray(g) && g.every(isString)) out.groupIds = (g as string[]).slice(0, MAX_GROUP_IDS).map(s => s.slice(0, MAX_GROUP_ID_CHARS))
+  // frame membership is recomputed and bindings are remapped by the paster; never trust the payload's ids
+  out.frameId = null
+  if (type === 'line' || type === 'arrow') {
+    out.startBinding = null
+    out.endBinding = null
   }
   if (finite(raw.opacity)) out.opacity = Math.min(1, Math.max(0, raw.opacity))
   return normalizeElement(out) as unknown as ElementInit

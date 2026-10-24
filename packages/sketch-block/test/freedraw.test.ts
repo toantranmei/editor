@@ -15,7 +15,7 @@ afterEach(() => {
 
 const fd = (over: Partial<FreedrawElement> = {}): FreedrawElement => ({
   id: 'f', type: 'freedraw', x: 0, y: 0, w: 100, h: 50, angle: 0, index: 'a0',
-  ...DEFAULT_STYLE, seed: 7, version: 1, locked: false,
+  ...DEFAULT_STYLE, groupIds: [], frameId: null, seed: 7, version: 1, locked: false,
   points: [[0, 0], [50, 50], [100, 0]], pressures: [], highlighter: false, ...over,
 })
 

@@ -121,6 +121,8 @@ export class PenTool implements Tool {
     let press: number[] | null = null
     const draft: FreedrawElement = {
       ...this.styleProps(),
+      groupIds: [],
+      frameId: null,
       x: minX,
       y: minY,
       w: this.maxX - minX,

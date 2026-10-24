@@ -79,7 +79,7 @@ const style = computed(() => {
     transform: el.angle ? `rotate(${el.angle}rad)` : undefined,
     transformOrigin: `${origin.x}px ${origin.y}px`,
     fontFamily: font ? FONT_FAMILIES[font.fontFamily] : undefined,
-    fontSize: font ? `${font.fontSize * props.view.zoom}px` : undefined,
+    fontSize: font && 'fontSize' in font ? `${font.fontSize * props.view.zoom}px` : undefined,
     lineHeight: String(LINE_HEIGHT),
     textAlign: font ? font.textAlign : undefined,
     whiteSpace: wraps ? 'pre-wrap' : 'pre',

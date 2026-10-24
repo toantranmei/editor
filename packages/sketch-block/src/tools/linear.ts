@@ -129,10 +129,15 @@ export class LinearTool implements Tool {
     const style = this.host.currentStyle.value
     const heads: Pick<LinearStyle, 'startArrowhead' | 'endArrowhead'> = this.type === 'arrow' ? style : TYPE_DEFAULTS.line as LinearStyle
     // lines and arrows have no background: they never take the current fill
-    const { stroke, strokeWidth, strokeStyle, roughness, roundness, opacity } = style
+    const { stroke, strokeWidth, strokeStyle, roughness, roundness, opacity, fontFamily, fontSize, textAlign } = style
     const { fill, fillStyle } = DEFAULT_STYLE
     return {
-      stroke, fill, fillStyle, strokeWidth, strokeStyle, roughness, roundness, opacity,
+      stroke, fill, fillStyle, strokeWidth, strokeStyle, roughness, roundness, opacity, fontFamily, fontSize, textAlign,
+      label: '',
+      startBinding: null,
+      endBinding: null,
+      groupIds: [],
+      frameId: null,
       routing: style.routing,
       startArrowhead: heads.startArrowhead,
       endArrowhead: heads.endArrowhead,

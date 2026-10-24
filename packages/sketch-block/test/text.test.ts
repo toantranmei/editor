@@ -23,12 +23,12 @@ const style = (over: Partial<TextStyle> = {}): TextStyle => ({ fontFamily: 'hand
 
 const textEl = (over: Partial<TextElement> = {}): TextElement => ({
   id: 't', type: 'text', x: 0, y: 0, w: 100, h: 25, angle: 0, index: 'a0',
-  ...DEFAULT_STYLE, seed: 1, version: 1, locked: false, text: 'hello', autoSize: true, ...over,
+  ...DEFAULT_STYLE, groupIds: [], frameId: null, seed: 1, version: 1, locked: false, text: 'hello', autoSize: true, ...over,
 })
 
 const shapeEl = (over: Partial<ShapeElement> = {}): ShapeElement => ({
   id: 's', type: 'rectangle', x: 0, y: 0, w: 200, h: 100, angle: 0, index: 'a0',
-  ...DEFAULT_STYLE, label: '', seed: 42, version: 1, locked: false, ...over,
+  ...DEFAULT_STYLE, groupIds: [], frameId: null, label: '', seed: 42, version: 1, locked: false, ...over,
 })
 
 const newCtx = () => document.createElement('canvas').getContext('2d') as unknown as FakeCtx

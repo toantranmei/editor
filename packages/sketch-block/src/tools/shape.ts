@@ -22,7 +22,7 @@ export function dragBox(start: Point, p: Point, square: boolean, fromCenter: boo
   return { x: Math.min(start.x, start.x + dx), y: Math.min(start.y, start.y + dy), w: Math.abs(dx), h: Math.abs(dy) }
 }
 
-/** Drag-to-create for rectangle / ellipse / diamond. The draft stays out of Y until pointerUp. */
+/** Drag-to-create for any shape type. The draft stays out of Y until pointerUp. */
 export class ShapeTool implements Tool {
   private start: Point | null = null
   private seed = 0
@@ -79,6 +79,8 @@ export class ShapeTool implements Tool {
       id: 'draft',
       type: this.type,
       label: '',
+      groupIds: [],
+      frameId: null,
       angle: 0,
       index: 'a0',
       seed: this.seed,

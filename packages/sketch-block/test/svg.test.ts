@@ -4,7 +4,7 @@ import { DEFAULT_STYLE, type FreedrawElement, type ShapeElement, type SketchElem
 
 const el = (over: Partial<ShapeElement> = {}): SketchElement => ({
   id: 'a', type: 'rectangle', x: 0, y: 0, w: 100, h: 50, angle: 0, index: 'a0', seed: 7, version: 1,
-  locked: false, ...DEFAULT_STYLE, label: '', ...over,
+  locked: false, ...DEFAULT_STYLE, groupIds: [], frameId: null, label: '', ...over,
 })
 
 describe('svg export', () => {
@@ -76,14 +76,14 @@ describe('svg export', () => {
 })
 
 describe('svg export: M1 kinds', () => {
-  const base = { angle: 0, version: 1, locked: false, ...DEFAULT_STYLE }
+  const base = { angle: 0, version: 1, locked: false, ...DEFAULT_STYLE, groupIds: [], frameId: null }
   const pen = (over: Partial<FreedrawElement> = {}): SketchElement => ({
     ...base, id: 'p', type: 'freedraw', x: 0, y: 0, w: 40, h: 20, index: 'a0', seed: 1,
     points: [[0, 0], [10, 5], [20, 10], [40, 20]], pressures: [], highlighter: false, ...over,
   })
   const arrow: SketchElement = {
     ...base, id: 'r', type: 'arrow', x: 100, y: 0, w: 100, h: 0, index: 'a1', seed: 2,
-    points: [[0, 0], [100, 0]], routing: 'straight', startArrowhead: 'none', endArrowhead: 'arrow',
+    points: [[0, 0], [100, 0]], label: '', startBinding: null, endBinding: null, routing: 'straight', startArrowhead: 'none', endArrowhead: 'arrow',
   }
   const text: SketchElement = {
     ...base, id: 't', type: 'text', x: 0, y: 100, w: 80, h: 25, index: 'a2', seed: 3, text: 'Xin chào <b>',

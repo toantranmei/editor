@@ -1,11 +1,15 @@
 import { describe, expect, it } from 'vitest'
-import { kindOf } from '../src/elements/kind'
+import { hasKind, kindOf } from '../src/elements/kind'
 import { CLIPBOARD_TYPE, parseClipboard } from '../src/io/clipboard'
 import { relevantStyleKeys, STYLE_SECTIONS } from '../src/model/style'
 import {
   DEFAULT_STYLE, ELEMENT_TYPES, type ElementType, isShape, normalizeElement, SHAPE_TYPES, type SketchElement,
 } from '../src/model/types'
 import { CREATOR_TOOLS, TOOL_ELEMENT_TYPES } from '../src/tools/controller'
+
+/** Element types whose kinds (and tools) land in later M2 tasks (sticky: 3, image: 4, frame: 5); hidden until then. */
+const PENDING_KINDS: readonly ElementType[] = ['sticky', 'image', 'frame']
+const READY_TYPES = ELEMENT_TYPES.filter(t => !PENDING_KINDS.includes(t))
 
 /** A minimal valid element of `type` (points for the types that need them). */
 function sample(type: ElementType): SketchElement {
@@ -21,8 +25,9 @@ describe('element type lists derive from SHAPE_TYPES / ELEMENT_TYPES', () => {
     for (const t of SHAPE_TYPES) expect(ELEMENT_TYPES).toContain(t)
   })
 
-  it('every element type has a registered kind', () => {
-    for (const t of ELEMENT_TYPES) expect(() => kindOf(sample(t))).not.toThrow()
+  it('every element type has a registered kind (pending ones are hidden until their task)', () => {
+    for (const t of READY_TYPES) expect(() => kindOf(sample(t))).not.toThrow()
+    for (const t of PENDING_KINDS) expect(hasKind(t), t).toBe(false)
   })
 
   it('isShape is true for exactly the shape types', () => {
@@ -30,7 +35,7 @@ describe('element type lists derive from SHAPE_TYPES / ELEMENT_TYPES', () => {
   })
 
   it('the clipboard accepts every element type', () => {
-    for (const t of ELEMENT_TYPES) {
+    for (const t of READY_TYPES) {
       const { id: _id, index: _index, version: _version, ...rest } = sample(t)
       const r = parseClipboard(JSON.stringify({ type: CLIPBOARD_TYPE, version: 1, elements: [rest] }))
       expect(r, t).toMatchObject({ elements: [{ type: t }] })
@@ -51,7 +56,7 @@ describe('element type lists derive from SHAPE_TYPES / ELEMENT_TYPES', () => {
       expect(CREATOR_TOOLS.has(t)).toBe(true)
     }
     const created = new Set(Object.values(TOOL_ELEMENT_TYPES))
-    for (const t of ELEMENT_TYPES) expect(created.has(t), t).toBe(true)
+    for (const t of READY_TYPES) expect(created.has(t), t).toBe(true)
     for (const tool of Object.keys(TOOL_ELEMENT_TYPES)) expect(CREATOR_TOOLS.has(tool as never)).toBe(true)
   })
 })

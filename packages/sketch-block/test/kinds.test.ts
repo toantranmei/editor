@@ -24,7 +24,7 @@ afterEach(() => {
 
 const el = (over: Partial<ShapeElement> = {}): ShapeElement => ({
   id: 'a', type: 'rectangle', x: 0, y: 0, w: 100, h: 50, angle: 0, index: 'a0',
-  ...DEFAULT_STYLE, label: '', seed: 42, version: 1, locked: false, ...over,
+  ...DEFAULT_STYLE, groupIds: [], frameId: null, label: '', seed: 42, version: 1, locked: false, ...over,
 })
 
 const init = (over: Partial<ShapeElement> = {}) => ({
@@ -332,7 +332,7 @@ describe('rotated resize keeps the opposite corner fixed', () => {
 describe('svg output for shapes is unchanged', () => {
   const svgEl = (over: Partial<ShapeElement> = {}): SketchElement => ({
     id: 'a', type: 'rectangle', x: 0, y: 0, w: 100, h: 50, angle: 0, index: 'a0', seed: 7, version: 1,
-    locked: false, ...DEFAULT_STYLE, label: '', ...over,
+    locked: false, ...DEFAULT_STYLE, groupIds: [], frameId: null, label: '', ...over,
   })
   // same inputs the M0 snapshot (fixtures/svg-m0.json) was captured from
   const cases: Record<keyof typeof svgM0, SketchElement[]> = {

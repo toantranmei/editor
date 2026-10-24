@@ -1,14 +1,18 @@
 import { generateKeyBetween, generateNKeysBetween } from 'fractional-indexing'
 import { nanoid } from 'nanoid'
 import * as Y from 'yjs'
+import { hasKind } from '../elements/kind'
 import { type ElementInit, type ElementPatch, isOrderKey, isRenderable, normalizeElement, type SketchElement } from './types'
 
 export const LOCAL_ORIGIN: unique symbol = Symbol('sketch-local')
 
-/** The element as a plain object, or undefined when it cannot be rendered (unknown type, malformed). */
+/**
+ * The element as a plain object, or undefined when it cannot be rendered (unknown type, malformed, or a type
+ * whose element kind is not registered).
+ */
 function toPlain(m: Y.Map<unknown>): SketchElement | undefined {
   const raw = m.toJSON()
-  return isRenderable(raw) ? normalizeElement(raw) : undefined
+  return isRenderable(raw) && hasKind(raw.type as string) ? normalizeElement(raw) : undefined
 }
 
 export class BoardStore {
@@ -40,17 +44,18 @@ export class BoardStore {
       for (const init of inits) {
         const { id: givenId, seed, ...rest } = init
         const index = generateKeyBetween(top, null)
-        const created = {
+        const created: Record<string, unknown> = {
           ...rest,
           id: givenId ?? nanoid(10),
           index,
           seed: seed ?? Math.floor(Math.random() * 2 ** 31),
           version: 1,
-        } as SketchElement
+        }
         const m = new Y.Map<unknown>()
-        for (const [k, v] of Object.entries(created)) m.set(k, v)
-        this.elements.set(created.id, m)
-        out.push(created)
+        for (const [k, v] of Object.entries(created)) if (v !== undefined) m.set(k, v)
+        this.elements.set(created.id as string, m)
+        // what a read returns: defaults filled in for props the init left out
+        out.push(normalizeElement(created))
         top = index
       }
       this.topIndex = top
