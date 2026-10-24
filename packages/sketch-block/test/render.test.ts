@@ -394,7 +394,51 @@ describe('renderInteractive', () => {
     const b = store.create(init({ x: 300 }))
     return { scene: new Scene(store), a, b }
   }
-  const overlay = (over = {}) => ({ selectedIds: new Set<string>(), marquee: null, hoverId: null, draft: null, ...over })
+  const overlay = (over = {}) => ({
+    selectedIds: new Set<string>(), marquee: null, hoverId: null, draft: null, pointHandles: null, previewSegment: null,
+    ...over,
+  })
+  const lineInit = (n: number) => ({
+    ...init(), type: 'line' as const, h: 0, w: 100 * (n - 1),
+    points: Array.from({ length: n }, (_, i) => [i * 100, 0] as [number, number]),
+    routing: 'straight' as const, startArrowhead: 'none' as const, endArrowhead: 'none' as const,
+  })
+
+  it('draws point handles as circles; a 2-point line has no resize handles, 3+ points keep them', () => {
+    const store = new BoardStore(new Y.Doc())
+    const two = store.create(lineInit(2))
+    const three = store.create(lineInit(3))
+    const scene = new Scene(store)
+    const a = newCanvas()
+    renderInteractive(a.ctx, scene, state(), overlay({
+      selectedIds: new Set([two.id]), pointHandles: [{ x: 0, y: 0 }, { x: 100, y: 0 }],
+    }))
+    expect(count(a.ctx, 'fillRect')).toBe(0)
+    expect(count(a.ctx, 'arc')).toBe(2)
+    const b = newCanvas()
+    renderInteractive(b.ctx, scene, state(), overlay({
+      selectedIds: new Set([three.id]), pointHandles: [{ x: 0, y: 0 }, { x: 100, y: 0 }, { x: 200, y: 0 }],
+    }))
+    expect(count(b.ctx, 'fillRect')).toBe(9)
+    expect(count(b.ctx, 'arc')).toBe(3)
+    // 8 px / zoom diameter
+    const z = newCanvas()
+    const vp = new Viewport()
+    vp.zoom = 2
+    renderInteractive(z.ctx, scene, state({ viewport: vp }), overlay({ pointHandles: [{ x: 5, y: 5 }] }))
+    expect(z.ctx.calls.find(c => c.name === 'arc')!.args.slice(0, 3)).toEqual([5, 5, 2])
+    scene.destroy()
+  })
+
+  it('draws the multi-point preview segment', () => {
+    const { scene } = sceneWith()
+    const { ctx } = newCanvas()
+    renderInteractive(ctx, scene, state(), overlay({ previewSegment: [{ x: 1, y: 2 }, { x: 30, y: 40 }] }))
+    const i = ctx.calls.findIndex(c => c.name === 'moveTo' && c.args[0] === 1 && c.args[1] === 2)
+    expect(i).toBeGreaterThanOrEqual(0)
+    expect(ctx.calls[i + 1]).toEqual({ name: 'lineTo', args: [30, 40] })
+    scene.destroy()
+  })
 
   it('draws handles only for a single selection', () => {
     const { scene, a, b } = sceneWith()

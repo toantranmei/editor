@@ -4,9 +4,12 @@ import type { History } from '../model/history'
 import type { Scene } from '../model/scene'
 import type { BoardStore } from '../model/store'
 import type { DEFAULT_STYLE, ElementPatch, SketchElement } from '../model/types'
+import { linearScenePoints } from '../elements/linear'
+import { isLinear } from '../model/types'
 import type { Overlay } from '../render/interactive'
 import type { Viewport } from '../viewport'
 import { HandTool } from './hand'
+import { LinearTool } from './linear'
 import { PenTool } from './pen'
 import { SelectTool } from './select'
 import { ShapeTool } from './shape'
@@ -16,7 +19,7 @@ export type ToolName =
   | 'eraser' | 'laser' | 'lasso' | 'eyedropper'
 
 /** Tools with an implementation (besides `hand`); later tasks register theirs here and in TOOL_KEYS. */
-type PointerToolName = 'select' | 'rectangle' | 'ellipse' | 'diamond' | 'pen' | 'highlighter'
+type PointerToolName = 'select' | 'rectangle' | 'ellipse' | 'diamond' | 'pen' | 'highlighter' | 'line' | 'arrow'
 
 export interface PointerInput {
   screen: Point
@@ -49,6 +52,8 @@ export interface ToolHost {
   marquee: Box | null
   hoverId: string | null
   draft: SketchElement | null
+  /** In-progress multi-point segment (last placed point → pointer), scene coords. */
+  previewSegment: [Point, Point] | null
   setSelection(ids: Iterable<string>): void
   setTool(t: ToolName): void
   /** Restores the idle cursor for the current tool / pan state. */
@@ -64,13 +69,18 @@ export interface Tool {
   hover?(e: PointerInput, p: Point): void
   /** Abort an in-progress gesture (tool switch, destroy). */
   cancel?(): void
+  /** The tool holds a gesture open between pointer presses (multi-point line/arrow). */
+  pending?(): boolean
+  /** Completes a pending gesture (Enter / Escape). */
+  finish?(): void
 }
 
 /** Tools that create elements: crosshair cursor, clear the selection, unavailable when read-only. */
-const CREATORS = new Set<ToolName>(['rectangle', 'ellipse', 'diamond', 'pen', 'highlighter'])
+const CREATORS = new Set<ToolName>(['rectangle', 'ellipse', 'diamond', 'pen', 'highlighter', 'line', 'arrow'])
 const TOOL_KEYS: Record<string, 'hand' | PointerToolName> = {
   v: 'select', 1: 'select', h: 'hand',
   r: 'rectangle', 2: 'rectangle', d: 'diamond', 3: 'diamond', o: 'ellipse', 4: 'ellipse',
+  a: 'arrow', 5: 'arrow', l: 'line', 6: 'line',
   p: 'pen', 7: 'pen', m: 'highlighter',
 }
 const NUDGE: Record<string, [number, number]> = {
@@ -86,6 +96,7 @@ export class ToolController implements ToolHost {
   marquee: Box | null = null
   hoverId: string | null = null
   draft: SketchElement | null = null
+  previewSegment: [Point, Point] | null = null
 
   private readonly hand: HandTool
   private readonly tools: Record<PointerToolName, Tool>
@@ -103,18 +114,37 @@ export class ToolController implements ToolHost {
       diamond: new ShapeTool(this, 'diamond'),
       pen: new PenTool(this, false),
       highlighter: new PenTool(this, true),
+      line: new LinearTool(this, 'line'),
+      arrow: new LinearTool(this, 'arrow'),
     }
     this.off = ctx.scene.onChange(() => this.pruneSelection())
   }
 
   overlay(): Overlay {
-    return { selectedIds: this.selectedIds.value, marquee: this.marquee, hoverId: this.hoverId, draft: this.draft }
+    return {
+      selectedIds: this.selectedIds.value,
+      marquee: this.marquee,
+      hoverId: this.hoverId,
+      draft: this.draft,
+      pointHandles: this.pointHandles(),
+      previewSegment: this.previewSegment,
+    }
+  }
+
+  /** Scene points of the single selected, unlocked line/arrow (editable), else null. */
+  pointHandles(): Point[] | null {
+    const sel = this.selectedIds.value
+    if (sel.size !== 1 || this.ctx.readonly()) return null
+    const el = this.ctx.scene.get([...sel][0]!)
+    return el && !el.locked && isLinear(el) ? linearScenePoints(el) : null
   }
 
   /** Switches tool; tools without an implementation yet are ignored. */
   setTool(t: ToolName): void {
     if (t !== 'hand' && !(t in this.tools)) return
+    const pending = this.pendingTool()
     this.active?.cancel?.()
+    if (pending !== this.active) pending?.cancel?.()
     this.active = null
     this.tool.value = t
     if (CREATORS.has(t)) this.setSelection([])
@@ -163,19 +193,32 @@ export class ToolController implements ToolHost {
     tool.up(e, this.toScene(e))
   }
 
-  /** A pointer gesture (draw, move, resize, rotate, marquee, pan) is in progress. */
+  /**
+   * A gesture (draw, move, resize, rotate, marquee, pan, point drag) is in progress, including a multi-point
+   * line/arrow that is open between clicks.
+   */
   isGestureActive(): boolean {
-    return this.active !== null
+    return this.active !== null || this.pendingTool() !== null
   }
 
   /** Aborts the gesture: drafts are discarded, a move/resize/rotate reverts with no undo step. */
   cancelGesture(): void {
     const tool = this.active
-    if (!tool) return
+    const pending = this.pendingTool()
+    if (!tool && !pending) return
     this.active = null
-    tool.cancel?.()
+    tool?.cancel?.()
+    if (pending && pending !== tool) pending.cancel?.()
     this.resetCursor()
     this.ctx.invalidate()
+  }
+
+  /** The current tool when it holds a multi-click gesture open. */
+  private pendingTool(): Tool | null {
+    const t = this.tool.value
+    if (t === 'hand') return null
+    const tool = this.tools[t as PointerToolName]
+    return tool?.pending?.() ? tool : null
   }
 
   private toScene(e: PointerInput): Point {
@@ -187,7 +230,16 @@ export class ToolController implements ToolHost {
   keyDown(e: { key: string; mod: boolean; shift: boolean }): boolean {
     const ro = this.ctx.readonly()
     const k = e.key.length === 1 ? e.key.toLowerCase() : e.key
-    if (this.active && k !== ' ') {
+    const pending = this.pendingTool()
+    if (pending && (k === 'Enter' || k === 'Escape') && this.active !== this.hand) {
+      // Enter / Escape complete a multi-point line or arrow (fewer than 2 points → nothing)
+      this.active = null
+      pending.finish?.()
+      this.resetCursor()
+      this.ctx.invalidate()
+      return true
+    }
+    if (this.isGestureActive() && k !== ' ') {
       // mid-gesture: only Escape (cancel) and Space (pan modifier) act
       if (k !== 'Escape') return false
       this.cancelGesture()
@@ -267,7 +319,9 @@ export class ToolController implements ToolHost {
   }
 
   destroy(): void {
+    const pending = this.pendingTool()
     this.active?.cancel?.()
+    if (pending !== this.active) pending?.cancel?.()
     this.active = null
     this.off()
   }

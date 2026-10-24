@@ -1,6 +1,7 @@
 import { blendsMultiply } from '../elements/freedraw'
 import { kindOf } from '../elements/kind'
-import { type Box, type Handle, handlePositions } from '../geometry'
+import { hasTransformHandles } from '../elements/linear'
+import { type Box, type Handle, handlePositions, type Point } from '../geometry'
 import type { Scene } from '../model/scene'
 import type { SketchElement } from '../model/types'
 import { applyViewTransform, type RenderState } from './static'
@@ -10,6 +11,10 @@ export interface Overlay {
   marquee: Box | null
   hoverId: string | null
   draft: SketchElement | null
+  /** Editable points of the single selected line/arrow (scene coords). */
+  pointHandles: Point[] | null
+  /** Multi-point line/arrow in progress: last placed point → pointer (scene coords). */
+  previewSegment: [Point, Point] | null
 }
 
 const FALLBACK_ACCENT = '#2383e2'
@@ -50,7 +55,10 @@ function outline(ctx: CanvasRenderingContext2D, el: SketchElement, gap: number):
   ctx.strokeRect(-el.w / 2 - gap, -el.h / 2 - gap, el.w + 2 * gap, el.h + 2 * gap)
 }
 
-/** Draws transient UI: the draft element (its kind's full-fidelity draw), hover, selection, handles, marquee. */
+/**
+ * Draws transient UI: the draft element (its kind's full-fidelity draw), the multi-point preview segment,
+ * hover, selection, handles, point handles, marquee.
+ */
 export function renderInteractive(
   ctx: CanvasRenderingContext2D,
   scene: Scene,
@@ -76,6 +84,17 @@ export function renderInteractive(
   ctx.strokeStyle = accent
   ctx.lineWidth = 1 / zoom
 
+  const seg = overlay.previewSegment
+  if (seg) {
+    elementFrame(ctx, state, 0, 0, 0)
+    ctx.setLineDash([4 / zoom, 4 / zoom])
+    ctx.beginPath()
+    ctx.moveTo(seg[0].x, seg[0].y)
+    ctx.lineTo(seg[1].x, seg[1].y)
+    ctx.stroke()
+    ctx.setLineDash([])
+  }
+
   if (overlay.hoverId && !overlay.selectedIds.has(overlay.hoverId)) {
     const el = scene.get(overlay.hoverId)
     if (el) {
@@ -97,7 +116,7 @@ export function renderInteractive(
   }
   ctx.setLineDash([])
 
-  if (selected.length === 1) {
+  if (selected.length === 1 && hasTransformHandles(selected[0]!)) {
     const el = selected[0]!
     const size = HANDLE_PX / zoom
     const handles = handlePositions(el, zoom)
@@ -107,6 +126,18 @@ export function renderInteractive(
       elementFrame(ctx, state, p.x, p.y, el.angle)
       ctx.fillRect(-size / 2, -size / 2, size, size)
       ctx.strokeRect(-size / 2, -size / 2, size, size)
+    }
+  }
+
+  if (overlay.pointHandles) {
+    const r = HANDLE_PX / zoom / 2
+    elementFrame(ctx, state, 0, 0, 0)
+    ctx.fillStyle = '#ffffff'
+    for (const p of overlay.pointHandles) {
+      ctx.beginPath()
+      ctx.arc(p.x, p.y, r, 0, Math.PI * 2)
+      ctx.fill()
+      ctx.stroke()
     }
   }
 

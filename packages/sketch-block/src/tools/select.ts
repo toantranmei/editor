@@ -1,8 +1,10 @@
 import { kindOf } from '../elements/kind'
+import { hasTransformHandles, linearScenePoints, movePointPatch } from '../elements/linear'
 import {
   type Box, boxCenter, boxContains, elementBounds, type Handle, handlePositions, type Point, resizeBox, rotateAngle,
+  snapSegment,
 } from '../geometry'
-import type { ElementPatch, SketchElement } from '../model/types'
+import { type ElementPatch, isLinear, type LinearElement, type SketchElement } from '../model/types'
 import type { PointerInput, Tool, ToolHost } from './controller'
 
 /** Hit tolerances in screen px (divided by zoom → scene units). */
@@ -18,6 +20,7 @@ type Gesture =
   | { kind: 'move'; start: Point; origins: SketchElement[] }
   | { kind: 'resize'; handle: Exclude<Handle, 'rotate'>; el: SketchElement }
   | { kind: 'rotate'; el: SketchElement }
+  | { kind: 'point'; el: LinearElement; index: number }
   | { kind: 'marquee'; start: Point; base: Set<string> }
   | { kind: 'none' }
 
@@ -99,6 +102,13 @@ export class SelectTool implements Tool {
     const ro = ctx.readonly()
     this.downAt = p
     this.dirty = false
+    // point handles win over the resize handles they may overlap
+    const point = ro ? null : this.pointAt(p)
+    if (point) {
+      this.beginWrite()
+      this.g = { kind: 'point', ...point }
+      return
+    }
     const handle = ro ? null : this.handleAt(p)
     if (handle) {
       this.beginWrite()
@@ -161,6 +171,16 @@ export class SelectTool implements Tool {
       case 'rotate':
         this.writer.set({ [g.el.id]: { angle: rotateAngle(boxCenter(g.el), p, e.shift) } })
         return
+      case 'point': {
+        let target = p
+        if (e.shift && g.el.points.length > 1) {
+          // snap the segment from the neighbouring point
+          const scene = linearScenePoints(g.el)
+          target = snapSegment(scene[g.index === 0 ? 1 : g.index - 1]!, p)
+        }
+        this.writer.set({ [g.el.id]: movePointPatch(g.el, g.index, target) })
+        return
+      }
       case 'marquee': {
         const box: Box = {
           minX: Math.min(g.start.x, p.x), minY: Math.min(g.start.y, p.y),
@@ -179,7 +199,7 @@ export class SelectTool implements Tool {
 
   up(e: PointerInput, p: Point): void {
     const g = this.g
-    if (g.kind === 'move' || g.kind === 'resize' || g.kind === 'rotate') {
+    if (g.kind === 'move' || g.kind === 'resize' || g.kind === 'rotate' || g.kind === 'point') {
       // a plain click must not write (no version bump, no empty undo step)
       if (this.dirty || p.x !== this.downAt.x || p.y !== this.downAt.y) this.move(e, p)
       this.writer.flush()
@@ -200,8 +220,11 @@ export class SelectTool implements Tool {
       this.host.hoverId = hoverId
       ctx.invalidate()
     }
-    const handle = ctx.readonly() ? null : this.handleAt(p)
-    this.host.cursor.value = handle
+    const point = ctx.readonly() ? null : this.pointAt(p)
+    const handle = ctx.readonly() || point ? null : this.handleAt(p)
+    this.host.cursor.value = point
+      ? 'pointer'
+      : handle
       ? HANDLE_CURSOR[handle.handle]
       : hit && this.host.selectedIds.value.has(hit.id) ? 'move' : 'default'
   }
@@ -232,7 +255,7 @@ export class SelectTool implements Tool {
 
   private origins(): SketchElement[] {
     const g = this.g
-    return g.kind === 'move' ? g.origins : g.kind === 'resize' || g.kind === 'rotate' ? [g.el] : []
+    return g.kind === 'move' ? g.origins : g.kind === 'resize' || g.kind === 'rotate' || g.kind === 'point' ? [g.el] : []
   }
 
   private endWrite(): void {
@@ -247,7 +270,7 @@ export class SelectTool implements Tool {
     if (sel.size !== 1) return null
     const { scene, viewport } = this.host.ctx
     const el = scene.get([...sel][0]!)
-    if (!el || el.locked) return null
+    if (!el || el.locked || !hasTransformHandles(el)) return null
     const tol = HANDLE_HIT_PX / viewport.zoom
     const handles = handlePositions(el, viewport.zoom)
     for (const k of Object.keys(handles) as Handle[]) {
@@ -255,5 +278,26 @@ export class SelectTool implements Tool {
       if (Math.abs(h.x - p.x) <= tol && Math.abs(h.y - p.y) <= tol) return { el, handle: k }
     }
     return null
+  }
+
+  /** Point handle under `p` when exactly one unlocked line/arrow is selected (nearest within tolerance). */
+  private pointAt(p: Point): { el: LinearElement; index: number } | null {
+    const sel = this.host.selectedIds.value
+    if (sel.size !== 1) return null
+    const { scene, viewport } = this.host.ctx
+    const el = scene.get([...sel][0]!)
+    if (!el || el.locked || !isLinear(el)) return null
+    const tol = HANDLE_HIT_PX / viewport.zoom
+    const pts = linearScenePoints(el)
+    let index = -1
+    let bestD = tol
+    for (let i = 0; i < pts.length; i++) {
+      const d = Math.hypot(pts[i]!.x - p.x, pts[i]!.y - p.y)
+      if (d <= bestD) {
+        bestD = d
+        index = i
+      }
+    }
+    return index < 0 ? null : { el, index }
   }
 }

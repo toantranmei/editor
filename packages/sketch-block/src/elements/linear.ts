@@ -1,7 +1,7 @@
 import rough from 'roughjs'
 import type { Drawable, Options } from 'roughjs/bin/core'
-import { polylineDistance, scalePoints } from '../geometry/math'
-import type { Arrowhead, LinearElement, LocalPoint } from '../model/types'
+import { type Point, polylineDistance, rotatePoint, scalePoints } from '../geometry/math'
+import { type Arrowhead, isLinear, type LinearElement, type LocalPoint, type SketchElement } from '../model/types'
 import { displayColor, roughOptions, type Theme } from '../render/shapes'
 import { type ElementKind, hashString, shapeKeyOf } from './kind'
 
@@ -70,6 +70,36 @@ export function boxFromPoints(abs: LocalPoint[]): { x: number; y: number; w: num
   }
   return { x: minX, y: minY, w: maxX - minX, h: maxY - minY, points: abs.map(([x, y]) => [x - minX, y - minY]) }
 }
+
+/** The element's points in scene coordinates (rotated about the box center). */
+export function linearScenePoints(el: LinearElement): Point[] {
+  const c = { x: el.x + el.w / 2, y: el.y + el.h / 2 }
+  return el.points.map(([x, y]) => rotatePoint({ x: el.x + x, y: el.y + y }, c, el.angle))
+}
+
+/**
+ * Patch moving point `index` of `el` to scene point `p`: points are re-normalized (w, h ≥ 0) and, for a
+ * rotated element, the box is shifted so every other point keeps its scene position.
+ */
+export function movePointPatch(
+  el: LinearElement,
+  index: number,
+  p: Point,
+): { x: number; y: number; w: number; h: number; points: LocalPoint[] } {
+  const c0 = { x: el.x + el.w / 2, y: el.y + el.h / 2 }
+  // unrotated frame about the original center
+  const q = rotatePoint(p, c0, -el.angle)
+  const abs = el.points.map(([x, y], i): LocalPoint => (i === index ? [q.x, q.y] : [el.x + x, el.y + y]))
+  const box = boxFromPoints(abs)
+  if (!el.angle) return box
+  // rotating about the new center c1 instead of c0 shifts every point by (R - I)(c1 - c0); undo that
+  const d = { x: c0.x - (box.x + box.w / 2), y: c0.y - (box.y + box.h / 2) }
+  const rd = rotatePoint(d, { x: 0, y: 0 }, el.angle)
+  return { ...box, x: box.x + d.x - rd.x, y: box.y + d.y - rd.y }
+}
+
+/** Resize / rotate handles apply to everything except a plain 2-point line or arrow. */
+export const hasTransformHandles = (el: SketchElement): boolean => !isLinear(el) || el.points.length > 2
 
 /** Heads with their tip and the route point the shaft arrives from (the nearest distinct one). */
 function heads(el: LinearElement, route: LocalPoint[]): ArrowheadShape[] {

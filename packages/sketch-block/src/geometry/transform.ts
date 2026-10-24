@@ -84,3 +84,13 @@ export function rotateAngle(center: Point, pointer: Point, snap: boolean): numbe
   if (a >= TAU - 1e-9) a = 0
   return a
 }
+
+/** `p` with the segment `anchor → p` snapped to the nearest 15° (length kept). */
+export function snapSegment(anchor: Point, p: Point): Point {
+  const dx = p.x - anchor.x
+  const dy = p.y - anchor.y
+  const len = Math.hypot(dx, dy)
+  if (len === 0) return p
+  const a = Math.round(Math.atan2(dy, dx) / SNAP) * SNAP
+  return { x: anchor.x + len * Math.cos(a), y: anchor.y + len * Math.sin(a) }
+}
