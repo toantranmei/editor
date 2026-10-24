@@ -165,11 +165,52 @@ sketch.configure({ provider: websocket({
 8. Để dành cho sau (chỉ làm nếu benchmark cho thấy cần): dựng bitmap bằng OffscreenCanvas trong worker.
 
 ## Các mốc (mỗi mốc là một bản publish 0.x qua changesets)
-- **M0 – Nền tảng (0.1.0)**: dựng package, sửa build, CI, release ở root, thêm export cho editor, node `sketch` + SketchView (preview → Interact → fullscreen), Y store + scene + rbush, renderer 2 lớp + cache + culling, pan/zoom vô hạn, select/move/resize/rotate/multi-select, rect/ellipse/diamond, undo/redo, provider indexeddb, slash item + messages vi/en.
-- **M1 – Công cụ vẽ (0.2.0)**: line/arrow, pen (perfect-freehand), text, eraser, StylePanel (màu theo `COLORS` của editor, kiểu fill, độ dày nét, độ nhám), phím tắt kiểu Excalidraw (V, R, O, D, A, P, T, E, H…), copy/paste/duplicate, xuất preview SVG.
-- **M2 – Tính năng Miro (0.3.0)**: arrow dính vào shape (binding + định tuyến lại khi kéo), sticky note, frame (clip + kéo theo cả các element con), group/ungroup, lock, ảnh (dán, kéo thả, upload), snap/căn chỉnh.
-- **M3 – Backend & collab (0.4.0)**: provider `http()` (cấp A), `exportBoards`/`importBoards`, clone board khi paste, `collectBoardIds`; provider `websocket()` + awareness, con trỏ và selection của người khác, giữ nguyên element mình đang sửa khi có thay đổi từ xa, server y-websocket cho playground (`apps/playground`, script `pnpm sync`).
-- **M4 – Export, thư viện, hoàn thiện (0.5.0 → 1.0)**: export PNG/SVG (vẽ vector, không dùng bitmap cache), library shape (lưu trong `meta`/localStorage), template board, minimap, LOD và tối ưu theo benchmark.
+
+Cập nhật 2026-10-25: M0 (0.1.0) đã xong. Danh mục công cụ đã chọn (A1–A8, B1–B12, C1–C5, D1–D10, F1–F4) được xếp theo thứ tự "vẽ trước, Miro sau". Không làm: smart drawing, trình chiếu/comment/voting/timer/reactions, AI.
+
+- **M0 – Nền tảng (0.1.0, đã xong)**: package, node `sketch` + SketchView, Y store + scene + rbush, renderer 2 lớp + cache + culling + LOD, pan/zoom, select/move/resize/rotate, rect/ellipse/diamond, undo/redo, provider indexeddb/memory, preview SVG.
+
+| Mốc | Bản | Nội dung |
+|---|---|---|
+| **M1 – Công cụ vẽ** | 0.2.0 | Pen (A1), highlighter (A2), line (A3), arrow thẳng/gấp khúc/cong (A4), text (A5), eraser (A6), laser (A7), lasso (A8), style panel (D1), hút màu (D2), copy/paste/duplicate và copy style (D3), zen/view mode (D10). Kèm nợ kỹ thuật từ M0 (xem bên dưới). |
+| **M2 – Miro core** | 0.3.0 | Sticky + tạo nhanh (B1, B2), ảnh + crop (B5), frame (B6), thư viện shape + flowchart (B3, B4), arrow binding (C1), nhãn arrow (C2), flowchart nhanh Ctrl+phím mũi tên (C3), group/lock (D4), align/distribute (D5), lưới + snap (D6). |
+| **M3 – Backend & collab** | 0.4.0 | Như spec gốc (http/websocket provider, awareness, clone-on-paste, exportBoards), thêm tìm kiếm (D7) và link phần tử (D8). |
+| **M4 – Xuất file & thư viện** | 0.5.0 | Export PNG/SVG/clipboard (F1), library (F2), template (F3), import `.excalidraw` (F4), minimap (D9), tối ưu hiệu năng theo benchmark. |
+| **M5 – Nội dung nâng cao** | 0.6.0 → 1.0 | Embed web (B7), emoji/stamp (B10), code block (B11), table (B8), card/kanban (B9), Mermaid → sketch (B12), mind map (C4), auto layout (C5). |
+
+### Thiết kế M1
+- **Model:** mở rộng `SketchElement` thành discriminated union theo `type`:
+  - `line` và `arrow`: `points` trong toạ độ local; `startArrowhead`/`endArrowhead`; `routing` là `straight`, `elbow` hoặc `curved`.
+  - `freedraw`: `points` kèm `pressures`; `highlighter: boolean` (vẽ với opacity thấp, blend multiply).
+  - `text`: `text`, `fontFamily` (hand/normal/code), `fontSize` (S/M/L/XL), `align`; `containerId` để ghi chữ trong shape.
+  - Ghi `points` một lần khi kết thúc nét (đúng như spec). Trong lúc vẽ, nét chỉ là draft local.
+- **Render:**
+  - freedraw dùng `perfect-freehand@1.2.3`, thành `Path2D`, rồi đưa vào cache bitmap như shape.
+  - line/arrow dùng roughjs `linearPath`/`curve`, đầu mũi tên vẽ riêng.
+  - Text dùng `fillText` với font tay **Excalifont** (OFL, tự host, nạp lazy bằng `FontFace` cùng engine).
+  - `exportSvg` và preview hỗ trợ đủ các kiểu mới.
+- **Tools:**
+  - pen/highlighter: lấy điểm bằng `getCoalescedEvents` (vòng lặp này đã có sẵn trong board).
+  - line/arrow: kéo để vẽ hai điểm, click để thêm điểm, Enter/Esc kết thúc, sửa từng điểm khi chọn.
+  - text: `<textarea>` DOM đè lên canvas; đo chữ bằng `measureText`, tự xuống dòng.
+  - eraser: rê qua thì đánh dấu, thả chuột thì xoá trong một transaction (một bước undo).
+  - laser: vệt chỉ nằm trên lớp interactive, tự mờ sau khoảng 1s, không lưu vào Y (M3 sẽ phát qua awareness).
+  - lasso: polygon tự do, chọn phần tử nằm trọn bên trong.
+- **UI:**
+  - Toolbar thêm các tool trên, phím tắt kiểu Excalidraw (P pen, L line, A arrow, T text, E eraser, K laser).
+  - StylePanel theo ngữ cảnh: màu từ `COLORS` của editor, kiểu tô, độ dày, kiểu nét, độ nhám, góc, opacity, đầu mũi tên, font. Hút màu bằng phím I.
+  - Copy/paste qua clipboard (MIME riêng, có fallback JSON text). Copy/paste style bằng Ctrl+Alt+C/V. Duplicate bằng Ctrl+D.
+  - Zen mode (Alt+Z) và view mode (Alt+R).
+- **Nợ kỹ thuật từ M0** (theo kết quả review cuối):
+  - Cache bitmap/drawable theo hình dạng, để kéo phần tử không phải vẽ lại bitmap mỗi frame.
+  - `BoardStore.create` chạy O(1) và nhận `seed`.
+  - `History` giữ nguyên khi chuyển qua lại inline ↔ fullscreen.
+  - Thêm `lostpointercapture` và chặn `contextmenu`.
+  - Đọc `deltaMode` của wheel.
+  - Thêm test resize khi đã xoay.
+  - Trả focus về editor sau khi thoát board.
+  - Xem lại `MAX_ROUGH_PAD` khi style panel cho chỉnh độ dày.
+- **Dependency mới:** `perfect-freehand 1.2.3`, font Excalifont (kiểm tra license OFL khi thêm).
 
 ## File cần sửa ngoài package mới
 - `package.json` (root): `build` và `release` chạy cho mọi package (`pnpm -r --filter "./packages/*" build`), thêm `dev:sketch`.
