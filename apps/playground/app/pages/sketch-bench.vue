@@ -1,8 +1,9 @@
 <script setup lang="ts">
 /**
- * Sketch benchmark page: /sketch-bench?n=5000
- * Fills an in-memory board with `n` mixed shapes and mounts the board fullscreen;
- * timings and the board element are exposed on window.__sketchBench (see scripts/bench-sketch.mjs).
+ * Sketch benchmark page: /sketch-bench?n=5000 (mixed shapes) or /sketch-bench?n=2000&kind=pen
+ * (pen strokes, 200 points each). Fills an in-memory board and mounts the board fullscreen;
+ * timings, the board element and the board instance are exposed on window.__sketchBench
+ * (see scripts/bench-sketch.mjs).
  */
 import type { BoardConnection } from '@toantranmei/sketch-block'
 import { SketchBoard } from '@toantranmei/sketch-block/engine'
@@ -12,16 +13,30 @@ import * as Y from 'yjs'
 
 const route = useRoute()
 const n = Number(route.query.n ?? 1000)
+const kind = route.query.kind === 'pen' ? 'pen' : 'shapes'
 
 const TYPES = ['rectangle', 'ellipse', 'diamond'] as const
 const FILLS = ['none', 'hachure', 'cross-hatch', 'solid'] as const
 const COLORS = ['#a5d8ff', '#b2f2bb', '#ffec99', '#ffc9c9']
 const CELL = 160
+const PEN_POINTS = 200
+
+/** A wavy pen stroke of PEN_POINTS points, normalized to its box (local coords, w/h ≥ 0). */
+function penStroke(i: number) {
+  const raw = Array.from({ length: PEN_POINTS }, (_, j) => [j * 0.6, 30 * Math.sin(j / 12 + i) + 8 * Math.sin(j / 3)] as const)
+  const minY = Math.min(...raw.map(p => p[1]))
+  const points = raw.map(([x, y]) => [x, y - minY])
+  return {
+    w: Math.max(...points.map(p => p[0]!)),
+    h: Math.max(...points.map(p => p[1]!)),
+    points,
+  }
+}
 
 declare global { interface Window { __sketchBench?: Record<string, unknown> } }
 
 const connection = shallowRef<BoardConnection | null>(null)
-const board = ref<{ $el: HTMLElement } | null>(null)
+const board = ref<{ $el: HTMLElement, selectAll: () => void, toScreen: (p: { x: number, y: number }) => { x: number, y: number } } | null>(null)
 let mountStart = 0
 
 onMounted(async () => {
@@ -34,17 +49,18 @@ onMounted(async () => {
   conn.doc.transact(() => {
     for (let i = 0; i < n; i++) {
       const fillStyle = FILLS[i % FILLS.length]!
+      const shape = kind === 'pen'
+        ? { type: 'freedraw', ...penStroke(i), pressures: [], highlighter: false }
+        : { type: TYPES[i % TYPES.length]!, w: 80 + (i * 37) % 60, h: 60 + (i * 53) % 60 }
       const el = {
         id: `e${i}`,
-        type: TYPES[i % TYPES.length]!,
+        ...shape,
         x: (i % cols) * CELL,
         y: Math.floor(i / cols) * CELL,
-        w: 80 + (i * 37) % 60,
-        h: 60 + (i * 53) % 60,
         angle: 0,
         index: keys[i]!,
         stroke: '#1e1e1e',
-        fill: fillStyle === 'none' ? 'transparent' : COLORS[i % COLORS.length]!,
+        fill: fillStyle === 'none' || kind === 'pen' ? 'transparent' : COLORS[i % COLORS.length]!,
         fillStyle,
         strokeWidth: 2,
         strokeStyle: 'solid',
@@ -62,7 +78,7 @@ onMounted(async () => {
   })
   const fillMs = performance.now() - t0
   mountStart = performance.now()
-  window.__sketchBench = { n, fillMs, mountStart }
+  window.__sketchBench = { n, kind, fillMs, mountStart }
   connection.value = markRaw(conn)
 })
 
@@ -70,7 +86,7 @@ onMounted(async () => {
 watch(board, (b) => {
   if (!b) return
   requestAnimationFrame(() => requestAnimationFrame(() => {
-    window.__sketchBench = { ...window.__sketchBench, firstFrameAt: performance.now(), el: b.$el }
+    window.__sketchBench = { ...window.__sketchBench, firstFrameAt: performance.now(), el: b.$el, board: b }
   }))
 })
 </script>

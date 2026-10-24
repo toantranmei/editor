@@ -2,10 +2,13 @@
 /**
  * Sketch board benchmark: time to first frame, pan and zoom frame rate for large boards.
  * Pans at the fitted zoom (LOD path at 5000 shapes) and at zoom 1 and 0.35 (bitmap path), and
- * records the post-settle rebuild after zooming ("settle max").
+ * records the post-settle rebuild after zooming ("settle max"). The same runs go over a board of
+ * long pen strokes (200 points each), and a drag of a selection of shapes reports the frame time
+ * while moving it.
  *
- *   pnpm bench:sketch                     # 1000 and 5000 shapes
- *   pnpm bench:sketch -- --sizes=500,10000 --no-build
+ *   pnpm bench:sketch                     # 1000 and 5000 shapes, 2000 pen strokes, drag 500 shapes
+ *   pnpm bench:sketch -- --sizes=500,10000 --pen=4000 --drag=1000 --no-build
+ *   pnpm bench:sketch -- --pen=0 --drag=0  # shapes only
  *
  * Builds the playground (production), serves it, and drives /sketch-bench with Playwright.
  * Uses the installed Google Chrome; otherwise run `pnpm exec playwright install chromium`.
@@ -17,6 +20,8 @@ import { chromium } from 'playwright'
 
 const args = Object.fromEntries(process.argv.slice(2).map(a => a.replace(/^--/, '').split('=')))
 const sizes = (args.sizes ?? '1000,5000').split(',').map(Number)
+const penStrokes = Number(args.pen ?? 2000)
+const dragCount = Number(args.drag ?? 500)
 const port = Number(args.port ?? 3170)
 const playground = fileURLToPath(new URL('../apps/playground', import.meta.url))
 
@@ -127,26 +132,86 @@ async function measure(page, kind) {
   }, { kind, SETTLE_MS })
 }
 
-await waitForServer()
-const browser = await launch()
-const rows = []
-const loads = []
-for (const n of sizes) {
+/**
+ * Runs in the page: selects every element, presses on the first shape (e0's left edge) and drags the
+ * selection with one pointermove per animation frame. Returns the average and 95th percentile frame
+ * time during the drag and how many elements actually moved.
+ */
+async function measureDrag(page) {
+  return page.evaluate(async () => {
+    const { el, board } = window.__sketchBench
+    const canvas = el.querySelector('.me-sketch-canvas--interactive')
+    const rect = canvas.getBoundingClientRect()
+    const frame = () => new Promise(r => requestAnimationFrame(r))
+    const before = new Map(board.getElements().map(e => [e.id, e.x]))
+    const e0 = board.getElements().find(e => e.id === 'e0')
+    board.selectAll()
+    await frame()
+    const start = board.toScreen({ x: e0.x, y: e0.y + e0.h / 2 })
+    const at = (dx, dy) => ({ clientX: rect.left + start.x + dx, clientY: rect.top + start.y + dy })
+    const ptr = (type, dx, dy) => canvas.dispatchEvent(new PointerEvent(type, {
+      ...at(dx, dy), pointerId: 1, pointerType: 'mouse', button: 0, buttons: type === 'pointerup' ? 0 : 1,
+      isPrimary: true, bubbles: true, cancelable: true,
+    }))
+    ptr('pointerdown', 0, 0)
+    await frame()
+    const STEPS = 60
+    const stamps = [await frame()]
+    for (let i = 1; i <= STEPS; i++) {
+      ptr('pointermove', i * 4, i * 2)
+      stamps.push(await frame())
+    }
+    // let the last move render
+    stamps.push(await frame())
+    ptr('pointerup', STEPS * 4, STEPS * 2)
+    await frame()
+    const deltas = stamps.slice(1).map((t, i) => t - stamps[i]).sort((a, b) => a - b)
+    const avg = deltas.reduce((a, b) => a + b, 0) / deltas.length
+    const moved = board.getElements().filter(e => before.get(e.id) !== e.x).length
+    return {
+      avg: +avg.toFixed(1),
+      p95: +deltas[Math.floor(deltas.length * 0.95)].toFixed(1),
+      fps: +(1000 / avg).toFixed(1),
+      moved,
+      zoom: el.querySelector('.me-sketch-zoom-pct')?.textContent?.trim() ?? '?',
+    }
+  })
+}
+
+/** Opens the bench page and waits for the board's first frame; records the load timings. */
+async function openBoard(browser, n, kind, loads) {
   const page = await browser.newPage({ viewport: { width: 1280, height: 900 } })
-  await page.goto(`http://localhost:${port}/sketch-bench?n=${n}`)
+  await page.goto(`http://localhost:${port}/sketch-bench?n=${n}&kind=${kind}`)
   await page.waitForFunction(() => window.__sketchBench?.firstFrameAt, null, { timeout: 300_000 })
   const { fillMs, firstFrameMs } = await page.evaluate(() => ({
     fillMs: Math.round(window.__sketchBench.fillMs),
     firstFrameMs: Math.round(window.__sketchBench.firstFrameAt - window.__sketchBench.mountStart),
   }))
-  loads.push({ shapes: n, 'fill (ms)': fillMs, 'first frame (ms)': firstFrameMs })
+  loads.push({ board: `${n} ${kind}`, 'fill (ms)': fillMs, 'first frame (ms)': firstFrameMs })
+  return page
+}
+
+await waitForServer()
+const browser = await launch()
+const rows = []
+const loads = []
+const boards = [...sizes.map(n => [n, 'shapes']), ...(penStrokes > 0 ? [[penStrokes, 'pen']] : [])]
+for (const [n, kind] of boards) {
+  const page = await openBoard(browser, n, kind, loads)
   // pan at the fitted zoom (0.1 at 5000 shapes: the LOD path), then on the bitmap path
   // (zoom 1 and 0.35, both above LOD_ZOOM = 0.3), then the zoom sweep
-  for (const [run, kind] of [['pan (fit)', 'pan'], ['pan @ zoom 1', 'pan@1'], ['pan @ zoom 0.35', 'pan@0.35'], ['zoom 0.1 → 4', 'zoom']]) {
+  for (const [run, k] of [['pan (fit)', 'pan'], ['pan @ zoom 1', 'pan@1'], ['pan @ zoom 0.35', 'pan@0.35'], ['zoom 0.1 → 4', 'zoom']]) {
     await page.waitForTimeout(500)
-    const r = await measure(page, kind)
-    rows.push({ shapes: n, run, 'zoom (shown)': r.zoom, fps: r.fps, 'p95 (ms)': r.p95, 'settle max (ms)': r.settle ?? '–' })
+    const r = await measure(page, k)
+    rows.push({ board: `${n} ${kind}`, run, 'zoom (shown)': r.zoom, fps: r.fps, 'p95 (ms)': r.p95, 'settle max (ms)': r.settle ?? '–' })
   }
+  await page.close()
+}
+let drag = null
+if (dragCount > 0) {
+  const page = await openBoard(browser, dragCount, 'shapes', loads)
+  await page.waitForTimeout(500)
+  drag = await measureDrag(page)
   await page.close()
 }
 await browser.close()
@@ -157,3 +222,11 @@ console.table(loads)
 console.log(`\nfps from requestAnimationFrame timestamps, one wheel event per frame (60 frames). Target: pan ≥ 55 fps at 5000.
 settle max: longest single frame in the ${SETTLE_MS} ms after the run's last zoom (the static layer rebuild 150 ms after zooming stops).`)
 console.table(rows)
+if (drag) {
+  console.log(`\nDrag: all ${dragCount} shapes selected, one pointermove per frame (60 frames) at the fitted zoom.`)
+  console.table([{ selected: dragCount, 'zoom (shown)': drag.zoom, 'avg frame (ms)': drag.avg, 'p95 (ms)': drag.p95, fps: drag.fps, moved: drag.moved }])
+  if (drag.moved !== dragCount) {
+    console.error(`drag moved ${drag.moved} of ${dragCount} elements`)
+    process.exitCode = 1
+  }
+}

@@ -398,7 +398,7 @@ onMounted(() => {
     </div>
 
     <Teleport to="body">
-      <div v-if="fullscreen && engine && connection && session" v-bind="scope" class="me-sketch-modal" @mousedown.self="leave">
+      <div v-if="fullscreen && engine && connection && session" v-bind="scope" class="me-sketch-modal" @mousedown.self.prevent="leave">
         <div class="me-sketch-modal-panel">
           <div class="me-block-bar me-sketch-bar">
             <PenTool />

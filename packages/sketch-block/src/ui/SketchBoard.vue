@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref, shallowRef, toRaw, watch } f
 import type * as Y from 'yjs'
 import '../styles/sketch.css'
 import type { BoardSession } from '../engine'
+import type { Point } from '../geometry/math'
 import { parseClipboard, serializeClipboard } from '../io/clipboard'
 import { messages as allMessages } from '../messages'
 import { History } from '../model/history'
@@ -506,6 +507,10 @@ onBeforeUnmount(() => {
 defineExpose({
   getElements: (): readonly SketchElement[] => scene.elements,
   fit,
+  /** Selects every element (as mod+A). */
+  selectAll: (): void => controller.selectAll(),
+  /** Scene point → px relative to the board canvas' top-left corner. */
+  toScreen: (p: Point): Point => viewport.toScreen(p),
 })
 </script>
 

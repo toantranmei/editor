@@ -1,8 +1,10 @@
 #!/usr/bin/env node
 /**
  * End-to-end check of the sketch block in the playground:
- * insert via the slash menu → draw a rectangle and an ellipse → preview image → reload →
- * preview still there and the board still holds both shapes.
+ * 1. insert via the slash menu → draw a rectangle and an ellipse → preview image → reload →
+ *    preview still there and the board still holds both shapes;
+ * 2. on a new block: a pen stroke, an arrow and the text "Xin chào" → the SVG preview holds the
+ *    stroke path and the text → reload → 3 elements → copy + paste (mod+C / mod+V) → 6 elements.
  *
  *   pnpm e2e:sketch
  *   pnpm e2e:sketch -- --port=3161 --headed
@@ -70,7 +72,10 @@ async function insertSketch(page) {
   await page.locator('.me-sketch').waitFor()
 }
 
-/** Drags on the board canvas from (x, y) by (dx, dy), relative to its top-left corner. */
+/**
+ * Drags on the board canvas from (x, y) by (dx, dy), relative to its top-left corner.
+ * Keep x ≥ 200 and y ≥ 60: the style panel and the toolbar float over the canvas's left and top.
+ */
 async function drag(page, x, y, dx, dy) {
   const box = await page.locator('.me-sketch .me-sketch-canvas--interactive').boundingBox()
   check(box, 'board canvas not found')
@@ -78,6 +83,22 @@ async function drag(page, x, y, dx, dy) {
   await page.mouse.down()
   for (let i = 1; i <= 8; i++) await page.mouse.move(box.x + x + (dx * i) / 8, box.y + y + (dy * i) / 8)
   await page.mouse.up()
+}
+
+/** Presses Escape until the board is gone (commit text, clear the selection, leave). */
+async function leaveBoard(page) {
+  for (let i = 0; i < 4 && await page.locator('.me-sketch .me-sketch-board').count(); i++) {
+    await page.keyboard.press('Escape')
+    await page.waitForTimeout(100)
+  }
+  check(await page.locator('.me-sketch .me-sketch-board').count() === 0, 'Escape did not leave the board')
+}
+
+/** Decodes the block's preview data URL (base64 SVG, UTF-8). */
+async function previewSvg(page) {
+  const src = await page.locator('.me-sketch img[src^="data:image/svg+xml"]').getAttribute('src')
+  const b64 = src.slice(src.indexOf(',') + 1)
+  return new TextDecoder().decode(Uint8Array.from(atob(b64), c => c.charCodeAt(0)))
 }
 
 const elementCount = page => page.evaluate(() => window.__sketchDebug?.getElements().length ?? -1)
@@ -131,7 +152,7 @@ try {
   await sketch.getByRole('button', { name: INTERACT }).click()
   await sketch.locator('.me-sketch-board').waitFor()
   await page.keyboard.press('r')
-  await drag(page, 150, 180, 100, 80)
+  await drag(page, 230, 120, 100, 80)
   await page.keyboard.press('o')
   await drag(page, 400, 200, 120, 90)
   check(await elementCount(page) === 2, `expected 2 elements on the board, found ${await elementCount(page)}`)
@@ -156,6 +177,63 @@ try {
 
   check(errors.length === 0, `page errors: ${errors.join(' | ')}`)
   await ctx.close()
+
+  // --- M1 tools: pen, arrow, text; preview; clipboard -----------------------------------
+  const ctx2 = await browser.newContext({ viewport: { width: 1280, height: 900 }, permissions: ['clipboard-read', 'clipboard-write'] })
+  const page2 = await ctx2.newPage()
+  page2.on('pageerror', e => errors.push(e.message))
+
+  step = 'M1: draw a pen stroke, an arrow and text'
+  await insertSketch(page2)
+  const block = page2.locator('.me-sketch')
+  await block.getByRole('button', { name: INTERACT }).click()
+  await block.locator('.me-sketch-board').waitFor()
+  await page2.keyboard.press('p')
+  await drag(page2, 220, 100, 160, 60)
+  await page2.keyboard.press('a')
+  await drag(page2, 420, 130, 150, 0)
+  await page2.keyboard.press('t')
+  const canvasBox = await page2.locator('.me-sketch .me-sketch-canvas--interactive').boundingBox()
+  await page2.mouse.click(canvasBox.x + 300, canvasBox.y + 330)
+  const textarea = page2.locator('.me-sketch-text-editor')
+  await textarea.waitFor()
+  await page2.keyboard.type('Xin chào')
+  await page2.keyboard.press('Escape') // commits the text
+  await textarea.waitFor({ state: 'detached' })
+  const types = await page2.evaluate(() => window.__sketchDebug.getElements().map(e => e.type).sort().join(','))
+  check(types === 'arrow,freedraw,text', `expected arrow, freedraw and text, found [${types}]`)
+  const text = await page2.evaluate(() => window.__sketchDebug.getElements().find(e => e.type === 'text')?.text)
+  check(text === 'Xin chào', `text element holds ${JSON.stringify(text)}`)
+
+  step = 'M1: leave; the preview holds the stroke and the text'
+  await leaveBoard(page2)
+  await page2.locator('.me-sketch img[src^="data:image/svg+xml"]').waitFor({ state: 'visible', timeout: 10_000 })
+  const svg = await previewSvg(page2)
+  check(svg.includes('<path'), 'preview has no <path')
+  check(svg.includes('Xin chào'), 'preview has no "Xin chào"')
+
+  step = 'M1: reload keeps 3 elements'
+  await page2.waitForTimeout(1500)
+  await page2.reload()
+  await page2.locator('.me-sketch img[src^="data:image/svg+xml"]').waitFor({ state: 'visible', timeout: 30_000 })
+  await page2.locator('.me-sketch').getByRole('button', { name: INTERACT }).click()
+  await page2.waitForFunction(() => window.__sketchDebug?.getElements().length === 3, null, { timeout: 15_000 })
+    .catch(async () => {
+      throw new Error(`expected 3 elements after reload, found ${await elementCount(page2)}`)
+    })
+
+  step = 'M1: select all, copy and paste → 6 elements'
+  await page2.locator('.me-sketch .me-sketch-board').waitFor()
+  await page2.keyboard.press('ControlOrMeta+a')
+  await page2.keyboard.press('ControlOrMeta+c')
+  await page2.keyboard.press('ControlOrMeta+v')
+  await page2.waitForFunction(() => window.__sketchDebug?.getElements().length === 6, null, { timeout: 5_000 })
+    .catch(async () => {
+      throw new Error(`expected 6 elements after copy/paste, found ${await elementCount(page2)}`)
+    })
+
+  check(errors.length === 0, `page errors: ${errors.join(' | ')}`)
+  await ctx2.close()
   console.log('e2e:sketch PASS')
 }
 catch (err) {

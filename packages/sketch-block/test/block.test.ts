@@ -578,6 +578,21 @@ describe('sketch block', () => {
     expect(document.activeElement).toBe(editor.view.dom)
   })
 
+  it('backdrop mousedown closes the modal and keeps focus on the editor', async () => {
+    const { editor, wrapper } = await setup({ attrs: { boardId: 'bd_x', preview: null, height: null, version: 0 } })
+    await enter(wrapper)
+    await wrapper.find('.me-sketch-expand').trigger('click')
+    await settle()
+    const modal = document.querySelector('.me-sketch-modal') as HTMLElement
+    const down = new MouseEvent('mousedown', { bubbles: true, cancelable: true })
+    modal.dispatchEvent(down)
+    await settle()
+    expect(document.querySelector('.me-sketch-modal')).toBeNull()
+    // the browser would otherwise move focus to <body> after the handler focused the editor
+    expect(down.defaultPrevented).toBe(true)
+    expect(document.activeElement).toBe(editor.view.dom)
+  })
+
   it('leave does not throw once the editor is destroyed', async () => {
     const { editor, wrapper } = await setup({ attrs: { boardId: 'bd_x', preview: null, height: null, version: 0 } })
     await enter(wrapper)
