@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { NodeViewWrapper, nodeViewProps } from '@tiptap/vue-3'
 import { computed, ref } from 'vue'
+import { useEditable } from '../composables/useEditable'
 import { toEmbedUrl } from '../extensions/embed'
 
 const props = defineProps(nodeViewProps)
+const editable = useEditable(props.editor)
 
 const m = computed(() => props.editor.storage.meiConfig.messages.embed)
 const link = ref('')
@@ -64,7 +66,7 @@ function startResize(e: PointerEvent) {
       />
       <!-- Iframes swallow pointer events; cover them while resizing. -->
       <div v-if="resizing" class="me-embed-overlay" />
-      <span v-if="editor.isEditable" class="me-embed-resize" @pointerdown="startResize" />
+      <span v-if="editable" class="me-embed-resize" @pointerdown="startResize" />
     </div>
   </NodeViewWrapper>
 </template>

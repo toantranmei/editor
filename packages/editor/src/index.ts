@@ -25,6 +25,7 @@ export { FileBlock, type FileBlockOptions, type FileKind } from './extensions/fi
 export { MentionNode, type MentionItem, type MentionKind, type MentionOptions } from './extensions/mention'
 export { EmojiSuggestion } from './extensions/emoji'
 export { MermaidPreview } from './extensions/mermaid'
+export { HtmlBlock, htmlBlockCsp, type HtmlBlockOptions } from './extensions/html-block'
 export { ToggleDetails } from './extensions/toggle'
 export { UnknownBlock, UnknownInline } from './extensions/unknown'
 export { CODE_LANGUAGES, loadLanguage } from './extensions/code-block'

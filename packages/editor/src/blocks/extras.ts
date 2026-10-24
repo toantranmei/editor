@@ -1,9 +1,10 @@
-import { AudioLines, AtSign, File, Film, Radical, Sigma, TableOfContents, Workflow } from '@lucide/vue'
+import { AudioLines, AtSign, CodeXml, File, Film, Radical, Sigma, TableOfContents, Workflow } from '@lucide/vue'
 import { type BlockType, isNode } from '../block-items'
 import { defineBlock } from '../define-block'
 import { CodeBlock } from '../extensions/code-block'
 import { EmojiSuggestion } from '../extensions/emoji'
 import { FileBlock, type FileBlockOptions, type FileKind } from '../extensions/file-block'
+import { HtmlBlock, type HtmlBlockOptions } from '../extensions/html-block'
 import { MathBlock, MathInline } from '../extensions/math'
 import { MentionNode, type MentionOptions } from '../extensions/mention'
 import { MermaidPreview, SAMPLE_MERMAID } from '../extensions/mermaid'
@@ -91,3 +92,22 @@ export const mention = defineBlock<MentionOptions>({
   }],
 })
 
+
+/**
+ * Notion-style HTML block: HTML/CSS/JS in a sandboxed frame (edit in place or upload a
+ * file). Network access is off by default; `html.configure({ network: ['https://cdn.jsdelivr.net'] })`.
+ */
+export const html = defineBlock<HtmlBlockOptions>({
+  name: 'html',
+  defaults: { network: false, maxSize: 1024, defaultHeight: 400 },
+  nodes: ['htmlBlock'],
+  extensions: o => [HtmlBlock.configure(o)],
+  items: () => [{
+    id: 'html',
+    icon: CodeXml,
+    group: 'advanced',
+    keywords: ['html', 'code', 'widget', 'interactive', 'prototype', 'nhung', 'tuong tac'],
+    insert: c => c.insertHtmlBlock(),
+    matches: isNode('htmlBlock'),
+  }],
+})

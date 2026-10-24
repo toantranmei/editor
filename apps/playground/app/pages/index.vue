@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { Editor, LocaleName, MentionItem, ThemeMode, ThemeTokens } from '@toantranmei/editor'
-import { defaultBlocks, emoji, file, math, mention, mermaid, toc } from '@toantranmei/editor'
+import { defaultBlocks, emoji, file, html, math, mention, mermaid, toc } from '@toantranmei/editor'
 
 // Demo people/pages for @mentions (a real app would query its API).
 const PEOPLE: MentionItem[] = [
@@ -17,6 +17,7 @@ const blocks = [
   toc,
   math,
   mermaid,
+  html,
   emoji,
   file.configure({ maxSize: 2 }),
   mention.configure({

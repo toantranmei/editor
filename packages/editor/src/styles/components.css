@@ -127,6 +127,14 @@
   .me-btn:hover { background: var(--me-button-hover-bg); }
   .me-btn--primary { border-color: transparent; background: var(--me-button-primary-bg); color: var(--me-button-primary-text); }
   .me-btn--primary:hover { background: var(--me-button-primary-hover-bg); }
+  /* Floats over content (HTML block's Interact): same button, lifted with the popover shadow. */
+  .me-btn--floating { border-color: transparent; background: var(--me-button-floating-bg); box-shadow: var(--me-button-floating-shadow); }
+  .me-btn--floating:hover { background: var(--me-button-floating-hover-bg); }
+  .me-btn:disabled { opacity: var(--me-button-disabled-opacity); cursor: default; }
+  .me-btn:disabled:hover { background: var(--me-button-bg); }
+  .me-btn--primary:disabled:hover { background: var(--me-button-primary-bg); }
+  /* One keyboard focus ring for every button. */
+  :is(.me-btn, .me-tool-btn, .me-tab, .me-handle-btn):focus-visible { outline: none; box-shadow: 0 0 0 var(--me-border-width-thick) var(--me-input-focus-ring); }
   .me-input {
     flex: 1;
     min-width: 0;
@@ -241,7 +249,7 @@
   .me-table-menu { z-index: 50; }
   .me-table-menu.is-above { transform: translateY(calc(-100% - var(--me-space-9))); }
   .me-table-toolbar { z-index: 40; transform: translateY(calc(-100% - var(--me-space-2))); }
-  .me-menu-item.is-danger { color: var(--me-table-controls-danger); }
+  .me-menu-item.is-danger { color: var(--me-color-danger); }
   .me-menu-item:disabled { opacity: 0.4; cursor: default; }
   .me-menu-item:disabled:hover { background: none; }
 
@@ -372,4 +380,41 @@
 
   /* Fixed-position popovers (block menu) */
   .me-floating { position: fixed; z-index: 50; }
+}
+
+@layer mei-editor {
+  /* HTML block: full-screen view */
+  .me-html-modal { position: fixed; inset: 0; z-index: 70; display: flex; padding: var(--me-modal-inset); background: var(--me-modal-backdrop); }
+  .me-html-modal-panel {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    overflow: hidden;
+    border-radius: var(--me-box-radius);
+    background: var(--me-color-bg);
+    box-shadow: var(--me-popover-shadow);
+  }
+  .me-html-modal-panel .me-html-iframe { flex: 1; height: auto; }
+}
+
+@layer mei-editor {
+  /* Image viewer (zoom) */
+  .me-lightbox {
+    position: fixed;
+    inset: 0;
+    z-index: 70;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    padding: var(--me-modal-inset);
+    background: var(--me-modal-backdrop-strong);
+  }
+  .me-lightbox-img { max-width: 100%; max-height: 100%; object-fit: contain; transition: transform var(--me-duration-fast); user-select: none; }
+  .me-lightbox-img.is-zoomed { cursor: grab; }
+  .me-lightbox-img.is-dragging { cursor: grabbing; transition: none; }
+  .me-lightbox-toolbar { position: absolute; bottom: var(--me-modal-toolbar-offset); left: 50%; transform: translateX(-50%); }
+  .me-lightbox-percent { min-width: calc(var(--me-toolbar-button-size) * 1.75); font-size: var(--me-font-size-xs); font-variant-numeric: tabular-nums; }
+  .me-tool-btn:disabled { opacity: var(--me-button-disabled-opacity); cursor: default; }
+  .me-tool-btn:disabled:hover { background: none; }
 }

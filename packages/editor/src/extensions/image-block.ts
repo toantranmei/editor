@@ -18,6 +18,30 @@ export const ImageBlock = Image.extend({
         parseHTML: el => el.getAttribute('data-caption') || '',
         renderHTML: attrs => (attrs.caption ? { 'data-caption': attrs.caption } : {}),
       },
+      /** Caption row shown (Notion hides it until "Caption" is clicked). Older docs: shown when there's text. */
+      showCaption: {
+        default: null,
+        parseHTML: el => (el.hasAttribute('data-show-caption') ? el.getAttribute('data-show-caption') === 'true' : null),
+        renderHTML: attrs => (attrs.showCaption === null ? {} : { 'data-show-caption': String(attrs.showCaption) }),
+      },
+      align: {
+        default: 'center',
+        parseHTML: el => el.getAttribute('data-align') || 'center',
+        renderHTML: attrs => (attrs.align && attrs.align !== 'center' ? { 'data-align': attrs.align } : {}),
+      },
+      /** Non-destructive crop, see ImageCrop. */
+      crop: {
+        default: null,
+        parseHTML: (el) => {
+          try {
+            return JSON.parse(el.getAttribute('data-crop') ?? 'null')
+          }
+          catch {
+            return null
+          }
+        },
+        renderHTML: attrs => (attrs.crop ? { 'data-crop': JSON.stringify(attrs.crop) } : {}),
+      },
     }
   },
 

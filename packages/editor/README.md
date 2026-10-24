@@ -86,7 +86,7 @@ Each block is a self-contained module (extensions + menu entries + UI). The edit
 `defaultBlocks` unless you pass `blocks`:
 
 ```ts
-import { defaultBlocks, emoji, file, math, mention, mermaid, toc } from '@toantranmei/editor'
+import { defaultBlocks, emoji, file, html, math, mention, mermaid, toc } from '@toantranmei/editor'
 
 const blocks = [
   ...defaultBlocks,
@@ -94,6 +94,7 @@ const blocks = [
   emoji,
   math,       // needs `npm i katex` + import 'katex/dist/katex.min.css'
   mermaid,    // needs `npm i mermaid`
+  html,       // sandboxed HTML/CSS/JS; html.configure({ network: ['https://cdn.jsdelivr.net'] })
   file.configure({ upload: async (f, kind) => uploadToS3(f), maxSize: 20 }),
   mention.configure({
     search: q => api.searchPeopleAndPages(q), // → [{ id, label, kind: 'user' | 'page', avatar?, href? }]
@@ -113,11 +114,12 @@ App-wide: `app.use(MeiEditorPlugin, { blocks })`, or in Nuxt `meiEditor: { block
 | --- | --- | --- |
 | `heading` (H1–H4), `bulletList`, `orderedList`, `taskList`, `quote`, `divider` | ✓ | `heading.configure({ levels: [1, 2, 3] })` |
 | `codeBlock` | ✓ | Grammars load per language on first use |
-| `image`, `embed` | ✓ | Upload via the `uploadImage` prop |
+| `image`, `embed` | ✓ | Upload via the `uploadImage` prop. Images have a Notion-style hover toolbar: align, caption, non-destructive crop, full-screen zoom (wheel/+/−/drag), download, replace / copy link / view original / delete |
 | `callout`, `toggle`, `toggleHeading`, `table`, `columns` | ✓ | |
 | `toc` | – | Table of contents from headings |
 | `math` | – | Optional peer `katex` |
 | `mermaid` | – | Optional peer `mermaid`; code blocks in `mermaid` show a live diagram |
+| `html` | – | Notion-style HTML block: HTML/CSS/JS in a sandboxed iframe (no access to the page, cookies or storage). Edit in place (Code / Preview) or upload an `.html` file; fixed height (drag to resize), "Interact" to use it, full-screen view. `network`: `false` (default, blocks all requests like Notion), `true`, or a list of allowed origins; `maxSize` (KB), `defaultHeight` (px) |
 | `emoji` | – | Type `:` + 2 letters; data loads on first use (vi/en search) |
 | `file` | – | File, audio, video; `upload`, `maxSize` (MB, base64 when no `upload`) |
 | `mention` | – | `@` people/pages via `search`; dates (today, 25/12…) built in. Click a date for a Notion-style picker (typed date/time, end date, date & time formats, reminders, clear); click a person/page to search and switch (read-only: `onClick` / page link). Reminders: `onRemind`, `getMentionReminders(doc)`, `reminderHelpUrl` |
@@ -251,7 +253,7 @@ every place that uses it.
 ```
 primitive  → raw values           --me-gray-800, --me-azure-500, --me-space-4, --me-rounded-md
 semantic   → meaning (light/dark) --me-color-text, --me-color-accent, --me-radius-md, --me-palette-red-text
-component  → per-part knobs       --me-menu-item-radius, --me-callout-padding, --me-code-bg
+component  → per-part knobs       --me-menu-item-radius, --me-box-padding, --me-block-box-spacing
 ```
 
 Usually you only override **semantic** tokens; reach for **component** tokens to fine-tune one part.
@@ -270,7 +272,7 @@ const tokens = defineTokens({
   color: { accent: '#7c3aed' },          // both modes
   radius: { md: '10px' },
   font: { sans: 'Inter, sans-serif' },
-  components: { menu: { itemRadius: '8px' }, callout: { padding: '20px' } },
+  components: { menu: { itemRadius: '8px' }, box: { padding: '16px 20px' } },
   dark: { color: { accent: '#a78bfa' } }, // dark mode only
 })
 ```

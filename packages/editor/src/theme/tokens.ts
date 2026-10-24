@@ -199,6 +199,10 @@ export const component = {
     primaryBg: r('color.accent'),
     primaryHoverBg: r('color.accentHover'),
     primaryText: r('color.onAccent'),
+    floatingBg: r('color.elevated'),
+    floatingHoverBg: r('color.surface'),
+    floatingShadow: r('shadow.popover'),
+    disabledOpacity: '0.5',
   },
   input: {
     height: '32px',
@@ -218,7 +222,44 @@ export const component = {
     radius: r('radius.sm'),
     gap: r('space.1'),
   },
-  block: { paddingY: '3px', paddingX: r('space.1'), gap: '1px', radius: r('radius.sm'), minHeight: 'calc(var(--me-font-line-height) * 1em)' },
+  /**
+   * Block rhythm, two levels like Notion: text blocks (paragraphs, lists, quotes,
+   * toggles) sit close (`gap` + `paddingY`); every boxed/media block (code, callout,
+   * table, image, embed, HTML, file, math, TOC, columns) uses `boxSpacing`.
+   */
+  block: {
+    paddingY: '3px',
+    paddingX: r('space.1'),
+    gap: '1px',
+    boxSpacing: r('space.4'),
+    radius: r('radius.sm'),
+    minHeight: 'calc(var(--me-font-line-height) * 1em)',
+    /** Tint over any selected block (text, boxes and media alike). */
+    selectedBg: r('color.blockSelected'),
+  },
+  /** Shared look of boxed blocks: code, callout, file rows, upload placeholders, HTML. */
+  box: {
+    bg: r('color.surface'),
+    border: r('color.border'),
+    radius: r('radius.md'),
+    padding: '12px 16px',
+    paddingCompact: '6px 10px',
+    /** Header row inside a box (code language + copy, HTML name + tabs). */
+    barPadding: '8px 10px 0 14px',
+    barColor: r('color.textMuted'),
+    barFontSize: r('fontSize.xs'),
+    barIconSize: r('fontSize.sm'),
+    barButtonSize: '24px',
+  },
+  /** Underlined tabs (upload placeholders, HTML Code / Preview). */
+  tabs: {
+    gap: r('space.7'),
+    fontSize: r('fontSize.sm'),
+    color: r('color.textMuted'),
+    activeColor: r('color.text'),
+    indicator: r('borderWidth.medium'),
+    paddingBottom: r('space.4'),
+  },
   heading: {
     weight: r('fontWeight.semibold'),
     lineHeight: r('lineHeight.snug'),
@@ -238,10 +279,8 @@ export const component = {
   list: { indent: '1.6em' },
   todo: { checkSize: r('fontSize.md'), checkColor: r('color.accent'), doneColor: r('color.textFaint') },
   quote: { borderWidth: r('borderWidth.thick'), borderColor: 'currentColor', paddingLeft: r('space.6') },
-  divider: { color: r('color.border'), selectedColor: r('color.accent'), spacing: r('space.6') },
+  divider: { color: r('color.border'), spacing: r('space.6') },
   callout: {
-    padding: '14px 16px 14px 12px',
-    radius: r('radius.md'),
     gap: r('space.4'),
     iconSize: r('fontSize.lg'),
     iconBox: '28px',
@@ -250,27 +289,42 @@ export const component = {
   },
   toggle: { arrowColor: r('color.text'), buttonSize: '24px', headingArrowOffset: 'calc(var(--me-block-padding-y) + 0.15em)' },
   columns: { gap: r('space.9') },
-  code: {
-    bg: r('color.surface'),
-    radius: r('radius.md'),
-    padding: '8px 16px 18px',
-    toolbarPadding: '8px 14px 0',
-    fontSize: '85%',
-    lineHeight: r('lineHeight.relaxed'),
-    toolbarColor: r('color.textMuted'),
-  },
+  code: { fontSize: '85%', lineHeight: r('lineHeight.relaxed') },
   table: { border: r('color.border'), headerBg: r('color.surface'), cellPadding: '6px 8px', cellMinWidth: '80px', selected: r('color.blockSelected'), resizeHandle: r('color.accent') },
   media: {
-    radius: r('radius.md'),
-    placeholderBg: r('color.surface'),
-    placeholderBorder: r('color.border'),
-    selectedRing: r('color.accent'),
     captionColor: r('color.textMuted'),
     captionSize: r('fontSize.sm'),
     resizeHandleBg: r('color.overlay'),
     errorColor: r('color.danger'),
   },
   dropIndicator: { color: 'rgba(35, 131, 226, 0.5)', height: r('borderWidth.heavy') },
+  html: {
+    /** User HTML usually assumes a white page, also in dark mode. */
+    frameBg: '#fff',
+    editorBg: r('color.bg'),
+    editorFont: r('font.mono'),
+    editorFontSize: '13px',
+    editorPadding: r('space.5'),
+    coverBg: 'rgba(15, 15, 15, 0.08)',
+  },
+  /** Full-screen views (HTML block expand, image zoom). */
+  modal: {
+    backdrop: 'rgba(15, 15, 15, 0.6)',
+    /** Image viewer: darker, so the photo stands out. */
+    backdropStrong: 'rgba(15, 15, 15, 0.88)',
+    inset: '4vh 4vw',
+    toolbarOffset: r('space.7'),
+  },
+  image: {
+    /** Hover toolbar inset from the image's top-right corner. */
+    toolbarInset: r('space.3'),
+    menuWidth: '208px',
+    cropDim: 'rgba(15, 15, 15, 0.55)',
+    cropBorder: r('white'),
+    cropHandle: '10px',
+    cropHandleBg: r('white'),
+    cropHandleBorder: 'rgba(15, 15, 15, 0.35)',
+  },
   outline: {
     /** Distance from the viewport's right edge and top. */
     right: r('space.7'),
@@ -295,13 +349,11 @@ export const component = {
     addBg: r('color.surface'),
     addHoverBg: r('color.hover'),
     radius: r('radius.sm'),
-    danger: r('color.danger'),
   },
   toc: { itemColor: r('color.textMuted'), itemHover: r('color.hover'), indent: r('space.7'), padding: r('space.2') },
-  math: { editorWidth: '360px', emptyColor: r('color.textFaint'), selectedBg: r('color.blockSelected') },
-  mermaid: { padding: r('space.5'), border: r('color.border') },
+  math: { editorWidth: '360px', emptyColor: r('color.textFaint') },
   emojiMenu: { cell: '32px', columns: '8', size: r('fontSize.lg') },
-  file: { rowBg: r('color.surface'), border: r('color.border'), radius: r('radius.md'), sizeColor: r('color.textFaint'), padding: '6px 10px' },
+  file: { sizeColor: r('color.textFaint') },
   mention: {
     color: r('color.text'),
     bg: r('color.hover'),
@@ -324,7 +376,7 @@ export const component = {
     inputBg: r('color.surface'),
   },
   switch: { width: '28px', height: '16px', knob: '12px', off: r('color.border'), on: r('color.accent'), knobColor: r('color.bg') },
-  unknown: { bg: r('color.surface'), border: r('color.border'), color: r('color.textMuted'), padding: '8px 12px', invalidBorder: r('palette.red.text'), invalidColor: r('palette.red.text') },
+  unknown: { color: r('color.textMuted'), invalidBorder: r('palette.red.text'), invalidColor: r('palette.red.text') },
   /** Handle tooltip and toast: dark in both modes, like Notion. */
   tooltip: {
     bg: '#0f0f0f',

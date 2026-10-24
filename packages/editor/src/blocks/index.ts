@@ -10,7 +10,7 @@ import { embed, image } from './media'
 
 export { callout, codeBlock, columns, table, toggle, toggleHeading } from './advanced'
 export { bulletList, divider, heading, orderedList, quote, taskList, text } from './basic'
-export { emoji, file, math, mention, mermaid, toc } from './extras'
+export { emoji, file, html, math, mention, mermaid, toc } from './extras'
 export { embed, image } from './media'
 
 /** What `<MeiEditor>` loads when `blocks` isn't given. */

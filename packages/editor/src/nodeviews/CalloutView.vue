@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { NodeViewContent, NodeViewWrapper, nodeViewProps } from '@tiptap/vue-3'
 import { computed, ref } from 'vue'
+import { useEditable } from '../composables/useEditable'
 import { PALETTE_NAMES } from '../theme/tokens'
 import { useClickOutside } from '../composables/useClickOutside'
 
 const props = defineProps(nodeViewProps)
+const editable = useEditable(props.editor)
 
 const ICONS = ['💡', '⚠️', '❗', '✅', 'ℹ️', '📌', '🔥', '📝', '🚀', '❓', '⭐', '🎯']
 const open = ref(false)
@@ -17,7 +19,7 @@ const m = computed(() => props.editor.storage.meiConfig.messages)
 <template>
   <NodeViewWrapper class="me-callout" :data-color="node.attrs.color">
     <div ref="pickerEl" class="me-callout-icon-wrap" contenteditable="false">
-      <button type="button" class="me-callout-icon" :title="m.callout.change" :disabled="!editor.isEditable" @click="open = !open">
+      <button type="button" class="me-callout-icon" :title="m.callout.change" :disabled="!editable" @click="open = !open">
         {{ node.attrs.icon }}
       </button>
       <div v-if="open" class="me-popover me-callout-picker">

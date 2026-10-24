@@ -40,6 +40,25 @@ export interface EditorMessages {
     caption: string
     uploading: string
     uploadFailed: string
+    align: string
+    alignments: { left: string, center: string, right: string }
+    captionToggle: string
+    crop: string
+    cropDone: string
+    cropCancel: string
+    cropReset: string
+    zoom: string
+    zoomIn: string
+    zoomOut: string
+    zoomReset: string
+    download: string
+    more: string
+    replace: string
+    copyLink: string
+    linkCopied: string
+    original: string
+    delete: string
+    close: string
   }
   embed: { hint: string, placeholder: string, submit: string, invalid: string }
   callout: { change: string, icon: string, background: string }
@@ -73,6 +92,21 @@ export interface EditorMessages {
   }
   math: { placeholder: string, inputPlaceholder: string, hintBlock: string, hintInline: string, missing: string }
   mermaid: { preview: string, invalid: string, missing: string }
+  html: {
+    title: string
+    code: string
+    preview: string
+    upload: string
+    uploadFile: string
+    write: string
+    expand: string
+    close: string
+    interact: string
+    emptyHint: string
+    placeholder: string
+    wrongType: string
+    tooLarge: (maxKb: number) => string
+  }
   file: {
     upload: string
     link: string
@@ -124,6 +158,7 @@ export const vi: EditorMessages = {
     mathBlock: { title: 'Công thức', description: 'Công thức toán (LaTeX).' },
     mathInline: { title: 'Công thức trong dòng', description: 'Công thức nằm trong câu.' },
     mermaid: { title: 'Sơ đồ Mermaid', description: 'Flowchart, sequence, gantt...' },
+    html: { title: 'HTML', description: 'Chạy HTML/CSS/JS tương tác trong trang.' },
     'file-file': { title: 'Tệp đính kèm', description: 'Tải lên hoặc dán link tệp.' },
     'file-audio': { title: 'Âm thanh', description: 'Tải lên hoặc dán link audio.' },
     'file-video': { title: 'Video tải lên', description: 'Tải lên hoặc dán link video.' },
@@ -176,6 +211,25 @@ export const vi: EditorMessages = {
     caption: 'Thêm chú thích...',
     uploading: 'Đang tải lên...',
     uploadFailed: 'Tải ảnh lên thất bại.',
+    align: 'Căn lề',
+    alignments: { left: 'Căn trái', center: 'Căn giữa', right: 'Căn phải' },
+    captionToggle: 'Chú thích',
+    crop: 'Cắt ảnh',
+    cropDone: 'Xong',
+    cropCancel: 'Huỷ',
+    cropReset: 'Đặt lại',
+    zoom: 'Phóng to',
+    zoomIn: 'Phóng to',
+    zoomOut: 'Thu nhỏ',
+    zoomReset: 'Về 100%',
+    download: 'Tải xuống',
+    more: 'Thêm',
+    replace: 'Thay ảnh',
+    copyLink: 'Sao chép link ảnh',
+    linkCopied: 'Đã sao chép',
+    original: 'Xem ảnh gốc',
+    delete: 'Xoá',
+    close: 'Đóng',
   },
   embed: { hint: 'Nhúng video hoặc trang web (YouTube, Vimeo, Loom, Figma, Google Maps...)', placeholder: 'Dán link vào đây...', submit: 'Nhúng', invalid: 'Link không hợp lệ (cần http/https).' },
   callout: { change: 'Đổi icon / màu', icon: 'Icon', background: 'Màu nền' },
@@ -215,6 +269,21 @@ export const vi: EditorMessages = {
     missing: 'Cần cài thư viện "katex" để hiển thị công thức.',
   },
   mermaid: { preview: 'Xem trước sơ đồ', invalid: 'Cú pháp Mermaid chưa đúng.', missing: 'Cần cài thư viện "mermaid" để hiển thị sơ đồ.' },
+  html: {
+    title: 'HTML',
+    code: 'Code',
+    preview: 'Xem trước',
+    upload: 'Tải lên file .html',
+    uploadFile: 'Tải lên file',
+    write: 'Viết code',
+    expand: 'Phóng to',
+    close: 'Đóng',
+    interact: 'Tương tác',
+    emptyHint: 'Chạy HTML, CSS và JavaScript ngay trong trang (máy tính, quiz, sơ đồ, prototype...).',
+    placeholder: '<!-- Viết hoặc dán code HTML vào đây -->',
+    wrongType: 'Chỉ nhận file .html.',
+    tooLarge: kb => `File tối đa ${kb >= 1024 ? `${Math.round(kb / 1024)}MB` : `${kb}KB`}.`,
+  },
   file: {
     upload: 'Tải lên',
     link: 'Dán link',
@@ -279,6 +348,7 @@ export const en: EditorMessages = {
     mathBlock: { title: 'Block equation', description: 'Math with LaTeX.' },
     mathInline: { title: 'Inline equation', description: 'Math inside a sentence.' },
     mermaid: { title: 'Mermaid diagram', description: 'Flowchart, sequence, gantt...' },
+    html: { title: 'HTML', description: 'Interactive HTML/CSS/JS on the page.' },
     'file-file': { title: 'File', description: 'Upload or link a file.' },
     'file-audio': { title: 'Audio', description: 'Upload or link audio.' },
     'file-video': { title: 'Video upload', description: 'Upload or link a video.' },
@@ -331,6 +401,25 @@ export const en: EditorMessages = {
     caption: 'Write a caption...',
     uploading: 'Uploading...',
     uploadFailed: 'Upload failed.',
+    align: 'Align',
+    alignments: { left: 'Align left', center: 'Align center', right: 'Align right' },
+    captionToggle: 'Caption',
+    crop: 'Crop',
+    cropDone: 'Done',
+    cropCancel: 'Cancel',
+    cropReset: 'Reset',
+    zoom: 'View full size',
+    zoomIn: 'Zoom in',
+    zoomOut: 'Zoom out',
+    zoomReset: 'Reset to 100%',
+    download: 'Download',
+    more: 'More',
+    replace: 'Replace',
+    copyLink: 'Copy image link',
+    linkCopied: 'Copied',
+    original: 'View original',
+    delete: 'Delete',
+    close: 'Close',
   },
   embed: { hint: 'Embed a video or web page (YouTube, Vimeo, Loom, Figma, Google Maps...)', placeholder: 'Paste a link...', submit: 'Embed', invalid: 'Invalid link (http/https only).' },
   callout: { change: 'Change icon / color', icon: 'Icon', background: 'Background' },
@@ -370,6 +459,21 @@ export const en: EditorMessages = {
     missing: 'Install the "katex" package to render equations.',
   },
   mermaid: { preview: 'Diagram preview', invalid: 'Invalid Mermaid syntax.', missing: 'Install the "mermaid" package to render diagrams.' },
+  html: {
+    title: 'HTML',
+    code: 'Code',
+    preview: 'Preview',
+    upload: 'Upload .html file',
+    uploadFile: 'Upload file',
+    write: 'Write code',
+    expand: 'Expand',
+    close: 'Close',
+    interact: 'Interact',
+    emptyHint: 'Run HTML, CSS and JavaScript right on the page (calculators, quizzes, diagrams, prototypes...).',
+    placeholder: '<!-- Write or paste HTML here -->',
+    wrongType: 'Only .html files are supported.',
+    tooLarge: kb => `Max file size is ${kb >= 1024 ? `${Math.round(kb / 1024)}MB` : `${kb}KB`}.`,
+  },
   file: {
     upload: 'Upload',
     link: 'Embed link',
