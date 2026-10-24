@@ -443,9 +443,18 @@ function onEscape(input: Parameters<ToolController['keyDown']>[0]): void {
 }
 
 // ---------- clipboard ----------
+// Listened for on `document`: WebKit / Gecko may target clipboard events at <body> rather than a focused
+// non-editable element. They act only while focus is inside the board and not in a text field.
+function boardClipboardTarget(e: ClipboardEvent): boolean {
+  const el = root.value
+  const active = document.activeElement
+  if (!el || !active || !el.contains(active)) return false
+  return !isTextTarget(e.target) && !isTextTarget(active)
+}
+
 /** Copies (and for cut, deletes) the selection; text fields inside the board keep native copy/cut. */
 function onCopy(e: ClipboardEvent, cut = false): void {
-  if (isTextTarget(e.target) || editing.value || !e.clipboardData) return
+  if (!boardClipboardTarget(e) || editing.value || !e.clipboardData) return
   if (cut && (locked.value || controller.isGestureActive())) return
   const els = controller.selectedElements()
   if (!els.length) return
@@ -460,7 +469,7 @@ function onCut(e: ClipboardEvent): void {
 
 /** Pastes sketch elements, or plain text as a text element, at the last pointer position. */
 function onPaste(e: ClipboardEvent): void {
-  if (isTextTarget(e.target) || editing.value || locked.value || controller.isGestureActive()) return
+  if (!boardClipboardTarget(e) || editing.value || locked.value || controller.isGestureActive()) return
   const parsed = parseClipboard(e.clipboardData?.getData('text/plain') ?? '')
   if (!parsed) return
   e.preventDefault()
@@ -468,6 +477,8 @@ function onPaste(e: ClipboardEvent): void {
   if ('elements' in parsed) controller.pasteElements(parsed.elements, at)
   else controller.pasteText(parsed.text, at ?? viewport.toScene(center()))
 }
+
+const onDocCopy = (e: ClipboardEvent) => onCopy(e)
 
 function onKeyUp(e: KeyboardEvent): void {
   if (isTextTarget(e.target)) return
@@ -486,6 +497,9 @@ onMounted(() => {
   })
   const el = root.value!
   el.addEventListener('wheel', onWheel, { passive: false })
+  document.addEventListener('copy', onDocCopy)
+  document.addEventListener('cut', onCut)
+  document.addEventListener('paste', onPaste)
   measure()
   // the first update fixes cacheZoom immediately; skip it if the initial fit already did so
   if (!settlerStarted) updateSettler()
@@ -501,6 +515,9 @@ onBeforeUnmount(() => {
   // keep what is being typed (the editor unmounts after the board's hook)
   editor.value?.commit()
   root.value?.removeEventListener('wheel', onWheel)
+  document.removeEventListener('copy', onDocCopy)
+  document.removeEventListener('cut', onCut)
+  document.removeEventListener('paste', onPaste)
   resizeObserver?.disconnect()
   resizeObserver = null
   dprQuery?.removeEventListener('change', onDprChange)
@@ -534,9 +551,6 @@ defineExpose({
     tabindex="0"
     @keydown="onKeyDown"
     @keyup="onKeyUp"
-    @copy="onCopy($event)"
-    @cut="onCut"
-    @paste="onPaste"
   >
     <canvas ref="staticCanvas" class="me-sketch-canvas" aria-hidden="true" />
     <canvas

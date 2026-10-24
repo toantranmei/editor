@@ -308,6 +308,8 @@ async function setupBoard(props: Record<string, unknown> = {}, seed?: (store: Bo
   wrappers.push(wrapper)
   await nextTick()
   const root = wrapper.find('.me-sketch-board')
+  // clipboard events act only while focus is inside the board
+  ;(root.element as HTMLElement).focus()
   const canvases = wrapper.findAll('canvas')
   const top = canvases[canvases.length - 1]!.element as HTMLCanvasElement
   const store = new BoardStore(connection.doc)
@@ -382,6 +384,36 @@ describe('SketchBoard clipboard', () => {
     expect(store.all()).toHaveLength(1)
     root.element.dispatchEvent(clip('paste', 'hello').e)
     expect(store.all()).toHaveLength(1)
+  })
+
+  it('clipboard events dispatched on document reach the focused board', async () => {
+    const { root, store } = await setupBoard()
+    expect(document.activeElement).toBe(root.element)
+    const paste = clip('paste', 'hello')
+    document.dispatchEvent(paste.e)
+    expect(paste.e.defaultPrevented).toBe(true)
+    expect(store.all()[0]).toMatchObject({ type: 'text', text: 'hello' })
+    // focus elsewhere: the board ignores document clipboard events
+    const outside = document.createElement('button')
+    document.body.appendChild(outside)
+    outside.focus()
+    const other = clip('paste', 'nope')
+    document.dispatchEvent(other.e)
+    expect(other.e.defaultPrevented).toBe(false)
+    expect(store.all()).toHaveLength(1)
+    outside.remove()
+  })
+
+  it('unmount removes the document clipboard listeners', async () => {
+    const { wrapper, store } = await setupBoard()
+    const remove = vi.spyOn(document, 'removeEventListener')
+    wrapper.unmount()
+    wrappers.splice(wrappers.indexOf(wrapper), 1)
+    expect(remove.mock.calls.map(c => c[0])).toEqual(expect.arrayContaining(['copy', 'cut', 'paste']))
+    const paste = clip('paste', 'hello')
+    document.dispatchEvent(paste.e)
+    expect(paste.e.defaultPrevented).toBe(false)
+    expect(store.all()).toHaveLength(0)
   })
 
   it('copy ignored when textarea focused', async () => {
