@@ -146,9 +146,28 @@ function onKeydown(e: KeyboardEvent) {
   // The board handles Escape itself first (clearing a selection prevents default).
   if (e.key === 'Escape' && !e.defaultPrevented) leave()
 }
+// Lock the document while live (see node.ts); keyed by this view.
+const liveToken = {}
+const liveSet = () => props.editor.storage.sketch?.live
 watch(live, (on) => {
-  if (on) window.addEventListener('keydown', onKeydown)
-  else window.removeEventListener('keydown', onKeydown)
+  if (on) {
+    window.addEventListener('keydown', onKeydown)
+    liveSet()?.add(liveToken)
+  }
+  else {
+    window.removeEventListener('keydown', onKeydown)
+    liveSet()?.delete(liveToken)
+  }
+})
+
+// Keys must go to the board, not to the document: move focus into it once mounted
+// (entering by double-click or a button click leaves focus in ProseMirror).
+watch(board, (b) => {
+  if (!b) return
+  nextTick(() => {
+    const el = (b as unknown as { $el?: HTMLElement }).$el
+    el?.focus?.({ preventScroll: true })
+  })
 })
 
 // --- Preview ---------------------------------------------------------------------
@@ -253,6 +272,7 @@ onBeforeUnmount(() => {
   // The board is still mounted here: take what it shows for a pending save.
   const elements = timer !== undefined || live.value ? snapshot() : null
   window.removeEventListener('keydown', onKeydown)
+  liveSet()?.delete(liveToken)
   themeObserver?.disconnect()
   disposed = true
   if (elements) void save(elements)

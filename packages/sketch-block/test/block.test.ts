@@ -338,6 +338,44 @@ describe('sketch block', () => {
     }
   })
 
+  it('moves focus into the board when entering by double-click, and into the modal board', async () => {
+    const { wrapper } = await setup({ attrs: { boardId: 'bd_x', preview: null, height: null, version: 0 } })
+    await wrapper.find('.me-sketch-cover').trigger('dblclick')
+    await vi.waitFor(() => {
+      if (!document.querySelector('.me-sketch-board')) throw new Error('board not mounted')
+    })
+    await settle()
+    expect(document.activeElement).toBe(document.querySelector('.me-sketch-board'))
+
+    await wrapper.find('.me-sketch-expand').trigger('click')
+    await settle()
+    const modalBoard = document.querySelector('.me-sketch-modal .me-sketch-board')
+    expect(modalBoard).not.toBeNull()
+    expect(document.activeElement).toBe(modalBoard)
+  })
+
+  it('locks the document while a board is live', async () => {
+    const { editor, wrapper } = await setup({ attrs: { boardId: 'bd_x', preview: null, height: null, version: 0 } })
+    editor.commands.setNodeSelection(0)
+    const backspace = () => new KeyboardEvent('keydown', { key: 'Backspace', bubbles: true, cancelable: true })
+    // a key no keymap handles, so asking doesn't edit anything
+    const blocked = () => !!editor.view.someProp('handleKeyDown', f => f(editor.view, new KeyboardEvent('keydown', { key: 'q' })))
+    expect(blocked()).toBe(false)
+
+    await enter(wrapper)
+    expect(blocked()).toBe(true)
+    expect(editor.view.someProp('handleTextInput', f => f(editor.view, 1, 1, 'x', () => editor.state.tr))).toBe(true)
+    editor.view.dom.dispatchEvent(backspace())
+    expect(sketchNode(editor)).not.toBeNull()
+
+    await clickOutside()
+    expect(blocked()).toBe(false)
+    // and the lock is really gone: Backspace on the selected node deletes it again
+    editor.commands.setNodeSelection(0)
+    editor.view.dom.dispatchEvent(backspace())
+    expect(sketchNode(editor)).toBeNull()
+  })
+
   it('resize handle clamps and writes the height on pointerup', async () => {
     const { editor, wrapper } = await setup({ attrs: { boardId: 'bd_x', preview: null, height: null, version: 0 } })
     const handle = wrapper.find('.me-embed-resize')

@@ -1,4 +1,5 @@
 import { Node } from '@tiptap/core'
+import { Plugin, PluginKey } from '@tiptap/pm/state'
 import { blockNodeView } from '@toantranmei/editor'
 import { nanoid } from 'nanoid'
 import type { SketchProvider } from '../providers/types'
@@ -27,6 +28,8 @@ export interface SketchOptions {
 export interface SketchStorage {
   /** The board provider, resolved once per editor (the IndexedDB default is loaded lazily). */
   provider: () => Promise<SketchProvider>
+  /** Sketch views of this editor whose board is live (interacting or fullscreen). */
+  live: Set<object>
 }
 
 /** Board heights users can drag between, in px. */
@@ -61,7 +64,25 @@ export const SketchNode = Node.create<SketchOptions, SketchStorage>({
       provider: () => (provider ??= options.provider
         ? Promise.resolve(options.provider)
         : import('../providers/indexeddb').then(m => m.indexeddb())),
+      live: new Set<object>(),
     }
+  },
+
+  // While a board is live the document behind it is locked: keys, typing, paste and drop
+  // that reach ProseMirror (e.g. focus still in the text) must not edit it.
+  addProseMirrorPlugins() {
+    const live = this.storage.live
+    const locked = () => live.size > 0
+    return [new Plugin({
+      key: new PluginKey('sketchLiveLock'),
+      props: {
+        handleKeyDown: locked,
+        handleKeyPress: locked,
+        handleTextInput: locked,
+        handlePaste: locked,
+        handleDrop: locked,
+      },
+    })]
   },
 
   addAttributes() {
