@@ -52,6 +52,28 @@ describe('BoardStore', () => {
     expect(s.get(a.id)).toBeUndefined()
   })
 
+  it('reorderMany keeps relative order in one transaction and keeps the top index current', () => {
+    const doc = new Y.Doc()
+    const s = new BoardStore(doc)
+    const [a, b, c, d, e] = [0, 1, 2, 3, 4].map(() => s.create(init()))
+    let n = 0
+    doc.on('afterTransaction', () => n++)
+    // ids passed out of z-order: the stored order wins
+    s.reorderMany([d!.id, b!.id, 'nope'], 'front')
+    expect(n).toBe(1)
+    expect(s.all().map(x => x.id)).toEqual([a!.id, c!.id, e!.id, b!.id, d!.id])
+    s.reorderMany([e!.id, d!.id], 'back')
+    expect(n).toBe(2)
+    expect(s.all().map(x => x.id)).toEqual([e!.id, d!.id, a!.id, c!.id, b!.id])
+    // d was the top: the next create still lands above everything
+    const f = s.create(init())
+    expect(s.all().at(-1)!.id).toBe(f.id)
+    // nothing to move / everything selected: no transaction
+    s.reorderMany(['nope'], 'front')
+    s.reorderMany(s.all().map(x => x.id), 'back')
+    expect(n).toBe(3)
+  })
+
   it('reorder front/back changes index order', () => {
     const s = new BoardStore(new Y.Doc())
     const a = s.create(init())

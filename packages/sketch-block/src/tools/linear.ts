@@ -1,6 +1,6 @@
 import { boxFromPoints } from '../elements/linear'
 import { type Point, snapSegment } from '../geometry'
-import { type LinearElement, type LocalPoint, TYPE_DEFAULTS } from '../model/types'
+import { DEFAULT_STYLE, type LinearElement, type LocalPoint, TYPE_DEFAULTS } from '../model/types'
 import type { PointerInput, Tool, ToolHost } from './controller'
 
 /** A press that travels farther than this (screen px) is a drag; less is a click. */
@@ -128,7 +128,9 @@ export class LinearTool implements Tool {
   private props() {
     const style = this.host.currentStyle.value
     const heads: Pick<LinearStyle, 'startArrowhead' | 'endArrowhead'> = this.type === 'arrow' ? style : TYPE_DEFAULTS.line as LinearStyle
-    const { stroke, fill, fillStyle, strokeWidth, strokeStyle, roughness, roundness, opacity } = style
+    // lines and arrows have no background: they never take the current fill
+    const { stroke, strokeWidth, strokeStyle, roughness, roundness, opacity } = style
+    const { fill, fillStyle } = DEFAULT_STYLE
     return {
       stroke, fill, fillStyle, strokeWidth, strokeStyle, roughness, roundness, opacity,
       routing: style.routing,

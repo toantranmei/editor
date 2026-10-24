@@ -8,7 +8,7 @@ import { type CurrentStyle, INITIAL_STYLE, styleOf, stylePatchFor } from '../mod
 import type { ElementPatch, SketchElement, TextElement, TextStyle } from '../model/types'
 import { linearScenePoints } from '../elements/linear'
 import { editedTextBox } from '../elements/text'
-import { isLinear, isShape, isText } from '../model/types'
+import { DEFAULT_STYLE, isLinear, isShape, isText } from '../model/types'
 import { measureText } from '../text/measure'
 import type { Overlay } from '../render/interactive'
 import type { Viewport } from '../viewport'
@@ -320,7 +320,7 @@ export class ToolController implements ToolHost {
 
   // ---------- keyboard ----------
 
-  /** `code` is the physical key (`KeyC`): with Alt held on macOS, `key` is a composed character. */
+  /** `code` is the physical key (`KeyC`); copy/paste style match it, as Alt on macOS composes `key`. */
   keyDown(e: { key: string; mod: boolean; shift: boolean; alt?: boolean; code?: string }): boolean {
     // keys belong to the editor overlay while it is open
     if (this.editing.value) return false
@@ -342,10 +342,10 @@ export class ToolController implements ToolHost {
       return true
     }
     if (e.mod) {
-      if (e.alt && (k === 'c' || e.code === 'KeyC')) {
+      if (e.alt && e.code === 'KeyC') {
         return this.copyStyle()
       }
-      if (e.alt && (k === 'v' || e.code === 'KeyV')) {
+      if (e.alt && e.code === 'KeyV') {
         if (ro) return false
         this.pasteStyle()
         return true
@@ -459,12 +459,9 @@ export class ToolController implements ToolHost {
     if (this.ctx.readonly()) return
     const els = this.movableSelection()
     if (!els.length) return
-    els.sort((a, b) => (a.index < b.index ? -1 : a.index > b.index ? 1 : a.id < b.id ? -1 : 1))
-    if (to === 'back') els.reverse()
     const { history, store } = this.ctx
-    // synchronous transactions between stopCapturing calls merge into one undo step
     history.stopCapturing()
-    for (const el of els) store.reorder(el.id, to)
+    store.reorderMany(els.map(el => el.id), to)
     history.stopCapturing()
   }
 
@@ -542,8 +539,9 @@ export class ToolController implements ToolHost {
 
   /** Creates an empty text element centered vertically on `p` (current text style) and edits it. */
   private createText(p: Point): void {
-    const { stroke, fill, fillStyle, strokeWidth, strokeStyle, roughness, roundness, opacity, ...style } =
-      this.currentStyle.value
+    // text has no background: it never takes the current fill
+    const { stroke, strokeWidth, strokeStyle, roughness, roundness, opacity, ...style } = this.currentStyle.value
+    const { fill, fillStyle } = DEFAULT_STYLE
     const font: TextStyle = { fontFamily: style.fontFamily, fontSize: style.fontSize, textAlign: style.textAlign }
     const { h } = measureText('', font, null)
     const { history, store } = this.ctx

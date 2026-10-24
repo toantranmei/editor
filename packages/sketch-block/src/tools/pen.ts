@@ -1,7 +1,7 @@
 import { boxFromPoints } from '../elements/linear'
 import type { Point } from '../geometry'
 import { simplifyIndices } from '../geometry/simplify'
-import type { FreedrawElement, LocalPoint } from '../model/types'
+import { DEFAULT_STYLE, type FreedrawElement, type LocalPoint } from '../model/types'
 import type { PointerInput, Tool, ToolHost } from './controller'
 
 /** Scene-unit tolerance for simplifying the committed stroke. */
@@ -101,7 +101,9 @@ export class PenTool implements Tool {
   }
 
   private styleProps() {
-    const { stroke, fill, fillStyle, strokeWidth, strokeStyle, roughness, roundness, opacity } = this.host.currentStyle.value
+    // freedraw has no background: it never takes the current fill
+    const { stroke, strokeWidth, strokeStyle, roughness, roundness, opacity } = this.host.currentStyle.value
+    const { fill, fillStyle } = DEFAULT_STYLE
     return { stroke, fill, fillStyle, strokeWidth, strokeStyle, roughness, roundness, opacity }
   }
 

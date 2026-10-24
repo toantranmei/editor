@@ -92,6 +92,16 @@ describe('current style', () => {
     expect(store.get(b.id)!.stroke).toBe('#1e1e1e')
   })
 
+  it('applyStyle on a mixed locked / unlocked selection changes only the unlocked element', () => {
+    const { c, store } = setup()
+    const locked = rect(store, 0, 0, 50, 50, { locked: true })
+    const free = rect(store, 100, 0, 50, 50)
+    c.setSelection([locked.id, free.id])
+    c.applyStyle({ stroke: '#e03131', opacity: 0.5 })
+    expect(store.get(locked.id)).toMatchObject({ stroke: '#1e1e1e', opacity: 1 })
+    expect(store.get(free.id)).toMatchObject({ stroke: '#e03131', opacity: 0.5 })
+  })
+
   it('applyStyle skips locked elements and writes nothing when read-only', () => {
     const { c, store } = setup()
     const a = rect(store, 0, 0, 50, 50, { locked: true })
@@ -172,6 +182,45 @@ describe('current style', () => {
     expect(t).toMatchObject({ stroke: '#f08c00', fontFamily: 'code', fontSize: 28, textAlign: 'left' })
   })
 
+  it('new pen, line, arrow and text elements do not inherit the current fill', () => {
+    const { c, store } = setup()
+    c.applyStyle({ fill: '#ffc9c9', fillStyle: 'solid', stroke: '#e03131' })
+    c.setTool('pen')
+    c.pointerDown(ptr(0, 0))
+    c.pointerMove(ptr(20, 20))
+    c.pointerUp(ptr(20, 20))
+    for (const t of ['line', 'arrow'] as const) {
+      c.setTool(t)
+      c.pointerDown(ptr(0, 100))
+      c.pointerMove(ptr(80, 100))
+      c.pointerUp(ptr(80, 100))
+    }
+    c.setTool('text')
+    c.pointerDown(ptr(300, 300))
+    c.pointerUp(ptr(300, 300))
+    const els = store.all()
+    expect(els.map(e => e.type).sort()).toEqual(['arrow', 'freedraw', 'line', 'text'])
+    for (const el of els) {
+      expect(el).toMatchObject({ stroke: '#e03131', fill: DEFAULT_STYLE.fill, fillStyle: DEFAULT_STYLE.fillStyle })
+    }
+    // shapes still take it
+    c.cancelEditing()
+    c.setTool('rectangle')
+    c.pointerDown(ptr(400, 0))
+    c.pointerMove(ptr(450, 50))
+    c.pointerUp(ptr(450, 50))
+    expect(store.all().find(e => e.type === 'rectangle')).toMatchObject({ fill: '#ffc9c9', fillStyle: 'solid' })
+  })
+
+  it('copy/paste style matches the physical key only', () => {
+    const { c, store } = setup()
+    const a = rect(store, 0, 0, 50, 50)
+    c.setSelection([a.id])
+    expect(c.keyDown(key('c', { mod: true, alt: true }))).toBe(false)
+    expect(c.keyDown(key('c', { mod: true, alt: true, code: 'KeyC' }))).toBe(true)
+    expect(c.keyDown(key('v', { mod: true, alt: true }))).toBe(false)
+  })
+
   it('copy/paste style', () => {
     const { c, store, history } = setup()
     const src = rect(store, 0, 0, 50, 50, { stroke: '#1971c2', fill: '#ffec99', fillStyle: 'cross-hatch', opacity: 0.5, roughness: 0 })
@@ -205,6 +254,22 @@ describe('current style', () => {
     c.setSelection([b.id, y.id])
     c.reorderSelection('back')
     expect(store.all().map(e => e.id)).toEqual([y.id, b.id, x.id, a.id])
+  })
+
+  it('reordering three selected elements is one undo step', () => {
+    const { c, store, history } = setup()
+    const els = [0, 1, 2, 3, 4].map(() => rect(store, 0, 0, 10, 10))
+    const ids = els.map(e => e.id)
+    history.stopCapturing()
+    c.setSelection([ids[3]!, ids[0]!, ids[2]!])
+    c.reorderSelection('back')
+    expect(store.all().map(e => e.id)).toEqual([ids[0], ids[2], ids[3], ids[1], ids[4]])
+    history.undo()
+    expect(store.all().map(e => e.id)).toEqual(ids)
+    c.reorderSelection('front')
+    expect(store.all().map(e => e.id)).toEqual([ids[1], ids[4], ids[0], ids[2], ids[3]])
+    history.undo()
+    expect(store.all().map(e => e.id)).toEqual(ids)
   })
 })
 

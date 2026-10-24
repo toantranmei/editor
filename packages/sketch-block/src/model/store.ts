@@ -1,4 +1,4 @@
-import { generateKeyBetween } from 'fractional-indexing'
+import { generateKeyBetween, generateNKeysBetween } from 'fractional-indexing'
 import { nanoid } from 'nanoid'
 import * as Y from 'yjs'
 import { type ElementInit, type ElementPatch, normalizeElement, type SketchElement } from './types'
@@ -120,6 +120,23 @@ export class BoardStore {
       ? generateKeyBetween(edge.index, null)
       : generateKeyBetween(null, edge.index)
     this.doc.transact(() => this.applyPatch(id, { index }), LOCAL_ORIGIN)
+  }
+
+  /**
+   * Moves `ids` above (front) or below (back) every other element, keeping their relative z-order, in one
+   * transaction. Unknown ids are ignored.
+   */
+  reorderMany(ids: string[], to: 'front' | 'back'): void {
+    const all = this.all()
+    const wanted = new Set(ids)
+    const moving = all.filter(e => wanted.has(e.id))
+    if (!moving.length || moving.length === all.length) return
+    const keys = to === 'front'
+      ? generateNKeysBetween(all[all.length - 1]!.index, null, moving.length)
+      : generateNKeysBetween(null, all[0]!.index, moving.length)
+    this.doc.transact(() => {
+      moving.forEach((el, i) => this.applyPatch(el.id, { index: keys[i]! }))
+    }, LOCAL_ORIGIN)
   }
 
   onChange(cb: (changedIds: Set<string>) => void): () => void {
