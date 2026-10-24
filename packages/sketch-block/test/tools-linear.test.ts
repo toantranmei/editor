@@ -38,7 +38,6 @@ function setup(opts: { zoom?: number } = {}) {
   const c = new ToolController({
     store, scene, history, viewport,
     readonly: () => false,
-    style: () => DEFAULT_STYLE,
     invalidate: vi.fn(),
   })
   return { doc, store, scene, history, viewport, c }

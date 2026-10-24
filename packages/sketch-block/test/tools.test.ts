@@ -43,7 +43,6 @@ function setup(opts: { readonly?: boolean; zoom?: number; x?: number; y?: number
   const c = new ToolController({
     store, scene, history, viewport,
     readonly: () => ro,
-    style: () => DEFAULT_STYLE,
     invalidate,
   })
   const setReadonly = (v: boolean) => { ro = v }

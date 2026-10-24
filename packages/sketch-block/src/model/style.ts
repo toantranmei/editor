@@ -1,0 +1,71 @@
+import type { AllProps, ElementType, SketchElement } from './types'
+import { DEFAULT_STYLE, TYPE_DEFAULTS } from './types'
+
+/** Style the next element is drawn with; also what the style panel edits. */
+export type CurrentStyle = Pick<AllProps,
+  | 'stroke' | 'fill' | 'fillStyle' | 'strokeWidth' | 'strokeStyle' | 'roughness' | 'roundness' | 'opacity'
+  | 'fontFamily' | 'fontSize' | 'textAlign' | 'routing' | 'startArrowhead' | 'endArrowhead'>
+
+export type StyleKey = keyof CurrentStyle
+
+const ARROW = TYPE_DEFAULTS.arrow
+
+export const INITIAL_STYLE: Readonly<CurrentStyle> = {
+  ...DEFAULT_STYLE,
+  routing: ARROW.routing!,
+  startArrowhead: ARROW.startArrowhead!,
+  endArrowhead: ARROW.endArrowhead!,
+}
+
+/** A style-panel section; each one owns a set of style keys and applies to some element types. */
+export type StyleSection =
+  | 'stroke' | 'background' | 'fillStyle' | 'strokeWidth' | 'strokeStyle' | 'sloppiness' | 'edges'
+  | 'arrowheads' | 'font' | 'opacity'
+
+type Kind = ElementType
+const SHAPES: Kind[] = ['rectangle', 'ellipse', 'diamond']
+const LINEAR: Kind[] = ['line', 'arrow']
+const ALL: Kind[] = [...SHAPES, ...LINEAR, 'freedraw', 'text']
+
+/** Panel order; `keys` are written by the section, `types` are the element types it applies to. */
+export const STYLE_SECTIONS: readonly { id: StyleSection; keys: StyleKey[]; types: readonly Kind[] }[] = [
+  { id: 'stroke', keys: ['stroke'], types: ALL },
+  { id: 'background', keys: ['fill'], types: SHAPES },
+  { id: 'fillStyle', keys: ['fillStyle'], types: SHAPES },
+  { id: 'strokeWidth', keys: ['strokeWidth'], types: ALL.filter(t => t !== 'text') },
+  { id: 'strokeStyle', keys: ['strokeStyle'], types: [...SHAPES, ...LINEAR] },
+  { id: 'sloppiness', keys: ['roughness'], types: [...SHAPES, ...LINEAR] },
+  { id: 'edges', keys: ['roundness'], types: ['rectangle', 'diamond'] },
+  { id: 'arrowheads', keys: ['routing', 'startArrowhead', 'endArrowhead'], types: LINEAR },
+  { id: 'font', keys: ['fontFamily', 'fontSize', 'textAlign'], types: [...SHAPES, 'text'] },
+  { id: 'opacity', keys: ['opacity'], types: ALL },
+]
+
+const RELEVANT = new Map<Kind, ReadonlySet<StyleKey>>(ALL.map(t => [
+  t,
+  new Set(STYLE_SECTIONS.filter(s => s.types.includes(t)).flatMap(s => s.keys)),
+]))
+
+/** Style keys that mean something for elements of `type`. */
+export function relevantStyleKeys(type: ElementType): ReadonlySet<StyleKey> {
+  return RELEVANT.get(type) ?? new Set()
+}
+
+/** The entries of `patch` relevant to `el`'s type that differ from its current values (null = none). */
+export function stylePatchFor(el: SketchElement, patch: Partial<CurrentStyle>): Partial<CurrentStyle> | null {
+  const keys = relevantStyleKeys(el.type)
+  const cur = el as unknown as Record<string, unknown>
+  const out: Record<string, unknown> = {}
+  for (const [k, v] of Object.entries(patch)) {
+    if (v !== undefined && keys.has(k as StyleKey) && cur[k] !== v) out[k] = v
+  }
+  return Object.keys(out).length ? out as Partial<CurrentStyle> : null
+}
+
+/** `el`'s values for the style keys relevant to its type (what "copy style" takes). */
+export function styleOf(el: SketchElement): Partial<CurrentStyle> {
+  const cur = el as unknown as Record<string, unknown>
+  const out: Record<string, unknown> = {}
+  for (const k of relevantStyleKeys(el.type)) if (cur[k] !== undefined) out[k] = cur[k]
+  return out as Partial<CurrentStyle>
+}

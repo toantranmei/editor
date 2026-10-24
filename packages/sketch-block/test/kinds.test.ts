@@ -287,7 +287,7 @@ describe('rotated resize keeps the opposite corner fixed', () => {
     const viewport = new Viewport()
     const c = new ToolController({
       store, scene, history: new History(store), viewport,
-      readonly: () => false, style: () => DEFAULT_STYLE, invalidate: () => {},
+      readonly: () => false, invalidate: () => {},
     })
     const flush = () => {
       const run = frames

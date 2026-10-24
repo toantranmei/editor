@@ -93,7 +93,6 @@ function setupController() {
   const c = new ToolController({
     store, scene, history, viewport,
     readonly: () => false,
-    style: () => DEFAULT_STYLE,
     invalidate: vi.fn(),
   })
   return { store, scene, history, viewport, c }

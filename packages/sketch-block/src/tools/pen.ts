@@ -101,7 +101,7 @@ export class PenTool implements Tool {
   }
 
   private styleProps() {
-    const { stroke, fill, fillStyle, strokeWidth, strokeStyle, roughness, roundness, opacity } = this.host.ctx.style()
+    const { stroke, fill, fillStyle, strokeWidth, strokeStyle, roughness, roundness, opacity } = this.host.currentStyle.value
     return { stroke, fill, fillStyle, strokeWidth, strokeStyle, roughness, roundness, opacity }
   }
 

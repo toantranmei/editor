@@ -6,14 +6,15 @@ import { messages as allMessages } from '../messages'
 import { History } from '../model/history'
 import { Scene } from '../model/scene'
 import { BoardStore } from '../model/store'
-import { DEFAULT_STYLE, isShape, type SketchElement } from '../model/types'
+import { isShape, type SketchElement } from '../model/types'
 import type { BoardConnection } from '../providers/types'
 import { BitmapCache, bindCacheInvalidation } from '../render/bitmap-cache'
 import { renderInteractive, resetAccentCache } from '../render/interactive'
 import { RenderScheduler, ZoomSettler } from '../render/scheduler'
 import { type RenderState, renderStatic } from '../render/static'
-import { type PointerInput, ToolController, type ToolName } from '../tools/controller'
+import { type CurrentStyle, type PointerInput, ToolController, type ToolName } from '../tools/controller'
 import { Viewport } from '../viewport'
+import StylePanel from './StylePanel.vue'
 import TextEditor from './TextEditor.vue'
 import Toolbar from './Toolbar.vue'
 import ZoomControls from './ZoomControls.vue'
@@ -125,7 +126,6 @@ let drawnErasing: Set<string> = new Set()
 const controller = new ToolController({
   store, scene, history, viewport,
   readonly: () => props.readonly,
-  style: () => DEFAULT_STYLE,
   invalidate: () => {
     scheduler.invalidateInteractive()
     if (controller.erasing !== drawnErasing) scheduler.invalidateStatic()
@@ -137,6 +137,28 @@ const toolLocked = controller.toolLocked
 const cursor = controller.cursor
 const editing = controller.editing
 const { canUndo, canRedo } = history
+const currentStyle = controller.currentStyle
+
+// ---------- style panel ----------
+/** Bumped on every scene change so the panel re-reads the selected elements. */
+const sceneVersion = ref(0)
+const selectedEls = computed<SketchElement[]>(() => {
+  void sceneVersion.value
+  const out: SketchElement[] = []
+  for (const id of controller.selectedIds.value) {
+    const el = scene.get(id)
+    if (el) out.push(el)
+  }
+  return out
+})
+
+function applyStyle(patch: Partial<CurrentStyle>): void {
+  controller.applyStyle(patch)
+}
+
+function reorder(to: 'front' | 'back'): void {
+  controller.reorderSelection(to)
+}
 
 // ---------- text editing ----------
 const editor = shallowRef<InstanceType<typeof TextEditor> | null>(null)
@@ -171,6 +193,7 @@ const offs: Array<() => void> = []
 offs.push(bindCacheInvalidation(scene, cache))
 offs.push(scene.onChange(invalidateAll))
 offs.push(scene.onChange(refreshEditing))
+offs.push(scene.onChange(() => sceneVersion.value++))
 
 const onAfterTransaction = (tr: Y.Transaction) => {
   if (tr.local && tr.changed.size > 0) emit('change')
@@ -318,6 +341,8 @@ function onPointerUp(e: PointerEvent): void {
 }
 
 function onWheel(e: WheelEvent): void {
+  // the style panel scrolls natively
+  if (e.target instanceof Element && e.target.closest('.me-sketch-style')) return
   e.preventDefault()
   if (e.ctrlKey || e.metaKey) {
     const rect = canvasRect()
@@ -342,7 +367,8 @@ function onKeyDown(e: KeyboardEvent): void {
     emit('exit')
     return
   }
-  if (controller.keyDown({ key: e.key, mod: e.ctrlKey || e.metaKey, shift: e.shiftKey })) e.preventDefault()
+  const input = { key: e.key, code: e.code, mod: e.ctrlKey || e.metaKey, shift: e.shiftKey, alt: e.altKey }
+  if (controller.keyDown(input)) e.preventDefault()
 }
 
 function onKeyUp(e: KeyboardEvent): void {
@@ -419,6 +445,16 @@ defineExpose({
       :theme="theme"
       :label="t.tools.text"
       @commit="onEditorCommit"
+    />
+    <StylePanel
+      :elements="selectedEls"
+      :tool="tool"
+      :current-style="currentStyle"
+      :messages="t"
+      :theme="theme"
+      :readonly="readonly"
+      @apply="applyStyle"
+      @layer="reorder"
     />
     <Toolbar
       :tool="tool"

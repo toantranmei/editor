@@ -111,6 +111,90 @@
     margin: 0 var(--me-space-1);
     background: var(--me-toolbar-divider-color);
   }
+  /* ── Style panel (left; scrolls inside short inline boards) ───── */
+  .me-sketch-board .me-sketch-style {
+    position: absolute;
+    top: var(--me-space-4);
+    left: var(--me-space-4);
+    display: flex;
+    flex-direction: column;
+    gap: var(--me-space-1);
+    max-height: calc(100% - var(--me-space-4) * 2);
+    padding: var(--me-space-1);
+    box-sizing: border-box;
+    border-radius: var(--me-popover-radius);
+    background: var(--me-popover-bg);
+    box-shadow: var(--me-popover-shadow);
+    font-size: var(--me-font-size-sm);
+  }
+  .me-sketch-board .me-sketch-style-toggle {
+    align-self: flex-start;
+    padding: 0 var(--me-space-2);
+    font-size: var(--me-font-size-xs);
+    color: var(--me-color-text-muted);
+  }
+  .me-sketch-board .me-sketch-style-body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--me-space-4);
+    min-height: 0;
+    padding: 0 var(--me-space-2) var(--me-space-2);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+  .me-sketch-board .me-sketch-style-section {
+    display: flex;
+    flex-direction: column;
+    gap: var(--me-space-2);
+  }
+  .me-sketch-board .me-sketch-style-label {
+    margin: 0;
+    font-size: var(--me-font-size-xs);
+    font-weight: normal;
+    color: var(--me-color-text-muted);
+  }
+  .me-sketch-board .me-sketch-style-mixed { color: var(--me-color-text-faint); }
+  .me-sketch-board .me-sketch-style-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--me-space-1);
+  }
+  .me-sketch-board .me-sketch-style-opt {
+    min-width: var(--me-toolbar-button-size);
+    padding: 0;
+    font-size: var(--me-font-size-xs);
+  }
+  .me-sketch-board .me-sketch-glyph {
+    width: var(--me-icon-size);
+    height: var(--me-icon-size);
+  }
+  .me-sketch-board :is(.me-sketch-swatch, .me-sketch-color-input) {
+    width: var(--me-icon-size);
+    height: var(--me-icon-size);
+    margin: var(--me-space-1);
+    padding: 0;
+    box-sizing: border-box;
+    border: var(--me-border-width-thin) solid var(--me-color-border);
+    border-radius: var(--me-radius-sm);
+    background: none;
+    cursor: pointer;
+  }
+  .me-sketch-board .me-sketch-swatch.is-transparent {
+    background: linear-gradient(to top right, transparent 45%, var(--me-color-text-muted) 45% 55%, transparent 55%);
+  }
+  .me-sketch-board :is(.me-sketch-swatch, .me-sketch-color-input).is-active { box-shadow: 0 0 0 var(--me-border-width-medium) var(--me-color-accent); }
+  .me-sketch-board :is(.me-sketch-swatch, .me-sketch-color-input):focus-visible { outline: none; box-shadow: 0 0 0 var(--me-border-width-thick) var(--me-input-focus-ring); }
+  .me-sketch-board .me-sketch-color-input { -webkit-appearance: none; appearance: none; }
+  .me-sketch-board .me-sketch-color-input::-webkit-color-swatch-wrapper { padding: 0; }
+  .me-sketch-board .me-sketch-color-input::-webkit-color-swatch { border: none; border-radius: var(--me-radius-sm); }
+  .me-sketch-board .me-sketch-color-input::-moz-color-swatch { border: none; border-radius: var(--me-radius-sm); }
+  .me-sketch-board .me-sketch-style-range {
+    width: 100%;
+    margin: 0;
+    accent-color: var(--me-color-accent);
+  }
+
   .me-sketch-board .lucide {
     width: var(--me-icon-size);
     height: var(--me-icon-size);

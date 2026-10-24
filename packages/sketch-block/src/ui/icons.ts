@@ -1,3 +1,4 @@
 export {
-  Circle, Diamond, Hand, Lock, LockOpen, Minus, MousePointer2, Plus, Redo2, Scan, Square, Undo2,
+  BringToFront, Circle, Diamond, Hand, Lock, LockOpen, Minus, MousePointer2, Palette, Plus, Redo2, Scan, SendToBack,
+  Square, TextAlignCenter, TextAlignEnd, TextAlignStart, Undo2,
 } from '@lucide/vue'

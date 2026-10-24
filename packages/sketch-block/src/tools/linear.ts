@@ -121,16 +121,19 @@ export class LinearTool implements Tool {
     return e.shift && last ? snapSegment({ x: last[0], y: last[1] }, p) : p
   }
 
-  /** Style for the element: the current style, plus routing / arrowheads from it or the type defaults. */
+  /**
+   * Style for the element: the current style, routing included. Arrows take the current arrowheads; a line keeps
+   * its type defaults (none), so drawing a line never sprouts the arrow tool's heads.
+   */
   private props() {
-    const style = this.host.ctx.style() as ReturnType<ToolHost['ctx']['style']> & Partial<LinearStyle>
-    const d = TYPE_DEFAULTS[this.type] as LinearStyle
+    const style = this.host.currentStyle.value
+    const heads: Pick<LinearStyle, 'startArrowhead' | 'endArrowhead'> = this.type === 'arrow' ? style : TYPE_DEFAULTS.line as LinearStyle
     const { stroke, fill, fillStyle, strokeWidth, strokeStyle, roughness, roundness, opacity } = style
     return {
       stroke, fill, fillStyle, strokeWidth, strokeStyle, roughness, roundness, opacity,
-      routing: style.routing ?? d.routing,
-      startArrowhead: style.startArrowhead ?? d.startArrowhead,
-      endArrowhead: style.endArrowhead ?? d.endArrowhead,
+      routing: style.routing,
+      startArrowhead: heads.startArrowhead,
+      endArrowhead: heads.endArrowhead,
       type: this.type,
       angle: 0,
       locked: false,

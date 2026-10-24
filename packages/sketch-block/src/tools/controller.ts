@@ -4,14 +4,16 @@ import { hitElement } from '../geometry/hit'
 import type { History } from '../model/history'
 import type { Scene } from '../model/scene'
 import type { BoardStore } from '../model/store'
+import { type CurrentStyle, INITIAL_STYLE, styleOf, stylePatchFor } from '../model/style'
 import type { ElementPatch, SketchElement, TextElement, TextStyle } from '../model/types'
 import { linearScenePoints } from '../elements/linear'
 import { editedTextBox } from '../elements/text'
-import { DEFAULT_STYLE, isLinear, isShape, isText } from '../model/types'
+import { isLinear, isShape, isText } from '../model/types'
 import { measureText } from '../text/measure'
 import type { Overlay } from '../render/interactive'
 import type { Viewport } from '../viewport'
 import { EraserTool } from './eraser'
+import { EyedropperTool } from './eyedropper'
 import { HandTool } from './hand'
 import { LASER_FADE_MS, type LaserPoint, LaserTool } from './laser'
 import { LassoTool } from './lasso'
@@ -28,7 +30,9 @@ export type ToolName =
 /** Tools with an implementation (besides `hand`); later tasks register theirs here and in TOOL_KEYS. */
 type PointerToolName =
   | 'select' | 'rectangle' | 'ellipse' | 'diamond' | 'pen' | 'highlighter' | 'line' | 'arrow' | 'text'
-  | 'eraser' | 'laser' | 'lasso'
+  | 'eraser' | 'laser' | 'lasso' | 'eyedropper'
+
+export type { CurrentStyle }
 
 /** The element whose text (a text element) or label (a shape) is open in the editor overlay. */
 export interface EditingTarget {
@@ -53,7 +57,6 @@ export interface ToolControllerContext {
   history: History
   viewport: Viewport
   readonly: () => boolean
-  style: () => typeof DEFAULT_STYLE
   invalidate: () => void
   /** Clock for the laser trail, in ms (defaults to `performance.now`). */
   now?: () => number
@@ -66,6 +69,8 @@ export interface ToolHost {
   readonly toolLocked: Ref<boolean>
   readonly selectedIds: Ref<Set<string>>
   readonly cursor: Ref<string>
+  /** Style new elements are drawn with (edited by the style panel). */
+  readonly currentStyle: Ref<CurrentStyle>
   marquee: Box | null
   hoverId: string | null
   draft: SketchElement | null
@@ -81,6 +86,10 @@ export interface ToolHost {
   now(): number
   setSelection(ids: Iterable<string>): void
   setTool(t: ToolName): void
+  /** Back to the tool active before the eyedropper (select if none). */
+  restoreTool(): void
+  /** Sets the current style and applies the relevant props to the selected, unlocked elements (one undo step). */
+  applyStyle(patch: Partial<CurrentStyle>): void
   /** Restores the idle cursor for the current tool / pan state. */
   resetCursor(): void
   /** Text tool click at scene point `p`: edit the text / shape label there, else create a text element. */
@@ -105,16 +114,16 @@ export interface Tool {
 /** Tools that create elements: crosshair cursor, clear the selection, unavailable when read-only. */
 const CREATORS = new Set<ToolName>(['rectangle', 'ellipse', 'diamond', 'pen', 'highlighter', 'line', 'arrow', 'text'])
 /** Tools that write (creators plus the eraser): unavailable when read-only. */
-const WRITERS = new Set<ToolName>([...CREATORS, 'eraser'])
+const WRITERS = new Set<ToolName>([...CREATORS, 'eraser', 'eyedropper'])
 const TOOL_KEYS: Record<string, 'hand' | PointerToolName> = {
   v: 'select', 1: 'select', h: 'hand',
   r: 'rectangle', 2: 'rectangle', d: 'diamond', 3: 'diamond', o: 'ellipse', 4: 'ellipse',
   a: 'arrow', 5: 'arrow', l: 'line', 6: 'line',
   p: 'pen', 7: 'pen', m: 'highlighter', t: 'text', 8: 'text',
-  e: 'eraser', 0: 'eraser', k: 'laser',
+  e: 'eraser', 0: 'eraser', k: 'laser', i: 'eyedropper',
 }
 /** Non-creating tools that still show a crosshair. */
-const POINTERS = new Set<ToolName>(['eraser', 'laser', 'lasso'])
+const POINTERS = new Set<ToolName>(['eraser', 'laser', 'lasso', 'eyedropper'])
 /** Hit tolerance for picking the element to edit, in screen px. */
 const EDIT_HIT_PX = 6
 const NUDGE: Record<string, [number, number]> = {
@@ -127,6 +136,7 @@ export class ToolController implements ToolHost {
   readonly toolLocked: Ref<boolean> = ref(false)
   readonly selectedIds: Ref<Set<string>> = ref(new Set())
   readonly cursor: Ref<string> = ref('default')
+  readonly currentStyle: Ref<CurrentStyle> = ref({ ...INITIAL_STYLE })
   marquee: Box | null = null
   hoverId: string | null = null
   draft: SketchElement | null = null
@@ -139,6 +149,10 @@ export class ToolController implements ToolHost {
 
   /** The edited text element was created for this edit (cancel / empty commit removes it, leaving no undo step). */
   private editCreated = false
+  /** Tool to return to when the eyedropper is done. */
+  private prevTool: ToolName = 'select'
+  /** Style taken by "copy style" (props relevant to the source element's type). */
+  private copiedStyle: Partial<CurrentStyle> | null = null
   /** Tool at the last pointer press; a dblclick only acts when it was the select tool. */
   private downTool: ToolName | null = null
   private readonly hand: HandTool
@@ -163,6 +177,7 @@ export class ToolController implements ToolHost {
       eraser: new EraserTool(this),
       laser: new LaserTool(this),
       lasso: new LassoTool(this),
+      eyedropper: new EyedropperTool(this),
     }
     this.off = ctx.scene.onChange(() => this.pruneSelection())
   }
@@ -213,11 +228,18 @@ export class ToolController implements ToolHost {
     this.active?.cancel?.()
     if (pending !== this.active) pending?.cancel?.()
     this.active = null
+    if (t === 'eyedropper' && this.tool.value !== 'eyedropper') this.prevTool = this.tool.value
     this.tool.value = t
     if (CREATORS.has(t)) this.setSelection([])
     this.hoverId = null
     this.resetCursor()
     this.ctx.invalidate()
+  }
+
+  restoreTool(): void {
+    const prev = this.prevTool
+    this.prevTool = 'select'
+    this.setTool(prev === 'eyedropper' ? 'select' : prev)
   }
 
   setSelection(ids: Iterable<string>): void {
@@ -298,7 +320,8 @@ export class ToolController implements ToolHost {
 
   // ---------- keyboard ----------
 
-  keyDown(e: { key: string; mod: boolean; shift: boolean }): boolean {
+  /** `code` is the physical key (`KeyC`): with Alt held on macOS, `key` is a composed character. */
+  keyDown(e: { key: string; mod: boolean; shift: boolean; alt?: boolean; code?: string }): boolean {
     // keys belong to the editor overlay while it is open
     if (this.editing.value) return false
     const ro = this.ctx.readonly()
@@ -319,6 +342,14 @@ export class ToolController implements ToolHost {
       return true
     }
     if (e.mod) {
+      if (e.alt && (k === 'c' || e.code === 'KeyC')) {
+        return this.copyStyle()
+      }
+      if (e.alt && (k === 'v' || e.code === 'KeyV')) {
+        if (ro) return false
+        this.pasteStyle()
+        return true
+      }
       if (k === 'z' || k === 'y') {
         if (ro) return false
         this.ctx.history.stopCapturing()
@@ -389,6 +420,52 @@ export class ToolController implements ToolHost {
 
   selectAll(): void {
     this.setSelection(this.ctx.scene.elements.map(el => el.id))
+  }
+
+  applyStyle(patch: Partial<CurrentStyle>): void {
+    const next = { ...this.currentStyle.value }
+    for (const [k, v] of Object.entries(patch)) if (v !== undefined) (next as Record<string, unknown>)[k] = v
+    this.currentStyle.value = next
+    if (this.ctx.readonly()) return
+    const patches: Record<string, ElementPatch> = {}
+    for (const el of this.movableSelection()) {
+      const p: ElementPatch | null = stylePatchFor(el, patch)
+      if (!p) continue
+      // an auto-sized / wrapped text refits to its new font
+      patches[el.id] = isText(el) ? { ...p, ...editedTextBox({ ...el, ...p } as TextElement, el.text) } : p
+    }
+    if (!Object.keys(patches).length) return
+    this.ctx.history.stopCapturing()
+    this.ctx.store.updateMany(patches)
+    this.ctx.history.stopCapturing()
+  }
+
+  /** Takes the style of the first selected element; false when nothing is selected. */
+  copyStyle(): boolean {
+    const id = this.selectedIds.value.values().next().value
+    const el = id === undefined ? undefined : this.ctx.scene.get(id)
+    if (!el) return false
+    this.copiedStyle = styleOf(el)
+    return true
+  }
+
+  /** Applies the copied style to the selection (and the current style). */
+  pasteStyle(): void {
+    if (this.copiedStyle) this.applyStyle(this.copiedStyle)
+  }
+
+  /** Moves the selected, unlocked elements to the front / back, keeping their relative order (one undo step). */
+  reorderSelection(to: 'front' | 'back'): void {
+    if (this.ctx.readonly()) return
+    const els = this.movableSelection()
+    if (!els.length) return
+    els.sort((a, b) => (a.index < b.index ? -1 : a.index > b.index ? 1 : a.id < b.id ? -1 : 1))
+    if (to === 'back') els.reverse()
+    const { history, store } = this.ctx
+    // synchronous transactions between stopCapturing calls merge into one undo step
+    history.stopCapturing()
+    for (const el of els) store.reorder(el.id, to)
+    history.stopCapturing()
   }
 
   // ---------- text editing ----------
@@ -465,17 +542,15 @@ export class ToolController implements ToolHost {
 
   /** Creates an empty text element centered vertically on `p` (current text style) and edits it. */
   private createText(p: Point): void {
-    const style = this.ctx.style() as typeof DEFAULT_STYLE & Partial<TextStyle>
-    const font: TextStyle = {
-      fontFamily: style.fontFamily ?? DEFAULT_STYLE.fontFamily,
-      fontSize: style.fontSize ?? DEFAULT_STYLE.fontSize,
-      textAlign: style.textAlign ?? DEFAULT_STYLE.textAlign,
-    }
+    const { stroke, fill, fillStyle, strokeWidth, strokeStyle, roughness, roundness, opacity, ...style } =
+      this.currentStyle.value
+    const font: TextStyle = { fontFamily: style.fontFamily, fontSize: style.fontSize, textAlign: style.textAlign }
     const { h } = measureText('', font, null)
     const { history, store } = this.ctx
     history.beginGesture()
     const el = store.create({
-      ...style, ...font, type: 'text', text: '', autoSize: true,
+      stroke, fill, fillStyle, strokeWidth, strokeStyle, roughness, roundness, opacity,
+      ...font, type: 'text', text: '', autoSize: true,
       x: p.x, y: p.y - h / 2, w: 0, h, angle: 0, locked: false,
     })
     this.openEditor(el.id, 'text', true)

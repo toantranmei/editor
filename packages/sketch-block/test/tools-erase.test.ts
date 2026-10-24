@@ -29,7 +29,6 @@ function setup(opts: { zoom?: number; now?: () => number } = {}) {
   const c = new ToolController({
     store, scene, history, viewport,
     readonly: () => false,
-    style: () => DEFAULT_STYLE,
     invalidate: vi.fn(),
     now: opts.now,
   })

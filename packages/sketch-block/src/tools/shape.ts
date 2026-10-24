@@ -65,10 +65,16 @@ export class ShapeTool implements Tool {
     }
   }
 
+  private styleProps() {
+    const { stroke, fill, fillStyle, strokeWidth, strokeStyle, roughness, roundness, opacity, fontFamily, fontSize, textAlign } =
+      this.host.currentStyle.value
+    return { stroke, fill, fillStyle, strokeWidth, strokeStyle, roughness, roundness, opacity, fontFamily, fontSize, textAlign }
+  }
+
   private makeDraft(e: PointerInput, p: Point): SketchElement {
     const box = dragBox(this.start!, p, e.shift, e.alt)
     return {
-      ...this.host.ctx.style(),
+      ...this.styleProps(),
       ...box,
       id: 'draft',
       type: this.type,

@@ -17,6 +17,65 @@ export interface SketchMessages {
   zoomOut: string
   resetZoom: string
   fit: string
+  style: StyleMessages
+}
+
+export interface StyleMessages {
+  panel: string
+  collapse: string
+  expand: string
+  mixed: string
+  customColor: string
+  transparent: string
+  stroke: string
+  background: string
+  fillStyle: string
+  hachure: string
+  crossHatch: string
+  solid: string
+  strokeWidth: string
+  thin: string
+  bold: string
+  extraBold: string
+  strokeStyle: string
+  dashed: string
+  dotted: string
+  sloppiness: string
+  architect: string
+  artist: string
+  cartoonist: string
+  edges: string
+  sharp: string
+  round: string
+  arrowheads: string
+  startArrowhead: string
+  endArrowhead: string
+  none: string
+  arrow: string
+  triangle: string
+  dot: string
+  bar: string
+  routing: string
+  straight: string
+  elbow: string
+  curved: string
+  font: string
+  fontHand: string
+  fontNormal: string
+  fontCode: string
+  fontSize: string
+  small: string
+  medium: string
+  large: string
+  extraLarge: string
+  textAlign: string
+  alignLeft: string
+  alignCenter: string
+  alignRight: string
+  opacity: string
+  layers: string
+  sendToBack: string
+  bringToFront: string
 }
 
 export const messages: Record<'vi' | 'en', SketchMessages> = {
@@ -53,6 +112,63 @@ export const messages: Record<'vi' | 'en', SketchMessages> = {
     zoomOut: 'Thu nhỏ',
     resetZoom: 'Đặt lại thu phóng',
     fit: 'Vừa khung nhìn',
+    style: {
+      panel: 'Kiểu dáng',
+      collapse: 'Thu gọn bảng kiểu dáng',
+      expand: 'Mở bảng kiểu dáng',
+      mixed: 'Nhiều giá trị',
+      customColor: 'Màu tùy chọn',
+      transparent: 'Trong suốt',
+      stroke: 'Nét vẽ',
+      background: 'Nền',
+      fillStyle: 'Kiểu tô',
+      hachure: 'Gạch chéo',
+      crossHatch: 'Gạch lưới',
+      solid: 'Đặc',
+      strokeWidth: 'Độ dày nét',
+      thin: 'Mảnh',
+      bold: 'Đậm',
+      extraBold: 'Rất đậm',
+      strokeStyle: 'Kiểu nét',
+      dashed: 'Nét đứt',
+      dotted: 'Nét chấm',
+      sloppiness: 'Độ phác thảo',
+      architect: 'Kiến trúc sư',
+      artist: 'Họa sĩ',
+      cartoonist: 'Họa sĩ biếm họa',
+      edges: 'Góc cạnh',
+      sharp: 'Góc nhọn',
+      round: 'Góc bo tròn',
+      arrowheads: 'Đầu mũi tên',
+      startArrowhead: 'Đầu bắt đầu',
+      endArrowhead: 'Đầu kết thúc',
+      none: 'Không có',
+      arrow: 'Mũi tên',
+      triangle: 'Tam giác',
+      dot: 'Chấm tròn',
+      bar: 'Vạch ngang',
+      routing: 'Kiểu đường',
+      straight: 'Thẳng',
+      elbow: 'Gấp khúc',
+      curved: 'Cong',
+      font: 'Phông chữ',
+      fontHand: 'Viết tay',
+      fontNormal: 'Thường',
+      fontCode: 'Mã',
+      fontSize: 'Cỡ chữ',
+      small: 'Nhỏ',
+      medium: 'Vừa',
+      large: 'Lớn',
+      extraLarge: 'Rất lớn',
+      textAlign: 'Căn lề chữ',
+      alignLeft: 'Căn trái',
+      alignCenter: 'Căn giữa',
+      alignRight: 'Căn phải',
+      opacity: 'Độ mờ',
+      layers: 'Lớp',
+      sendToBack: 'Đưa xuống dưới cùng',
+      bringToFront: 'Đưa lên trên cùng',
+    },
   },
   en: {
     title: 'Sketch',
@@ -87,5 +203,62 @@ export const messages: Record<'vi' | 'en', SketchMessages> = {
     zoomOut: 'Zoom out',
     resetZoom: 'Reset zoom',
     fit: 'Zoom to fit',
+    style: {
+      panel: 'Style',
+      collapse: 'Collapse style panel',
+      expand: 'Open style panel',
+      mixed: 'Mixed',
+      customColor: 'Custom color',
+      transparent: 'Transparent',
+      stroke: 'Stroke',
+      background: 'Background',
+      fillStyle: 'Fill',
+      hachure: 'Hachure',
+      crossHatch: 'Cross-hatch',
+      solid: 'Solid',
+      strokeWidth: 'Stroke width',
+      thin: 'Thin',
+      bold: 'Bold',
+      extraBold: 'Extra bold',
+      strokeStyle: 'Stroke style',
+      dashed: 'Dashed',
+      dotted: 'Dotted',
+      sloppiness: 'Sloppiness',
+      architect: 'Architect',
+      artist: 'Artist',
+      cartoonist: 'Cartoonist',
+      edges: 'Edges',
+      sharp: 'Sharp',
+      round: 'Round',
+      arrowheads: 'Arrowheads',
+      startArrowhead: 'Start',
+      endArrowhead: 'End',
+      none: 'None',
+      arrow: 'Arrow',
+      triangle: 'Triangle',
+      dot: 'Dot',
+      bar: 'Bar',
+      routing: 'Routing',
+      straight: 'Straight',
+      elbow: 'Elbow',
+      curved: 'Curved',
+      font: 'Font',
+      fontHand: 'Hand-drawn',
+      fontNormal: 'Normal',
+      fontCode: 'Code',
+      fontSize: 'Font size',
+      small: 'Small',
+      medium: 'Medium',
+      large: 'Large',
+      extraLarge: 'Extra large',
+      textAlign: 'Text align',
+      alignLeft: 'Left',
+      alignCenter: 'Center',
+      alignRight: 'Right',
+      opacity: 'Opacity',
+      layers: 'Layers',
+      sendToBack: 'Send to back',
+      bringToFront: 'Bring to front',
+    },
   },
 }

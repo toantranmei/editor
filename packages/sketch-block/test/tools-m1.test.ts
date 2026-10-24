@@ -39,7 +39,6 @@ function setup(opts: { zoom?: number; x?: number; y?: number } = {}) {
   const c = new ToolController({
     store, scene, history, viewport,
     readonly: () => false,
-    style: () => DEFAULT_STYLE,
     invalidate: vi.fn(),
   })
   return { doc, store, scene, history, viewport, c }
@@ -168,10 +167,10 @@ describe('pen and highlighter', () => {
     expect(el!.points.map(([x, y]) => [x + el!.x, y + el!.y])).toEqual([[0, 0], [10, 3], [20, -3], [30, 0]])
   })
 
-  it('unimplemented tools are not reachable by key or setTool', () => {
+  it('unknown tools are not reachable by key or setTool', () => {
     const { c } = setup()
-    expect(c.keyDown(key('i'))).toBe(false)
-    c.setTool('eyedropper')
+    expect(c.keyDown(key('j'))).toBe(false)
+    c.setTool('nope' as never)
     expect(c.tool.value).toBe('select')
   })
 })
