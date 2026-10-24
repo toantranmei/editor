@@ -7,33 +7,31 @@ on:
 concurrency: ${{ github.workflow }}-${{ github.ref }}
 
 permissions:
-  contents: write       # push the "Version Packages" branch and tags
+  contents: write       # push the "Version Packages" branch, tags and releases
   pull-requests: write  # open the "Version Packages" PR
-  id-token: write       # npm provenance / trusted publishing
+  id-token: write       # npm trusted publishing (OIDC): no npm token is stored anywhere
 
 jobs:
   release:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v5
         with:
           node-version-file: .nvmrc
           cache: pnpm
-          registry-url: https://registry.npmjs.org
+          # No `registry-url`: it sets a placeholder NODE_AUTH_TOKEN, which breaks trusted publishing.
       - run: pnpm install --frozen-lockfile
+      # Trusted publishing needs npm >= 11.5.1 (pnpm hands the actual publish to npm).
+      - run: npm install -g npm@11 && npm --version
 
       # With pending changesets: opens/updates the "Version Packages" PR.
-      # After that PR is merged: builds and publishes the new version to npm.
-      - uses: changesets/action@v1
+      # After that PR is merged: builds and publishes the new version to npm (with provenance).
+      - uses: changesets/action@v2.1.2
         with:
-          version: pnpm version-packages
-          publish: pnpm release
-          title: 'chore: version packages'
-          commit: 'chore: version packages'
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-          NPM_CONFIG_PROVENANCE: true
+          version-script: pnpm version-packages
+          publish-script: pnpm release
+          pr-title: 'chore: version packages'
+          commit-message: 'chore: version packages'
+          create-github-releases: true
