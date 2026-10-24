@@ -67,7 +67,7 @@ function rect(store: BoardStore, x: number, y: number, w: number, h: number, pat
   })
 }
 
-const key = (k: string, mods: { mod?: boolean; shift?: boolean } = {}) => ({ key: k, mod: false, shift: false, ...mods })
+const key = (k: string, mods: { mod?: boolean; shift?: boolean; alt?: boolean } = {}) => ({ key: k, mod: false, shift: false, ...mods })
 
 describe('shape tools', () => {
   it('drag with rectangle tool creates a rectangle in scene coordinates', () => {
@@ -349,6 +349,21 @@ describe('keyboard', () => {
     expect(c.toolLocked.value).toBe(true)
     c.keyDown(key('q'))
     expect(c.toolLocked.value).toBe(false)
+  })
+
+  it('tool letters are ignored while Alt or Ctrl/Cmd is held', () => {
+    const { c } = setup()
+    expect(c.keyDown(key('p', { alt: true }))).toBe(false)
+    expect(c.tool.value).toBe('select')
+    expect(c.keyDown(key('r', { mod: true }))).toBe(false)
+    expect(c.tool.value).toBe('select')
+    expect(c.keyDown(key('5', { alt: true }))).toBe(false)
+    expect(c.keyDown(key('q', { alt: true }))).toBe(false)
+    expect(c.toolLocked.value).toBe(false)
+    expect(c.tool.value).toBe('select')
+    // the plain key still switches
+    expect(c.keyDown(key('p'))).toBe(true)
+    expect(c.tool.value).toBe('pen')
   })
 
   it('Delete removes selection; mod+z restores it', () => {

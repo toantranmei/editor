@@ -380,6 +380,9 @@ export class ToolController implements ToolHost {
       }
       return true
     }
+    // Alt+letter is a menu / OS shortcut on Windows and Linux, and Alt / mod combos are reserved for explicit
+    // shortcuts: tool letters and the lock toggle only act on the bare key
+    if (e.alt && k.length === 1) return false
     const t = TOOL_KEYS[k]
     if (t) {
       if (ro && WRITERS.has(t)) return false
