@@ -313,6 +313,39 @@ preflight) don't affect the editor, while your own CSS — unlayered, or in `com
 `utilities` — overrides it without `!important`. Every part has a stable `me-*` class
 (`.me-menu-item`, `.me-callout`, `.me-code-block`, …).
 
+### Match a shadcn/ui + Tailwind app
+
+Point the editor's semantic tokens at shadcn's CSS variables, and it follows the app's theme,
+including dark mode (both use `.dark` on `<html>`). In shadcn, `accent` is the subtle hover
+background and `primary` is the brand color, so map them that way round:
+
+```ts
+import { defineTokens } from '@toantranmei/editor'
+
+// Tailwind v4 / shadcn v4 variables are full colors. On Tailwind v3 (HSL triplets) use 'hsl(var(--primary))'.
+export const tokens = defineTokens({
+  color: {
+    text: 'var(--foreground)',
+    textMuted: 'var(--muted-foreground)',
+    bg: 'var(--background)',
+    elevated: 'var(--popover)',
+    surface: 'var(--muted)',
+    hover: 'var(--accent)',
+    border: 'var(--border)',
+    accent: 'var(--primary)',
+    onAccent: 'var(--primary-foreground)',
+    danger: 'var(--destructive)',
+  },
+  radius: { sm: 'calc(var(--radius) - 4px)', md: 'calc(var(--radius) - 2px)', lg: 'var(--radius)' },
+  font: { sans: 'var(--font-sans)', mono: 'var(--font-mono)' },
+  components: { input: { focusRing: 'var(--ring)' } },
+})
+```
+
+Tailwind v4 works out of the box (its preflight lives in the `base` layer). Tailwind v3 emits its
+preflight outside any cascade layer, which beats layered CSS, so it can reset editor buttons,
+lists and headings.
+
 ### Colors in documents
 
 Text, highlight and callout colors are stored **by name** (`data-text-color="red"`), not as hex,
