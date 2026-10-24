@@ -16,6 +16,7 @@ import { renderInteractive, resetAccentCache } from '../render/interactive'
 import { RenderScheduler, ZoomSettler } from '../render/scheduler'
 import { type RenderState, renderStatic } from '../render/static'
 import { loadFonts } from '../text/fonts'
+import { clearTextCache } from '../text/measure'
 import { type CurrentStyle, type PointerInput, ToolController, type ToolName } from '../tools/controller'
 import { Viewport } from '../viewport'
 import StylePanel from './StylePanel.vue'
@@ -520,6 +521,8 @@ onMounted(() => {
   // the hand font changes text metrics and glyphs: drop cached bitmaps and redraw once it is in
   void loadFonts().then(() => {
     if (unmounted) return
+    // text layouts measured with the fallback font are stale too (measure.ts also clears on onFontsLoaded)
+    clearTextCache()
     cache.clear()
     invalidateAll()
   })

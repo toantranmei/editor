@@ -5,6 +5,9 @@ import { fontString, measureText, wrapText } from '../text/measure'
 import { type ElementKind, hashString } from './kind'
 import { escXml } from '../io/xml'
 
+/** Below this on-screen font size (CSS px) LOD drawing skips text: it would be an unreadable smudge. */
+export const MIN_LOD_TEXT_PX = 4
+
 /** Where lines go: a box (x, y, w) in the local frame; lines start at `y`, one line height apart. */
 export interface TextBlock {
   lines: string[]

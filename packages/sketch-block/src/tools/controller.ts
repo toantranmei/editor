@@ -641,7 +641,8 @@ export class ToolController implements ToolHost {
         this.setSelection([el.id])
       }
     } else if (el && target.kind === 'sticky' && isSticky(el)) {
-      // an empty sticky is kept (it is still a colored note)
+      // an empty sticky is kept (it is still a colored note), by design: also when it was just created and the
+      // editor closed with Escape (which commits), unlike an empty text element, which is removed
       if (el.text !== value) store.update(el.id, { text: value })
       history.endGesture()
       this.setSelection([el.id])

@@ -7,7 +7,7 @@ import { cornerRadius, displayColor, hasFill, roughOptions, type Theme } from '.
 import { measureText } from '../text/measure'
 import { type ElementKind, hashString, shapeKeyOf } from './kind'
 import { outlinePoints, shapeOutline } from './outlines'
-import { drawTextBlock, svgTextBlock, type TextBlock } from './text'
+import { drawTextBlock, MIN_LOD_TEXT_PX, svgTextBlock, type TextBlock } from './text'
 import { escXml } from '../io/xml'
 
 /** Horizontal padding between the shape box and its label. */
@@ -171,9 +171,10 @@ export const shapeKind: ElementKind<ShapeElement> = {
     ctx.strokeStyle = displayColor(el.stroke, theme)
     ctx.lineWidth = Math.max(1 / zoom, el.strokeWidth)
     ctx.stroke()
-    const label = labelBlock(el, theme)
+    // the label as plain text (layout cached by measure.ts), skipped when too small to read
+    const label = el.fontSize * zoom >= MIN_LOD_TEXT_PX ? labelBlock(el, theme) : null
     if (label) {
-      // the label as plain text (drawLod's origin is the box center)
+      // drawLod's origin is the box center
       ctx.save()
       ctx.translate(-el.w / 2, -el.h / 2)
       drawTextBlock(ctx, label)

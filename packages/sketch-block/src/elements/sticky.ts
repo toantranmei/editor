@@ -4,7 +4,7 @@ import type { Theme } from '../render/shapes'
 import { LINE_HEIGHT } from '../text/fonts'
 import { measureText } from '../text/measure'
 import { type ElementKind, hashString } from './kind'
-import { drawTextBlock, svgTextBlock, type TextBlock } from './text'
+import { drawTextBlock, MIN_LOD_TEXT_PX, svgTextBlock, type TextBlock } from './text'
 
 /** Auto-fit candidates, largest first: the first one whose wrapped text fits the padded box wins. */
 export const STICKY_FONT_SIZES = [36, 28, 20, 16, 12] as const
@@ -93,14 +93,18 @@ export const stickyKind: ElementKind<StickyElement> = {
     drawTextBlock(ctx, stickyBlock(el))
   },
 
-  drawLod(ctx, el) {
+  drawLod(ctx, el, _theme, zoom) {
     ctx.save()
     ctx.translate(-el.w / 2, -el.h / 2)
     ctx.beginPath()
     ctx.rect(0, 0, el.w, el.h)
     ctx.fillStyle = el.color
     ctx.fill()
-    drawTextBlock(ctx, stickyBlock(el))
+    // plain fillText (layout cached by measure.ts); none when even the largest size is too small to read
+    if (STICKY_FONT_SIZES[0] * zoom >= MIN_LOD_TEXT_PX) {
+      const block = stickyBlock(el)
+      if (block.style.fontSize * zoom >= MIN_LOD_TEXT_PX) drawTextBlock(ctx, block)
+    }
     ctx.restore()
   },
 

@@ -128,6 +128,40 @@ describe('sticky kind', () => {
   })
 })
 
+describe('text layout cache and tiny LOD text', () => {
+  it('rendering the same sticky in LOD twice measures only during the first frame', () => {
+    const spy = vi.fn((text: string, font: string) => text.length * (Number.parseFloat(font) || 16) * 0.5)
+    setMeasurer(spy)
+    const el = sticky({ text: 'cached words here' })
+    const ctx = makeFakeCtx(document.createElement('canvas'))
+    kindOf(el).drawLod(ctx, el, 'light', 0.2)
+    expect(spy).toHaveBeenCalled()
+    spy.mockClear()
+    kindOf(el).drawLod(ctx, el, 'light', 0.2)
+    expect(spy).not.toHaveBeenCalled()
+    // shape labels share the cache
+    const rect = { ...sticky(), ...DEFAULT_STYLE, type: 'rectangle', label: 'lbl' } as unknown as ShapeElement
+    kindOf(rect).drawLod(ctx, rect, 'light', 0.25)
+    spy.mockClear()
+    kindOf(rect).drawLod(ctx, rect, 'light', 0.25)
+    expect(spy).not.toHaveBeenCalled()
+  })
+
+  it('LOD at zoom 0.1 with fontSize 20 draws no text', () => {
+    const rect = { ...sticky(), ...DEFAULT_STYLE, fontSize: 20, type: 'rectangle', label: 'lbl' } as unknown as ShapeElement
+    const ctx = makeFakeCtx(document.createElement('canvas'))
+    kindOf(rect).drawLod(ctx, rect, 'light', 0.1)
+    expect(ctx.calls.some(c => c.name === 'fillText')).toBe(false)
+    // a sticky whose auto-fit size is 20: 20 × 0.1 = 2 px
+    const long = sticky({ text: 'word '.repeat(30) })
+    expect(stickyFontSize(long)).toBeLessThanOrEqual(20)
+    kindOf(long).drawLod(ctx, long, 'light', 0.1)
+    expect(ctx.calls.some(c => c.name === 'fillText')).toBe(false)
+    // its box is still drawn
+    expect(ctx.calls.some(c => c.name === 'fill')).toBe(true)
+  })
+})
+
 describe('sticky tool', () => {
   it('click creates sticky and edits', () => {
     const { store, c } = setup()
@@ -309,6 +343,31 @@ describe('loadFonts', () => {
       onFontsLoaded(cb)
       await loadFonts()
       expect(cb).toHaveBeenCalledTimes(1)
+    } finally {
+      delete (document as { fonts?: unknown }).fonts
+    }
+  })
+
+  it('the text layout cache clears when the fonts load', async () => {
+    class GoodFace {
+      load() { return Promise.resolve(this) }
+    }
+    vi.stubGlobal('FontFace', GoodFace)
+    Object.defineProperty(document, 'fonts', { value: { add() {} }, configurable: true })
+    try {
+      const measure = await import('../src/text/measure')
+      const { loadFonts } = await import('../src/text/fonts')
+      const spy = vi.fn((text: string) => text.length * 10)
+      measure.setMeasurer(spy)
+      measure.measureText('abc', DEFAULT_STYLE, 100)
+      const first = spy.mock.calls.length
+      expect(first).toBeGreaterThan(0)
+      measure.measureText('abc', DEFAULT_STYLE, 100)
+      expect(spy).toHaveBeenCalledTimes(first)
+      await loadFonts()
+      measure.measureText('abc', DEFAULT_STYLE, 100)
+      expect(spy).toHaveBeenCalledTimes(2 * first)
+      measure.setMeasurer(null)
     } finally {
       delete (document as { fonts?: unknown }).fonts
     }
