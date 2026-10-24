@@ -430,6 +430,42 @@ describe('SketchBoard', () => {
     expect(store.all()).toHaveLength(2)
   })
 
+  it('pointercancel at bogus coordinates after a drag does not move the element there', async () => {
+    const { wrapper, pointer, store } = await setup({}, s => s.create(init({ x: 0, y: 0, w: 100, h: 50, fill: '#ffffff', fillStyle: 'solid' })))
+    const vm = wrapper.vm as unknown as { toScreen(p: { x: number; y: number }): { x: number; y: number } }
+    const c = vm.toScreen({ x: 50, y: 25 })
+    const before = store.all()[0]!
+    pointer('pointerdown', c.x, c.y)
+    pointer('pointermove', c.x + 40, c.y + 30, { buttons: 1 })
+    frames.flush()
+    expect(store.all()[0]!.x).toBeGreaterThan(before.x)
+    pointer('pointercancel', 0, 0)
+    frames.flush()
+    // the move is reverted, never applied at (0, 0)
+    const after = store.all()[0]!
+    expect({ x: after.x, y: after.y }).toEqual({ x: before.x, y: before.y })
+    // the gesture is over: a later press works
+    pointer('pointerdown', c.x, c.y, { pointerId: 2 })
+    pointer('pointermove', c.x + 10, c.y, { pointerId: 2, buttons: 1 })
+    frames.flush()
+    pointer('pointerup', c.x + 10, c.y, { pointerId: 2 })
+    expect(store.all()[0]!.x).not.toBe(before.x)
+  })
+
+  it('pointercancel during a pen stroke commits it at the last known position', async () => {
+    const { key, pointer, store } = await setup()
+    await key('p')
+    pointer('pointerdown', 300, 300)
+    pointer('pointermove', 340, 320, { buttons: 1 })
+    pointer('pointermove', 380, 340, { buttons: 1 })
+    pointer('lostpointercapture', 0, 0)
+    const [el] = store.all()
+    expect(el!.type).toBe('freedraw')
+    // the box spans the real stroke only (screen 300..380 at zoom 1), not the bogus (0, 0)
+    expect(el!.w).toBeCloseTo(80)
+    expect(el!.h).toBeCloseTo(40)
+  })
+
   it('contextmenu prevented', async () => {
     const { top } = await setup()
     const ev = new MouseEvent('contextmenu', { bubbles: true, cancelable: true })

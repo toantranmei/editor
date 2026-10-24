@@ -305,6 +305,18 @@ export class ToolController implements ToolHost {
   }
 
   /**
+   * The browser took the pointer away (pointercancel / lostpointercapture); its coordinates are meaningless.
+   * A select gesture (move, resize, rotate, point drag, marquee) is reverted; any other gesture (pen, lasso,
+   * shape, line, eraser, pan) ends as a pointerup at `last`, the last position the board saw.
+   */
+  pointerCancel(last: PointerInput): void {
+    const tool = this.active
+    if (!tool) return
+    if (tool === this.tools.select) this.cancelGesture()
+    else this.pointerUp(last)
+  }
+
+  /**
    * A gesture (draw, move, resize, rotate, marquee, pan, point drag) is in progress, including a multi-point
    * line/arrow that is open between clicks.
    */

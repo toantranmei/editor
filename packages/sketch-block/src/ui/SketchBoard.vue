@@ -323,6 +323,8 @@ function onDprChange(): void {
 
 // ---------- input ----------
 let activePointer: number | null = null
+/** Last input of the active pointer (down / move), for ending a gesture the browser cancelled. */
+let lastInput: PointerInput | null = null
 /** Last pointer position over the board (screen px; null = never entered), for paste-at-pointer. */
 let lastPointer: { x: number; y: number } | null = null
 
@@ -348,7 +350,8 @@ function onPointerDown(e: PointerEvent): void {
   } catch {
     // pointer already released / not active (synthetic events)
   }
-  controller.pointerDown(toInput(e, canvasRect()))
+  lastInput = toInput(e, canvasRect())
+  controller.pointerDown(lastInput)
 }
 
 function onPointerMove(e: PointerEvent): void {
@@ -356,6 +359,7 @@ function onPointerMove(e: PointerEvent): void {
   const rect = canvasRect()
   const input = toInput(e, rect)
   lastPointer = input.screen
+  if (activePointer !== null) lastInput = input
   // Pen/touch deliver several samples per frame: one move carries them all (drawing tools consume each).
   const samples = e.pointerType !== 'mouse' ? e.getCoalescedEvents?.() : undefined
   if (samples && samples.length > 1) {
@@ -372,7 +376,22 @@ function onPointerUp(e: PointerEvent): void {
   } catch {
     // not captured
   }
+  lastInput = null
   controller.pointerUp(toInput(e, canvasRect()))
+}
+
+/** pointercancel / lostpointercapture: the event's coordinates are bogus (often 0,0), so use the last input. */
+function onPointerCancel(e: PointerEvent): void {
+  if (e.pointerId !== activePointer) return
+  activePointer = null
+  try {
+    interactiveCanvas.value?.releasePointerCapture(e.pointerId)
+  } catch {
+    // not captured
+  }
+  const last = lastInput ?? toInput(e, canvasRect())
+  lastInput = null
+  controller.pointerCancel(last)
 }
 
 /** CSS px per wheel delta unit: pixels, lines (16 px) or pages (the canvas height). */
@@ -561,8 +580,8 @@ defineExpose({
       @pointerdown="onPointerDown"
       @pointermove="onPointerMove"
       @pointerup="onPointerUp"
-      @pointercancel="onPointerUp"
-      @lostpointercapture="onPointerUp"
+      @pointercancel="onPointerCancel"
+      @lostpointercapture="onPointerCancel"
       @contextmenu.prevent
       @dblclick="onDblClick"
     />
