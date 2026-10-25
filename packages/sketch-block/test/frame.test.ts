@@ -193,6 +193,25 @@ describe('frames and the select tool', () => {
     expect(store.all()).toHaveLength(0)
   })
 
+  it('dragging a frame keeps the binding of a child arrow bound to an outside shape', () => {
+    const { store, c } = setup()
+    const f = store.create(frameInit())
+    const inner = store.create(rectInit({ x: 150, y: 150, frameId: f.id }))
+    const outside = store.create(rectInit({ x: 700, y: 150 }))
+    const arrow = store.create({
+      ...DEFAULT_STYLE, type: 'arrow', label: '', x: 210, y: 175, w: 100, h: 0, angle: 0, locked: false,
+      points: [[0, 0], [100, 0]], routing: 'straight', startArrowhead: 'none', endArrowhead: 'arrow',
+      startBinding: { id: inner.id, ax: 1, ay: 0.5 }, endBinding: { id: outside.id, ax: 0, ay: 0.5 }, frameId: f.id,
+    } as unknown as ElementInit)
+    // the frame alone is selected: its children (the arrow among them) are carried
+    drag(c, [100, 350], [100, 450])
+    expect(store.get(f.id)!.y).toBe(200)
+    expect(store.get(inner.id)!.y).toBe(250)
+    expect(store.get(arrow.id)).toMatchObject({
+      startBinding: { id: inner.id }, endBinding: { id: outside.id },
+    })
+  })
+
   it('moving child out clears frameId', () => {
     const { store, c } = setup()
     const f = store.create(frameInit())

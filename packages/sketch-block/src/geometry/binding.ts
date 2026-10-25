@@ -191,7 +191,9 @@ const changesGeometry = (patch: ElementPatch | undefined): boolean =>
 /**
  * Patches for the lines bound to `changedIds` (whose geometry changed), so they follow their targets. `pending`
  * holds patches not written yet (they are applied over the scene, and the caller merges the result into the same
- * write). A line in `changedIds` that moved itself lets go of the ends whose target did not change. A binding to
+ * write). A line in `changedIds` that moved itself lets go of the ends whose target did not change, but only when
+ * it is in `detach` (default: every changed line) — lines carried along (by a frame, align) keep their bindings
+ * and are re-routed to their targets instead. A binding to
  * a missing target (deleted, e.g. by a remote peer) is set to null in the patch and its point kept. Locked lines
  * are left alone.
  */
@@ -200,6 +202,7 @@ export function followBindings(
   scene: Scene,
   changedIds: Iterable<string>,
   pending: Record<string, ElementPatch> = {},
+  detach?: ReadonlySet<string>,
 ): Record<string, ElementPatch> {
   const changed = new Set(changedIds)
   const out: Record<string, ElementPatch> = {}
@@ -223,7 +226,7 @@ export function followBindings(
     const s = line.startBinding
     const e = line.endBinding
     if (!s && !e) continue
-    const self = changed.has(line.id)
+    const self = changed.has(line.id) && (!detach || detach.has(line.id))
     const cur = get(line.id) as LinearElement
     const loose: ElementPatch = {}
     if (self) {
@@ -239,13 +242,14 @@ export function followBindings(
 /**
  * `patches` plus the follow-up patches of the lines bound to the elements whose geometry they change, merged per
  * element (a follower's patch wins over its own entry). The single integration point for writers that move,
- * resize or rotate elements.
+ * resize or rotate elements. `detach`: the lines moved directly by the user, which may let go of targets that
+ * stay put (default: every line in `patches`).
  */
 export function withFollowers(
-  store: BoardStore, scene: Scene, patches: Record<string, ElementPatch>,
+  store: BoardStore, scene: Scene, patches: Record<string, ElementPatch>, detach?: ReadonlySet<string>,
 ): Record<string, ElementPatch> {
   const moved = Object.keys(patches).filter(id => changesGeometry(patches[id]))
-  const follow = followBindings(store, scene, moved, patches)
+  const follow = followBindings(store, scene, moved, patches, detach)
   if (!Object.keys(follow).length) return patches
   const out = { ...patches }
   for (const [id, p] of Object.entries(follow)) out[id] = { ...out[id], ...p }

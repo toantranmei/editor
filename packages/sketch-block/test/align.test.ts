@@ -3,6 +3,7 @@ import * as Y from 'yjs'
 
 import { linearScenePoints } from '../src/elements/linear'
 import { alignPatches, distributePatches } from '../src/geometry/align'
+import { anchorScenePoint, BIND_GAP } from '../src/geometry/binding'
 import { History } from '../src/model/history'
 import { Scene } from '../src/model/scene'
 import { BoardStore } from '../src/model/store'
@@ -221,4 +222,83 @@ describe('controller align / distribute', () => {
     expect(get(store, out.id).y).toBe(550)
     expect(get(store, out.id).frameId).toBe(target.id)
   })
+
+  it('align left keeps the bindings of selected bound arrows and re-routes them', () => {
+    const { store, c } = setup()
+    const a = rect(store, 0, 0, 100, 60)
+    const b = rect(store, 300, 0, 100, 60)
+    const d = rect(store, 600, 200, 100, 60)
+    const ab = boundArrow(store, a, b, { x: 150, y: 20, w: 100, h: 10 })
+    const bd = boundArrow(store, b, d, { x: 450, y: 100, w: 100, h: 100 })
+    c.setSelection([a.id, b.id, d.id, ab.id, bd.id])
+    c.align('left')
+    expect(get(store, b.id).x).toBe(0)
+    expect(get(store, d.id).x).toBe(0)
+    for (const [arrow, from, to] of [[ab, a, b], [bd, b, d]] as const) {
+      const now = get(store, arrow.id) as LinearElement
+      expect(now.startBinding?.id).toBe(from.id)
+      expect(now.endBinding?.id).toBe(to.id)
+      expectRouted(store, now)
+    }
+  })
+
+  it('distribute keeps the bindings of selected bound arrows', () => {
+    const { store, c } = setup()
+    const a = rect(store, 0, 0, 50, 50)
+    const b = rect(store, 100, 0, 50, 50)
+    const d = rect(store, 500, 0, 50, 50)
+    const ab = boundArrow(store, a, b, { x: 60, y: 20, w: 30, h: 10 })
+    const bd = boundArrow(store, b, d, { x: 160, y: 20, w: 330, h: 10 })
+    c.setSelection([a.id, b.id, d.id, ab.id, bd.id])
+    c.distribute('h')
+    // the arrows are not units: a, b and d are spaced on their own
+    expect(get(store, b.id).x).toBe(250)
+    for (const [arrow, from, to] of [[ab, a, b], [bd, b, d]] as const) {
+      const now = get(store, arrow.id) as LinearElement
+      expect(now.startBinding?.id).toBe(from.id)
+      expect(now.endBinding?.id).toBe(to.id)
+      expectRouted(store, now)
+    }
+  })
+
+  it('a frame moved by align carries a child arrow bound to an outside shape without detaching it', () => {
+    const { store, c } = setup()
+    const f = frame(store, 0, 0, 300, 200)
+    const inner = rect(store, 20, 20, 50, 50)
+    const outside = rect(store, 400, 300, 50, 50)
+    // the arrow sits inside the frame (a child), its end bound to the outside shape
+    const arrow = boundArrow(store, inner, outside, { x: 80, y: 40, w: 100, h: 100 })
+    c.created([inner.id, arrow.id])
+    expect(get(store, arrow.id).frameId).toBe(f.id)
+    const other = rect(store, 600, 500, 50, 50)
+    c.setSelection([f.id, other.id])
+    c.align('right')
+    expect(get(store, f.id).x).toBe(350)
+    expect(get(store, inner.id).x).toBe(370)
+    const now = get(store, arrow.id) as LinearElement
+    expect(now.startBinding?.id).toBe(inner.id)
+    expect(now.endBinding?.id).toBe(outside.id)
+    expectRouted(store, now)
+  })
 })
+
+function boundArrow(store: BoardStore, from: ShapeElement, to: ShapeElement, box = { x: 0, y: 0, w: 1, h: 1 }): LinearElement {
+  return store.create({
+    ...DEFAULT_STYLE, type: 'arrow', label: '', ...box, angle: 0, locked: false,
+    points: [[0, 0], [box.w, box.h]], routing: 'straight', startArrowhead: 'none', endArrowhead: 'arrow',
+    startBinding: { id: from.id, ax: 1, ay: 0.5 }, endBinding: { id: to.id, ax: 0, ay: 0.5 },
+  } as unknown as ElementInit) as LinearElement
+}
+
+/** The arrow's ends sit on its targets' anchors (plus the gap). */
+function expectRouted(store: BoardStore, arrow: LinearElement): void {
+  const pts = linearScenePoints(arrow)
+  const s = get(store, arrow.startBinding!.id)
+  const e = get(store, arrow.endBinding!.id)
+  const ps = anchorScenePoint(s, arrow.startBinding!, BIND_GAP, pts[1]!)
+  const pe = anchorScenePoint(e, arrow.endBinding!, BIND_GAP, pts[0]!)
+  expect(pts[0]!.x).toBeCloseTo(ps.x)
+  expect(pts[0]!.y).toBeCloseTo(ps.y)
+  expect(pts[pts.length - 1]!.x).toBeCloseTo(pe.x)
+  expect(pts[pts.length - 1]!.y).toBeCloseTo(pe.y)
+}

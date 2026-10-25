@@ -17,7 +17,7 @@ import type {
   TextElement, TextStyle,
 } from '../model/types'
 import {
-  cleanFrameName, membershipPatches, withFrameChildren,
+  cleanFrameName, directLines, membershipPatches, withFrameChildren,
 } from '../elements/frame'
 import { expandToGroups } from '../elements/group'
 import { boxFromPoints, linearScenePoints } from '../elements/linear'
@@ -159,9 +159,10 @@ export interface ToolHost {
   /**
    * `patches` plus the patches making the lines bound to the elements they move / resize / rotate follow them,
    * merged per element. Every writer that changes a bindable element's box writes this in place of `patches` (one
-   * write, so undo and Escape cover the lines too).
+   * write, so undo and Escape cover the lines too). `detach`: the lines the user moves directly, which may let go
+   * of targets that stay put (default: every line in `patches`).
    */
-  withFollowers(patches: Record<string, ElementPatch>): Record<string, ElementPatch>
+  withFollowers(patches: Record<string, ElementPatch>, detach?: ReadonlySet<string>): Record<string, ElementPatch>
   /** Creates a frame with box `box` named "Frame N", at the back, taking in the elements inside it. */
   createFrame(box: { x: number; y: number; w: number; h: number }): void
   /** `ids` plus every member of each one's outermost group (groups are selected whole). */
@@ -925,8 +926,9 @@ export class ToolController implements ToolHost {
 
   /**
    * Writes align / distribute moves: a moved frame takes its unlocked children along by the same offset, except
-   * children that were arranged themselves (`arranged`: their own move, even a zero one, wins); bound lines follow,
-   * and frame membership is recomputed, in one undo step.
+   * children that were arranged themselves (`arranged`: their own move, even a zero one, wins); bound lines follow
+   * (never letting go: a carried line is re-routed to its targets), and frame membership is recomputed, in one
+   * undo step.
    */
   private arrange(moves: Record<string, { x: number; y: number }>, arranged: readonly SketchElement[]): void {
     const ids = Object.keys(moves)
@@ -943,7 +945,7 @@ export class ToolController implements ToolHost {
         if (!own.has(child.id) && !(child.id in patches)) patches[child.id] = { x: child.x + dx, y: child.y + dy }
       }
     }
-    const all = this.withFollowers(patches)
+    const all = this.withFollowers(patches, new Set())
     history.gesture(() => {
       store.updateMany(all)
       this.created(Object.keys(all))
@@ -1202,8 +1204,8 @@ export class ToolController implements ToolHost {
     if (Object.keys(patches).length) this.ctx.store.updateMany(patches)
   }
 
-  withFollowers(patches: Record<string, ElementPatch>): Record<string, ElementPatch> {
-    return withFollowers(this.ctx.store, this.ctx.scene, patches)
+  withFollowers(patches: Record<string, ElementPatch>, detach?: ReadonlySet<string>): Record<string, ElementPatch> {
+    return withFollowers(this.ctx.store, this.ctx.scene, patches, detach)
   }
 
   createFrame(box: { x: number; y: number; w: number; h: number }): void {
@@ -1311,15 +1313,16 @@ export class ToolController implements ToolHost {
   }
 
   /**
-   * Moves the selection (frames with their children; bound lines follow) and recomputes frame membership: one undo
-   * step.
+   * Moves the selection (frames with their children; bound lines follow, only lines moved directly let go of
+   * targets that stay put) and recomputes frame membership: one undo step.
    */
   private nudge(dx: number, dy: number): void {
     const { scene, store, history } = this.ctx
     const patches: Record<string, ElementPatch> = {}
-    for (const el of withFrameChildren(scene, this.movableSelection())) patches[el.id] = { x: el.x + dx, y: el.y + dy }
+    const selected = this.movableSelection()
+    for (const el of withFrameChildren(scene, selected)) patches[el.id] = { x: el.x + dx, y: el.y + dy }
     if (!Object.keys(patches).length) return
-    const all = this.withFollowers(patches)
+    const all = this.withFollowers(patches, directLines(selected))
     history.gesture(() => {
       store.updateMany(all)
       this.created(Object.keys(all))

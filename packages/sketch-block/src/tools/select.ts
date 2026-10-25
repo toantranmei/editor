@@ -1,4 +1,4 @@
-import { canRotate, membershipPatches, withFrameChildren } from '../elements/frame'
+import { canRotate, directLines, membershipPatches, withFrameChildren } from '../elements/frame'
 import { kindOf } from '../elements/kind'
 import { hasTransformHandles, linearScenePoints, movePointPatch } from '../elements/linear'
 import {
@@ -23,7 +23,7 @@ const HANDLE_CURSOR: Record<Handle, string> = {
 }
 
 type Gesture =
-  | { kind: 'move'; start: Point; origins: SketchElement[]; box: Box | null; snap: Snapper; dragging: boolean }
+  | { kind: 'move'; start: Point; origins: SketchElement[]; detach: Set<string>; box: Box | null; snap: Snapper; dragging: boolean }
   | { kind: 'resize'; handle: Exclude<Handle, 'rotate'>; el: SketchElement; snap: Snapper }
   | { kind: 'rotate'; el: SketchElement }
   | { kind: 'point'; el: LinearElement; index: number }
@@ -164,9 +164,12 @@ export class SelectTool implements Tool {
       return
     }
     // a frame takes its children along (each element moves once, selected or not)
-    const origins = withFrameChildren(ctx.scene, [...this.host.selectedIds.value]
+    const selected = [...this.host.selectedIds.value]
       .map(id => ctx.scene.get(id))
-      .filter((el): el is SketchElement => !!el && !el.locked))
+      .filter((el): el is SketchElement => !!el && !el.locked)
+    const origins = withFrameChildren(ctx.scene, selected)
+    // only lines moved on their own let go of targets that stay put (a frame's child line keeps its bindings)
+    const detach = directLines(selected)
     if (origins.length) this.beginWrite()
     // the union box of what moves is snapped; candidates exclude it (and the lines bound to it)
     let box: Box | null = null
@@ -177,7 +180,7 @@ export class SelectTool implements Tool {
         : b
     }
     const snap = this.host.snapper(origins.map(el => el.id))
-    this.g = { kind: 'move', start: p, origins, box, snap, dragging: false }
+    this.g = { kind: 'move', start: p, origins, detach, box, snap, dragging: false }
     this.host.cursor.value = 'move'
   }
 
@@ -208,7 +211,7 @@ export class SelectTool implements Tool {
             : { x: el.x + dx, y: el.y + dy }
         }
         // bound lines follow in the same write (and are reverted with it on cancel)
-        this.writer.set(this.host.withFollowers(patches))
+        this.writer.set(this.host.withFollowers(patches, g.detach))
         return
       }
       case 'resize': {

@@ -2,7 +2,7 @@ import { elementCorners } from '../geometry/bounds'
 import type { Box } from '../geometry/math'
 import { escXml } from '../io/xml'
 import type { Scene } from '../model/scene'
-import { type ElementPatch, type FrameElement, isFrame, type SketchElement } from '../model/types'
+import { type ElementPatch, type FrameElement, isFrame, isLinear, type SketchElement } from '../model/types'
 import type { Theme } from '../render/shapes'
 import { FONT_FAMILIES } from '../text/fonts'
 import { type ElementKind, hashString } from './kind'
@@ -128,6 +128,15 @@ export function withFrameChildren(scene: Scene, els: readonly SketchElement[]): 
     }
   }
   return [...out.values()]
+}
+
+/**
+ * Ids of the lines among `els` (what the user moves) that move on their own, not carried by a frame among `els`:
+ * only these may let go of bound targets that stay put. A frame's child line keeps its bindings.
+ */
+export function directLines(els: readonly SketchElement[]): Set<string> {
+  const frames = new Set(els.filter(isFrame).map(f => f.id))
+  return new Set(els.filter(el => isLinear(el) && !(el.frameId && frames.has(el.frameId))).map(el => el.id))
 }
 
 /**

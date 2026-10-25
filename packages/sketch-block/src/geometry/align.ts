@@ -1,5 +1,5 @@
 import { outermostGroup } from '../elements/group'
-import type { SketchElement } from '../model/types'
+import { isLinear, type SketchElement } from '../model/types'
 import { cornersBox as cornerBox } from './bounds'
 import type { Box } from './math'
 
@@ -16,11 +16,18 @@ function union(a: Box, b: Box): Box {
   }
 }
 
-/** `els` split into units (elements sharing an outermost group form one), each with its union box. */
+/** A line with a bound end: it is never moved by align / distribute, it follows its targets instead. */
+const isBoundLine = (el: SketchElement): boolean => isLinear(el) && !!(el.startBinding || el.endBinding)
+
+/**
+ * `els` split into units (elements sharing an outermost group form one), each with its union box. Bound lines
+ * are left out (they follow their targets, and must not let go of the ones that stay put).
+ */
 function unitsOf(els: readonly SketchElement[]): Unit[] {
   const units: Unit[] = []
   const byGroup = new Map<string, Unit>()
   for (const el of els) {
+    if (isBoundLine(el)) continue
     const box = cornerBox(el)
     const g = outermostGroup(el)
     const unit = g ? byGroup.get(g) : undefined
