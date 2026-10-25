@@ -241,12 +241,126 @@ describe('http provider', () => {
     conn.destroy()
   })
 
-  it('load failure without offline cache rejects; with cache it opens offline', async () => {
+  it('load failure without a cache rejects', async () => {
     const failing = { load: async () => { throw new Error('down') }, save: async () => {} }
     await expect(http({ ...failing, offline: false }).connect('lf')).rejects.toThrow('down')
-    const conn = await http(failing).connect('lf2')
-    expect(conn.status!.get()).toBe('offline')
+    // offline on but nothing cached for this board: same as no cache
+    await expect(http(failing).connect('lf-empty')).rejects.toThrow('down')
+  })
+
+  it('load failure with a cache opens offline and reconciles once a background load succeeds', async () => {
+    const server = fakeServer()
+    server.boards.set('lf-cached', seed(1))
+    const cached = await indexeddb().connect('lf-cached')
+    new BoardStore(cached.doc).create(init(70)) // cache-only element
+    await flushMicrotasks()
+    cached.destroy()
+
+    let down = 2
+    const load = vi.fn(async (id: string) => {
+      if (down-- > 0) throw new Error('down')
+      return server.boards.get(id) ?? null
+    })
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
+    const conn = await http({ load, save: server.save, debounceMs: 10 }).connect('lf-cached')
+    const status = conn.status!
+    const seen: string[] = []
+    status.on(s => seen.push(s))
+    expect(status.get()).toBe('offline')
+    expect(conn.doc.getMap('elements').size).toBe(1)
+
+    // edits while unreconciled may be saved, but the status never claims `saved`
+    new BoardStore(conn.doc).create(init(80))
+    await vi.advanceTimersByTimeAsync(10)
+    expect(server.save).toHaveBeenCalledTimes(1)
+    expect(status.get()).toBe('offline')
+
+    await vi.advanceTimersByTimeAsync(1000) // retry 1 fails
+    expect(load).toHaveBeenCalledTimes(2)
+    expect(status.get()).toBe('offline')
+    await vi.advanceTimersByTimeAsync(2000) // retry 2 succeeds
+    expect(load).toHaveBeenCalledTimes(3)
+    expect(conn.doc.getMap('elements').size).toBe(3) // server content merged
+    await vi.advanceTimersByTimeAsync(10)
+    expect(server.save).toHaveBeenCalledTimes(2) // the cache-only diff is pushed
+    expect(server.doc('lf-cached').getMap('elements').size).toBe(3)
+    expect(status.get()).toBe('saved')
+    expect(seen.indexOf('saved')).toBe(seen.length - 1)
+    expect(seen.slice(0, -1)).not.toContain('saved')
     conn.destroy()
+  })
+
+  it('destroy stops background load retries', async () => {
+    const cached = await indexeddb().connect('lf-stop')
+    new BoardStore(cached.doc).create(init())
+    await flushMicrotasks()
+    cached.destroy()
+    const load = vi.fn(async () => { throw new Error('down') })
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
+    const conn = await http({ load, save: async () => {} }).connect('lf-stop')
+    conn.destroy()
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(load).toHaveBeenCalledTimes(1)
+  })
+
+  it('continuous editing still saves after maxWait (5 × debounce)', async () => {
+    vi.useFakeTimers()
+    const server = fakeServer()
+    const conn = await http({ load: server.load, save: server.save, offline: false, debounceMs: 100 }).connect('mw')
+    const store = new BoardStore(conn.doc)
+    for (let t = 0; t < 450; t += 50) {
+      store.create(init(t))
+      await vi.advanceTimersByTimeAsync(50)
+    }
+    expect(server.save).not.toHaveBeenCalled()
+    store.create(init(999))
+    await vi.advanceTimersByTimeAsync(50) // 500 ms after the burst began
+    expect(server.save).toHaveBeenCalledTimes(1)
+    conn.destroy()
+  })
+
+  it('edits during an in-flight save are rescheduled after it succeeds', async () => {
+    vi.useFakeTimers()
+    const server = fakeServer()
+    let release!: () => void
+    const save = vi.fn((id: string, u: Uint8Array) => {
+      if (save.mock.calls.length === 1) return new Promise<void>(r => { release = () => { server.save(id, u).then(r) } })
+      return server.save(id, u)
+    })
+    const conn = await http({ load: server.load, save, offline: false, debounceMs: 100 }).connect('if')
+    const store = new BoardStore(conn.doc)
+    store.create(init(0))
+    await vi.advanceTimersByTimeAsync(100)
+    expect(save).toHaveBeenCalledTimes(1)
+    store.create(init(10)) // while the first save is in flight
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(save).toHaveBeenCalledTimes(1)
+    release()
+    await vi.advanceTimersByTimeAsync(100)
+    expect(save).toHaveBeenCalledTimes(2)
+    expect(server.doc('if').getMap('elements').size).toBe(2)
+    expect(conn.status!.get()).toBe('saved')
+    conn.destroy()
+  })
+
+  it('destroy during an in-flight save that fails: the final flush carries both updates', async () => {
+    vi.useFakeTimers()
+    const server = fakeServer()
+    let reject!: () => void
+    const save = vi.fn((id: string, u: Uint8Array) => {
+      if (save.mock.calls.length === 1) return new Promise<void>((_r, j) => { reject = () => j(new Error('x')) })
+      return server.save(id, u)
+    })
+    const conn = await http({ load: server.load, save, offline: false, debounceMs: 100 }).connect('dif')
+    const store = new BoardStore(conn.doc)
+    store.create(init(0))
+    await vi.advanceTimersByTimeAsync(100)
+    store.create(init(10)) // newer edit, pending
+    conn.destroy()
+    reject()
+    await flushMicrotasks()
+    expect(save).toHaveBeenCalledTimes(2)
+    expect(server.doc('dif').getMap('elements').size).toBe(2)
   })
 
   it('passes savePreview and uploadImage through', () => {

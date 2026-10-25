@@ -19,7 +19,8 @@ type YWebsocket = typeof import('y-websocket')
 
 /**
  * Realtime boards through a y-websocket server, with presence on `connection.awareness`. Needs the optional peer
- * dependency `y-websocket`, loaded only when a board connects.
+ * dependency `y-websocket`, loaded only when a board connects. Some bundlers resolve that dynamic import at build
+ * time, so install `y-websocket` or mark it external even if you never call `websocket()`.
  */
 export function websocket(opts: WebsocketProviderOptions): SketchProvider {
   const offline = opts.offline ?? true
@@ -80,9 +81,12 @@ export function websocket(opts: WebsocketProviderOptions): SketchProvider {
       const onClose = () => {
         if (opts.params) provider.params = opts.params()
       }
+      // the server refused for good (shouldReconnect false, e.g. 4401 unauthorized): no more retries
+      const onClosed = () => status.set('error')
       provider.on('status', onStatus)
       provider.on('sync', onSync)
       provider.on('connection-close', onClose)
+      provider.on('closed', onClosed)
 
       if (!provider.synced) {
         await new Promise<void>((resolve) => {
@@ -117,6 +121,7 @@ export function websocket(opts: WebsocketProviderOptions): SketchProvider {
             provider.off('status', onStatus)
             provider.off('sync', onSync)
             provider.off('connection-close', onClose)
+            provider.off('closed', onClosed)
             provider.destroy()
           } catch (err) {
             console.error(err)

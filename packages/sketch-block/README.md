@@ -117,6 +117,10 @@ import { indexeddb, memory } from '@toantranmei/sketch-block/providers'
 sketch.configure({ provider: indexeddb({ prefix: 'my-app' }) })
 ```
 
+`websocket()` loads the optional peer dependency `y-websocket` only when a board connects. Some bundlers still
+resolve that dynamic import at build time, so install `y-websocket` (or mark it external) even if you don't use
+`websocket()`.
+
 ### Custom provider
 
 Implement `SketchProvider` to keep boards on your backend:

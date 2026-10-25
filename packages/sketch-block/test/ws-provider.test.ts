@@ -146,8 +146,9 @@ describe('websocket provider', () => {
     const conn = await pending
     const seen: string[] = []
     const off = conn.status!.on(s => seen.push(s))
-    p.emit('status', { status: 'disconnected' })
+    // y-websocket's real order on a drop: synced=false first, then the disconnected status
     p.emit('sync', false)
+    p.emit('status', { status: 'disconnected' })
     expect(conn.status!.get()).toBe('offline')
     p.emit('status', { status: 'connecting' }) // retry attempts don't flicker the dot
     expect(conn.status!.get()).toBe('offline')
@@ -155,7 +156,9 @@ describe('websocket provider', () => {
     expect(conn.status!.get()).toBe('connecting')
     p.emit('sync', true)
     expect(conn.status!.get()).toBe('online')
-    expect(seen).toEqual(['offline', 'connecting', 'online'])
+    expect(seen).toEqual(['connecting', 'offline', 'connecting', 'online'])
+    p.emit('closed', { code: 4401, reason: 'unauthorized' }, p) // terminal: no more retries
+    expect(conn.status!.get()).toBe('error')
     off()
     conn.destroy()
   })
