@@ -1,6 +1,8 @@
 // Heavy part of the package (roughjs, rbush, board UI). Loaded lazily by the node view.
 import { type Ref, ref, toRaw } from 'vue'
+import { installRepair } from './collab/repair'
 import { History } from './model/history'
+import { Scene } from './model/scene'
 import { BoardStore } from './model/store'
 import type { ShapeType } from './model/types'
 import type { BoardConnection } from './providers/types'
@@ -17,7 +19,14 @@ export { installRepair, REPAIR_ORIGIN } from './collab/repair'
  */
 export interface BoardSession {
   readonly store: BoardStore
+  /** Scene (spatial index) of the store, shared by the boards mounted on this session. */
+  readonly scene: Scene
   readonly history: History
+  /**
+   * Whether the derived-data repair observer (one per session) may write; a read-only board turns it off, leaving
+   * repairs to the peers that can write.
+   */
+  readonly canWrite: Ref<boolean>
   /** Zen mode: tool bars hidden. */
   readonly zen: Ref<boolean>
   /** View mode: read-only, hand tool only. */
@@ -35,11 +44,17 @@ export function createBoardSession(connection: BoardConnection): BoardSession {
   // toRaw: Vue proxies around Yjs types break Yjs identity checks (UndoManager scope, origins)
   const doc = toRaw(toRaw(connection).doc)
   const store = new BoardStore(doc)
+  const scene = new Scene(store)
   const history = new History(store)
+  const canWrite = ref(true)
+  // one repair observer per session (the inline and fullscreen boards share it)
+  const uninstallRepair = installRepair(store, scene, { canWrite: () => canWrite.value })
   let destroyed = false
   return {
     store,
+    scene,
     history,
+    canWrite,
     zen: ref(false),
     viewMode: ref(false),
     grid: ref(false),
@@ -48,7 +63,9 @@ export function createBoardSession(connection: BoardConnection): BoardSession {
     destroy() {
       if (destroyed) return
       destroyed = true
+      uninstallRepair()
       history.destroy()
+      scene.destroy()
     },
   }
 }

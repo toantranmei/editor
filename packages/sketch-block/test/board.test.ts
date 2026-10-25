@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
 import * as Y from 'yjs'
 
+import { installRepair, REPAIR_ORIGIN } from '../src/collab/repair'
 import { createBoardSession, SketchBoard } from '../src/engine'
 import { messages } from '../src/messages'
 import { BoardStore } from '../src/model/store'
@@ -18,6 +19,12 @@ vi.mock('../src/text/fonts', async orig => ({
   ...(await orig<typeof import('../src/text/fonts')>()),
   loadFonts: vi.fn(() => Promise.resolve()),
 }))
+
+// counts installs (passes through to the real observer)
+vi.mock('../src/collab/repair', async orig => {
+  const real = await orig<typeof import('../src/collab/repair')>()
+  return { ...real, installRepair: vi.fn(real.installRepair) }
+})
 
 let frames: ReturnType<typeof stubFrames>
 const wrappers: VueWrapper[] = []
@@ -616,6 +623,55 @@ describe('SketchBoard', () => {
     expect(session.store.all()).toHaveLength(0)
     session.destroy()
     expect(destroy).toHaveBeenCalled()
+  })
+
+  it('one repair observer per session: inline + fullscreen mounts repair each remote update once', async () => {
+    const connection = await connect()
+    const installs = vi.mocked(installRepair)
+    installs.mockClear()
+    const session = createBoardSession(connection)
+    const mountBoard = () => {
+      const w = mount(SketchBoard, { props: { connection, session }, attachTo: document.body })
+      wrappers.push(w)
+      return w
+    }
+    const inline = mountBoard()
+    const full = mountBoard()
+    await nextTick()
+    expect(installs).toHaveBeenCalledTimes(1)
+    const store = session.store
+    const f = store.create({ ...DEFAULT_STYLE, type: 'frame', name: 'F', x: 0, y: 0, w: 400, h: 300, angle: 0, locked: false } as never)
+    const r = store.create(init({ x: 50, y: 50, frameId: f.id }))
+    let passes = 0
+    const onTr = (tr: { origin: unknown }) => { if (tr.origin === REPAIR_ORIGIN) passes++ }
+    connection.doc.on('afterTransaction', onTr)
+    connection.doc.transact(() => connection.doc.getMap('elements').delete(f.id), 'remote')
+    await flushPromises()
+    expect(store.get(r.id)!.frameId).toBeNull()
+    expect(passes).toBe(1)
+    // a read-only board closes the session's write gate
+    await inline.setProps({ readonly: true })
+    const g = store.create({ ...DEFAULT_STYLE, type: 'frame', name: 'G', x: 0, y: 0, w: 400, h: 300, angle: 0, locked: false } as never)
+    store.update(r.id, { frameId: g.id })
+    connection.doc.transact(() => connection.doc.getMap('elements').delete(g.id), 'remote')
+    await flushPromises()
+    expect(store.get(r.id)!.frameId).toBe(g.id)
+    await inline.setProps({ readonly: false })
+    // unmounting the boards keeps it; destroying the session uninstalls it
+    inline.unmount()
+    full.unmount()
+    wrappers.splice(0)
+    const h = store.create({ ...DEFAULT_STYLE, type: 'frame', name: 'H', x: 0, y: 0, w: 400, h: 300, angle: 0, locked: false } as never)
+    store.update(r.id, { frameId: h.id })
+    connection.doc.transact(() => connection.doc.getMap('elements').delete(h.id), 'remote')
+    await flushPromises()
+    expect(store.get(r.id)!.frameId).toBeNull()
+    session.destroy()
+    store.update(r.id, { frameId: 'gone' })
+    connection.doc.transact(() => (connection.doc.getMap('elements') as Y.Map<Y.Map<unknown>>).get(r.id)!.set('x', 60), 'remote')
+    await flushPromises()
+    expect(store.get(r.id)!.frameId).toBe('gone')
+    connection.doc.off('afterTransaction', onTr)
   })
 
   it('without a session the board destroys its own history on unmount', async () => {

@@ -1,10 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import * as Y from 'yjs'
 
+import { installRepair } from '../src/collab/repair'
+import { followBindings } from '../src/geometry/binding'
 import { History } from '../src/model/history'
 import { Scene } from '../src/model/scene'
 import { BoardStore } from '../src/model/store'
-import { DEFAULT_STYLE, type ElementInit, type ShapeElement } from '../src/model/types'
+import { DEFAULT_STYLE, type ElementInit, type LinearElement, type ShapeElement } from '../src/model/types'
 import { type PointerInput, ToolController } from '../src/tools/controller'
 import { Viewport } from '../src/viewport'
 import { createRelay, type Relay } from './helpers/relay'
@@ -271,5 +273,73 @@ describe('concurrent edits: local gestures stay robust (relay)', () => {
       expect(s.get(r3.id)).toBeDefined()
     }
     expect(Y.encodeStateVector(A.store.doc)).toEqual(Y.encodeStateVector(B.store.doc))
+  })
+
+  it('a target deleted before the first write leaves the gesture too', () => {
+    const { A, B, c } = setup()
+    const r1 = rect(A.store, 0, 0)
+    const r2 = rect(A.store, 300, 0)
+    A.history.stopCapturing()
+    c.setSelection([r1.id, r2.id])
+    c.pointerDown(ptr(50, 50))
+    // deleted and brought back by the peer before our first frame
+    B.store.remove([r1.id])
+    B.history.undo()
+    c.pointerMove(ptr(80, 80))
+    flushFrames()
+    c.pointerUp(ptr(80, 80))
+    expect(A.store.get(r1.id)).toMatchObject({ x: 0, y: 0 })
+    expect(A.store.get(r2.id)).toMatchObject({ x: 330, y: 30 })
+
+    // the same for a resize target
+    c.setSelection([r2.id])
+    c.pointerDown(ptr(430, 130))
+    B.store.remove([r2.id])
+    B.history.undo()
+    c.pointerMove(ptr(500, 200))
+    flushFrames()
+    c.pointerUp(ptr(500, 200))
+    expect(A.store.get(r2.id)).toMatchObject({ x: 330, y: 30, w: 100, h: 100 })
+  })
+
+  it('Escape after a mid-gesture repair leaves the arrow attached to both targets (no peer online)', async () => {
+    const { relay, A, B, c } = setup()
+    const offA = installRepair(A.store, A.scene)
+    const offB = installRepair(B.store, B.scene)
+    const s1 = rect(A.store, 0, 0)
+    const s2 = rect(A.store, 300, 0)
+    const arrow = A.store.create({
+      ...DEFAULT_STYLE, type: 'arrow', label: '', x: 100, y: 50, w: 200, h: 0, angle: 0, locked: false,
+      points: [[0, 0], [200, 0]], routing: 'straight', startArrowhead: 'none', endArrowhead: 'arrow',
+      startBinding: { id: s1.id, ax: 1, ay: 0.5 }, endBinding: { id: s2.id, ax: 0, ay: 0.5 },
+    } as ElementInit)
+    A.store.updateMany(followBindings(A.store, A.scene, [s1.id, s2.id]))
+    A.history.stopCapturing()
+    // drag s1 (its arrow follows in our writes)
+    c.setSelection([s1.id])
+    c.pointerDown(ptr(50, 50))
+    c.pointerMove(ptr(50, 250))
+    flushFrames()
+    // the peer moves s2 without its arrow; our repair re-follows the arrow
+    B.store.doc.transact(() => (B.store.doc.getMap('elements') as Y.Map<Y.Map<unknown>>).get(s2.id)!.set('y', -300), 'raw')
+    await new Promise(r => setTimeout(r, 0))
+    // then the connection drops, and we cancel
+    relay.setMode('manual')
+    c.keyDown(key('Escape'))
+    expect(A.store.get(s1.id)).toMatchObject({ x: 0, y: 0 })
+    expect(A.store.get(s2.id)).toMatchObject({ x: 300, y: -300 })
+    const cur = A.store.get(arrow.id) as LinearElement
+    expect(cur).toMatchObject({ startBinding: { id: s1.id }, endBinding: { id: s2.id } })
+    const follow = followBindings(A.store, A.scene, [s1.id, s2.id])[arrow.id] ?? {}
+    for (const [k, v] of Object.entries(follow)) {
+      const got = (cur as unknown as Record<string, unknown>)[k]
+      if (typeof v === 'number') expect(got as number).toBeCloseTo(v, 6)
+      else expect(JSON.parse(JSON.stringify(got))).toEqual(JSON.parse(JSON.stringify(v)))
+    }
+    // the tip really is on s2's new position (left side, y = -250)
+    const end = cur.points[cur.points.length - 1]!
+    expect(cur.y + end[1]).toBeCloseTo(-250, 6)
+    offA()
+    offB()
   })
 })

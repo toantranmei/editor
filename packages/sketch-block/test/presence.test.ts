@@ -403,6 +403,25 @@ describe('SketchBoard presence', () => {
     expect(topCtx.calls.some(c => c.name === 'fillText' && c.args[0] === 'Eve')).toBe(true)
   })
 
+  it('mounts when a peer already has a laser trail (no TDZ on the clock) and draws it', async () => {
+    const base = await memory().connect('b')
+    const awareness = newAwareness(base.doc)
+    const peer = newAwareness()
+    relay(peer, awareness)
+    peer.setLocalState({
+      user: { name: 'Eve', color: '#0c8599' }, cursor: null, selection: [], viewport: null,
+      laser: [{ x: 0, y: 0, t: 5, start: true }, { x: 50, y: 50, t: 10 }],
+    })
+    const connection: BoardConnection = { ...base, awareness, destroy: () => base.destroy() }
+    const wrapper = mount(SketchBoard, { props: { connection, locale: 'en' }, attachTo: document.body })
+    wrappers.push(wrapper)
+    await nextTick()
+    frames.flush()
+    const canvases = document.querySelectorAll('canvas')
+    const topCtx = ctxOf(canvases[canvases.length - 1] as HTMLCanvasElement)
+    expect(topCtx.calls.some(c => c.name === 'set:strokeStyle' && c.args[0] === '#0c8599')).toBe(true)
+  })
+
   it('shows at most 5 avatars plus +N', async () => {
     const { wrapper, awareness } = await setup(true)
     for (let i = 0; i < 7; i++) {

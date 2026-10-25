@@ -73,11 +73,12 @@ const t = computed(() => allMessages[props.locale] ?? allMessages.vi)
 const session = props.session ? toRaw(props.session) : null
 const store = session ? toRaw(session.store) : new BoardStore(toRaw(toRaw(props.connection).doc))
 const doc = store.doc
-const scene = new Scene(store)
+const scene = session ? toRaw(session.scene) : new Scene(store)
 const history = session ? toRaw(session.history) : new History(store)
-// derived data (bound-line geometry, frameId) converges after remote edits, provider loads and undo / redo;
-// a read-only board leaves it to the peers that can write
-const uninstallRepair = installRepair(store, scene, { canWrite: () => !props.readonly })
+// derived data (bound-line geometry, frameId) converges after remote edits, provider loads and undo / redo: the
+// session's observer (one per session), else this board's own. A read-only board leaves it to the peers that can write
+const uninstallRepair = session ? null : installRepair(store, scene, { canWrite: () => !props.readonly })
+if (session) watch(() => props.readonly, ro => { session.canWrite.value = !ro }, { immediate: true })
 // a shared history may hold an open capture from the previous mount: start a fresh undo step
 history.stopCapturing()
 const viewport = new Viewport()
@@ -170,13 +171,15 @@ function syncView(): void {
 
 // ---------- presence (networked providers only; fully inert without an awareness) ----------
 // Declared before anything whose closures read them (syncView, the controller's invalidate): no TDZ access.
+/** The board clock (laser trails, presence re-timing): one source for the controller and the presence reader. */
+const now = (): number => performance.now()
 const awareness = toRaw(toRaw(props.connection).awareness) ?? null
 const hasPresence = !!awareness
 const publisher = awareness
   ? new PresencePublisher(awareness, resolveUser(props.user, awareness.clientID, props.locale))
   : null
 const reader = awareness
-  ? new PresenceReader(awareness, { now: () => controller.now(), locale: () => props.locale, onChange: onRemote })
+  ? new PresenceReader(awareness, { now, locale: () => props.locale, onChange: onRemote })
   : null
 /** Peers for the avatars list (replaced only when someone joins, leaves or changes name / color). */
 const avatarPeers = shallowRef<AvatarPeer[]>([])
@@ -203,7 +206,7 @@ const lastShape = session ? session.lastShape : ref<ShapeType | null>(null)
 const locked = computed(() => props.readonly || viewMode.value)
 
 const controller = new ToolController({
-  store, scene, history, viewport,
+  store, scene, history, viewport, now,
   readonly: () => locked.value,
   viewCenter: () => viewport.toScene(center()),
   viewBox: () => viewport.visibleBox(widthCss, heightCss),
@@ -861,10 +864,10 @@ onBeforeUnmount(() => {
   settler.destroy()
   scheduler.destroy()
   controller.destroy()
-  uninstallRepair()
-  // a shared session's history outlives this mount
+  uninstallRepair?.()
+  // a shared session's history and scene outlive this mount
   if (!session) history.destroy()
-  scene.destroy()
+  if (!session) scene.destroy()
   cache.clear()
 })
 

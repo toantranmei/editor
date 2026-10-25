@@ -6,7 +6,7 @@ import {
   snapSegment,
 } from '../geometry'
 import { GRID_SIZE, type Snapper, snapPoint } from '../geometry/snap'
-import { bindingAt, boundPatch } from '../geometry/binding'
+import { bindingAt, boundPatch, followBindings } from '../geometry/binding'
 import { type ElementPatch, isImage, isLinear, type LinearElement, type SketchElement } from '../model/types'
 import { frameLabelAt } from '../render/frame-labels'
 import type { PointerInput, Tool, ToolHost } from './controller'
@@ -324,9 +324,20 @@ export class SelectTool implements Tool {
     this.writer.drop()
     this.setBindTarget(null)
     if (this.writing) {
-      const { store, history } = this.host.ctx
+      const { store, scene, history } = this.host.ctx
       const patches = revertPatches(this.writer.snapshots.values(), this.writer.touched)
-      if (Object.keys(patches).length) store.updateMany(patches)
+      if (Object.keys(patches).length) {
+        // derived data from the reverted state as it is now: a repair (a peer's concurrent move) may have re-routed
+        // a bound line mid-gesture, so its snapshot alone can be stale. Lines re-follow their targets (never let go)
+        const all = { ...patches }
+        for (const [id, p] of Object.entries(followBindings(store, scene, Object.keys(patches), patches, new Set()))) {
+          all[id] = { ...all[id], ...p }
+        }
+        store.updateMany(all)
+        // membership needs the reverted boxes in the scene: a second write, dropped with the gesture all the same
+        const members = membershipPatches(scene, Object.keys(all))
+        if (Object.keys(members).length) store.updateMany(members)
+      }
       this.writing = false
       history.discardGesture()
     }
@@ -340,11 +351,11 @@ export class SelectTool implements Tool {
   /**
    * The scene changed (a peer may have deleted elements mid-gesture): every element of the gesture in progress that
    * no longer exists leaves it for good. Later frames skip it and a cancel does not revert it, even if a peer brings
-   * it back (its undo). A resize / rotate / point drag whose target is gone keeps its undo bracket (bound lines it
-   * already moved stay part of it) but writes nothing more.
+   * it back (its undo), also when it was deleted before the first write. A resize / rotate / point drag whose
+   * target is gone keeps its undo bracket (bound lines it already moved stay part of it) but writes nothing more.
    */
   prune(): void {
-    if (!this.writing) return
+    // the gesture's targets are known from pointerdown (before any write)
     const { scene } = this.host.ctx
     const g = this.g
     for (const id of [...this.writer.touched.keys()]) if (!scene.get(id)) this.writer.forget(id)
