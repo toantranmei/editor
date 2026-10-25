@@ -92,11 +92,21 @@ async function rasterizeInBrowser(svg: string, maxWidth: number): Promise<Previe
   return { dataUrl: canvas.toDataURL('image/png'), blob }
 }
 
-/** PNG of a canvas; throws a SecurityError when the canvas is tainted. */
+/** A blob as a data URL. */
+function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result as string)
+    reader.onerror = () => reject(reader.error ?? new Error('FileReader failed'))
+    reader.readAsDataURL(blob)
+  })
+}
+
+/** PNG of a canvas, encoded once (the data URL is read from the blob); throws a SecurityError when tainted. */
 async function encodePng(canvas: HTMLCanvasElement): Promise<PreviewResult> {
   const blob = await new Promise<Blob>((resolve, reject) =>
     canvas.toBlob(b => (b ? resolve(b) : reject(new Error('toBlob failed'))), 'image/png'))
-  return { dataUrl: canvas.toDataURL('image/png'), blob }
+  return { dataUrl: await blobToDataUrl(blob), blob }
 }
 
 /** Waits (at most `ms`) for the images' loads; failures are fine (they draw as placeholders). */
@@ -129,7 +139,7 @@ function drawPreviewElement(ctx: CanvasRenderingContext2D, el: SketchElement, sc
 }
 
 /**
- * Browser-only: draws the elements (light theme, transparent background) onto a canvas at most `maxWidth` px
+ * Browser-only: draws the elements (light theme, on white) onto a canvas at most `maxWidth` px
  * wide and returns a PNG. Images come from the image cache (loads awaited up to `waitMs`); with `images` false,
  * or for an image known to taint the canvas, a placeholder is drawn instead.
  */
@@ -149,6 +159,9 @@ async function rasterizeSceneInBrowser(
   canvas.height = Math.max(1, Math.round(b.h * scale))
   const ctx = canvas.getContext('2d')
   if (!ctx) throw new Error('sketch-block: no 2d canvas context')
+  // a white card: readable in both editor themes (PNG previews are not inverted in dark mode)
+  ctx.fillStyle = '#ffffff'
+  ctx.fillRect(0, 0, canvas.width, canvas.height)
   const frames = new Map(elements.filter(isFrame).map(f => [f.id, f]))
   const base = (): void => ctx.setTransform(scale, 0, 0, scale, -b.x * scale, -b.y * scale)
   for (const el of elements) {

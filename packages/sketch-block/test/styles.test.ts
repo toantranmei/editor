@@ -11,9 +11,13 @@ describe('block styles', () => {
     const rule = /([^{}]+)\{[^{}]*filter: invert\(1\) hue-rotate\(180deg\)/.exec(css)
     expect(rule).not.toBeNull()
     const selectors = rule![1]!.split(',').map(s => s.trim())
-    expect(selectors).toEqual(expect.arrayContaining([
-      'html.dark .me-scope:not(.me-light) .me-sketch-preview',
-      '.me-scope.me-dark .me-sketch-preview',
-    ]))
+    // only SVG previews: a PNG preview (a board with photos) has a white background and must not be inverted
+    expect(selectors.sort()).toEqual([
+      'html.dark .me-scope:not(.me-light) .me-sketch-preview[src^="data:image/svg+xml"]',
+      'html.dark .me-scope:not(.me-light) .me-sketch-preview[src$=".svg"]',
+      '.me-scope.me-dark .me-sketch-preview[src^="data:image/svg+xml"]',
+      '.me-scope.me-dark .me-sketch-preview[src$=".svg"]',
+    ].sort())
+    expect(css.match(/filter: invert/g)).toHaveLength(1)
   })
 })

@@ -329,6 +329,8 @@ function selectTool(name: ToolName): void {
 function pickShape(shape: ShapeType): void {
   lastShape.value = shape
   controller.setTool(shape)
+  // the popover (and its focused cell) is gone: keep keyboard shortcuts working
+  root.value?.focus({ preventScroll: true })
 }
 
 function toggleLock(): void {

@@ -59,9 +59,18 @@ describe('makePreview with images', () => {
     const rasterize = vi.fn()
     const p = await makePreview([rect({ w: 3000 }), image()], { rasterize })
     expect(rasterize).not.toHaveBeenCalled()
-    expect(p!.dataUrl).toBe('data:image/png;base64,UE5H')
+    // encoded once (toBlob); the data URL is read from the blob
     expect(p!.blob.type).toBe('image/png')
+    expect(p!.dataUrl).toBe(`data:image/png;base64,${btoa('png')}`)
+    expect(toBlob).toHaveBeenCalledTimes(1)
+    expect(HTMLCanvasElement.prototype.toDataURL).not.toHaveBeenCalled()
     expect(canvases).toHaveLength(1)
+    // a white card: the background is filled before anything else is drawn
+    const calls = ctxOf(canvases[0]!).calls
+    const firstDraw = calls.findIndex(c => ['fillRect', 'stroke', 'fill', 'drawImage', 'strokeRect'].includes(c.name))
+    expect(calls[firstDraw]!.name).toBe('fillRect')
+    expect(calls.slice(0, firstDraw).filter(c => c.name === 'set:fillStyle').at(-1)!.args[0]).toBe('#ffffff')
+    expect(calls[firstDraw]!.args).toEqual([expect.any(Number), expect.any(Number), expect.any(Number), expect.any(Number)])
     // at most 1200 px wide, drawn from the image cache
     expect(canvases[0]!.width).toBeLessThanOrEqual(1200)
     expect(canvases[0]!.width).toBeGreaterThan(1100)
@@ -92,7 +101,7 @@ describe('makePreview with images', () => {
       throw new DOMException('Tainted canvases may not be exported.', 'SecurityError')
     })
     const p = await makePreview([rect(), image()])
-    expect(p!.dataUrl).toBe('data:image/png;base64,UE5H')
+    expect(p!.dataUrl.startsWith('data:image/png;base64,')).toBe(true)
     expect(canvases).toHaveLength(2)
     expect(drewImg(ctxOf(canvases[0]!))).toBe(true)
     // the re-render draws placeholders instead of images
@@ -128,7 +137,7 @@ describe('makePreview with images', () => {
     const start = Date.now()
     const p = await makePreview([image({ src: 'https://example.com/slow.png' })], { imageWaitMs: 20 })
     expect(Date.now() - start).toBeLessThan(1000)
-    expect(p!.dataUrl).toBe('data:image/png;base64,UE5H')
+    expect(p!.dataUrl.startsWith('data:image/png;base64,')).toBe(true)
     expect(drewPlaceholder(ctxOf(canvases[0]!))).toBe(true)
   })
 })

@@ -157,6 +157,46 @@ describe('SketchBoard', () => {
     expect(wrapper.find('[data-tool="rectangle"]').classes()).toContain('is-active')
   })
 
+  it('focus: a pick hands focus to the board, Escape back to the shapes button; focus leaving closes it', async () => {
+    const { wrapper, root } = await setup()
+    const popover = () => wrapper.find('.me-sketch-shapes')
+    const shapesBtn = () => wrapper.find('[data-tool="shapes"]')
+    // the shapes button is a menu button: expanded state, no pressed state
+    expect(shapesBtn().attributes('aria-pressed')).toBeUndefined()
+    expect(shapesBtn().attributes('aria-expanded')).toBe('false')
+    await shapesBtn().trigger('click')
+    expect(shapesBtn().attributes('aria-expanded')).toBe('true')
+    await nextTick()
+    expect(document.activeElement?.getAttribute('data-shape')).toBe('rectangle')
+    await popover().find('[data-shape="hexagon"]').trigger('click')
+    expect(document.activeElement).toBe(root.element)
+    // Escape: focus returns to the shapes button
+    await shapesBtn().trigger('click')
+    await nextTick()
+    await popover().trigger('keydown', { key: 'Escape' })
+    expect(document.activeElement).toBe(shapesBtn().element)
+    // focus moving out of the popover closes it; moving inside it does not
+    await shapesBtn().trigger('click')
+    await nextTick()
+    const cells = popover().findAll('button[data-shape]')
+    await cells[0]!.trigger('focusout', { relatedTarget: cells[1]!.element })
+    expect(popover().exists()).toBe(true)
+    await cells[0]!.trigger('focusout', { relatedTarget: root.element })
+    expect(popover().exists()).toBe(false)
+  })
+
+  it('a last shape with its own button shows the generic shapes icon', async () => {
+    const { wrapper } = await setup()
+    const shapesBtn = () => wrapper.find('[data-tool="shapes"]')
+    await shapesBtn().trigger('click')
+    await wrapper.find('.me-sketch-shapes [data-shape="diamond"]').trigger('click')
+    expect(shapesBtn().find('.me-sketch-shape-icon').exists()).toBe(false)
+    expect(shapesBtn().find('.lucide').exists()).toBe(true)
+    await shapesBtn().trigger('click')
+    await wrapper.find('.me-sketch-shapes [data-shape="cloud"]').trigger('click')
+    expect(shapesBtn().find('.me-sketch-shape-icon').exists()).toBe(true)
+  })
+
   it('read-only Escape treats readonly like view mode: the hand tool does not switch to select', async () => {
     const { wrapper, key } = await setup({ readonly: true })
     await key('h')

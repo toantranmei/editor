@@ -23,7 +23,7 @@ const props = withDefaults(defineProps<{
 const emit = defineEmits<{
   select: [tool: ToolName]
   toggleLock: []
-  /** A shape chosen from the shapes popover. */
+  /** A shape chosen from the shapes popover (the board takes focus back: the popover is gone). */
   pickShape: [shape: ShapeType]
   /** The image button: open the file picker. */
   insertImage: []
@@ -107,6 +107,8 @@ const PREVIEWS = Object.fromEntries(
   SHAPE_TYPES.map(s => [s, toPreview(shapeOutline(s, PREVIEW_W, PREVIEW_H))]),
 ) as Record<ShapeType, Preview>
 const PREVIEW_TRANSFORM = `translate(${(24 - PREVIEW_W) / 2} ${(24 - PREVIEW_H) / 2})`
+/** Preview icon on the shapes button: the last shape, unless it has a button of its own (then the generic icon). */
+const buttonShape = computed(() => (props.lastShape && !DIRECT_SHAPES.has(props.lastShape) ? props.lastShape : null))
 
 // ---------- shapes popover ----------
 const open = ref(false)
@@ -147,6 +149,13 @@ function onItem(name: ItemName): void {
 function pick(shape: ShapeType): void {
   open.value = false
   emit('pickShape', shape)
+}
+
+/** Focus moving out of the popover (Tab, a click elsewhere) closes it. */
+function onFocusOut(e: FocusEvent): void {
+  const next = e.relatedTarget
+  if (next instanceof Node && popover.value?.contains(next)) return
+  open.value = false
 }
 
 /** Escape closes an open popover; the board does not see it (it would switch tools or leave). */
@@ -191,16 +200,16 @@ function onKeydown(e: KeyboardEvent): void {
           :class="{ 'is-active': isActive(item.name) }"
           :title="title(item.name)"
           :aria-label="title(item.name)"
-          :aria-pressed="item.name === 'image' ? undefined : isActive(item.name)"
+          :aria-pressed="item.name === 'image' || item.name === 'shapes' ? undefined : isActive(item.name)"
           :aria-haspopup="item.name === 'shapes' ? 'true' : undefined"
           :aria-expanded="item.name === 'shapes' ? open : undefined"
           @click="onItem(item.name)"
         >
-          <svg v-if="item.name === 'shapes' && lastShape" class="me-sketch-shape-icon" viewBox="0 0 24 24" aria-hidden="true">
+          <svg v-if="item.name === 'shapes' && buttonShape" class="me-sketch-shape-icon" viewBox="0 0 24 24" aria-hidden="true">
             <g :transform="PREVIEW_TRANSFORM">
-              <polygon v-if="PREVIEWS[lastShape].polygon" :points="PREVIEWS[lastShape].polygon" />
-              <path v-else :d="PREVIEWS[lastShape].d" />
-              <path v-if="PREVIEWS[lastShape].detail" :d="PREVIEWS[lastShape].detail" />
+              <polygon v-if="PREVIEWS[buttonShape].polygon" :points="PREVIEWS[buttonShape].polygon" />
+              <path v-else :d="PREVIEWS[buttonShape].d" />
+              <path v-if="PREVIEWS[buttonShape].detail" :d="PREVIEWS[buttonShape].detail" />
             </g>
           </svg>
           <component :is="item.icon" v-else />
@@ -208,7 +217,7 @@ function onKeydown(e: KeyboardEvent): void {
         </button>
       </template>
     </div>
-    <div v-if="open" ref="popover" class="me-sketch-shapes" role="group" :aria-label="messages.shapes">
+    <div v-if="open" ref="popover" class="me-sketch-shapes" role="group" :aria-label="messages.shapes" @focusout="onFocusOut">
       <p class="me-sketch-shapes-title" aria-hidden="true">
         {{ messages.shapes }}
       </p>
