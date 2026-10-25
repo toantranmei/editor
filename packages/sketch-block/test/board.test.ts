@@ -276,6 +276,25 @@ describe('SketchBoard', () => {
     expect(pct()).toBe('643%')
   })
 
+  it('grid and snap toggles: buttons and shortcuts (grid off, snap on by default)', async () => {
+    const { wrapper, key } = await setup()
+    const grid = () => wrapper.find('[data-action="grid"]')
+    const snap = () => wrapper.find('[data-action="snap"]')
+    expect(grid().attributes('aria-pressed')).toBe('false')
+    expect(snap().attributes('aria-pressed')).toBe('true')
+    expect(grid().attributes('title')).toContain(messages.vi.grid)
+    await grid().trigger('click')
+    expect(grid().attributes('aria-pressed')).toBe('true')
+    await key('\'', { code: 'Quote', ctrlKey: true })
+    expect(grid().attributes('aria-pressed')).toBe('false')
+    await snap().trigger('click')
+    expect(snap().attributes('aria-pressed')).toBe('false')
+    await key('ß', { code: 'KeyS', altKey: true })
+    expect(snap().attributes('aria-pressed')).toBe('true')
+    expect(messages.en.grid).toBeTruthy()
+    expect(messages.en.objectSnap).toBeTruthy()
+  })
+
   it('undo/redo buttons follow history and emit change', async () => {
     const { wrapper, key, drag, store } = await setup()
     const undo = () => wrapper.find('[data-action="undo"]')

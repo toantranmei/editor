@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import type { SketchMessages } from '../messages'
-import { Minus, Plus, Redo2, Scan, Undo2 } from './icons'
+import { Grid3x3, Magnet, Minus, Plus, Redo2, Scan, Undo2 } from './icons'
 
 defineProps<{
   zoom: number
   canUndo: boolean
   canRedo: boolean
   readonly: boolean
+  grid: boolean
+  objectSnap: boolean
   messages: SketchMessages
 }>()
 
@@ -17,6 +19,8 @@ const emit = defineEmits<{
   zoomOut: []
   reset: []
   fit: []
+  toggleGrid: []
+  toggleSnap: []
 }>()
 </script>
 
@@ -66,6 +70,22 @@ const emit = defineEmits<{
       @click="emit('fit')"
     >
       <Scan />
+    </button>
+    <span class="me-toolbar-divider" aria-hidden="true" />
+    <button
+      type="button" class="me-tool-btn" :class="{ 'is-active': grid }" data-action="grid"
+      :title="messages.grid" :aria-label="messages.grid" :aria-pressed="grid"
+      @click="emit('toggleGrid')"
+    >
+      <Grid3x3 />
+    </button>
+    <button
+      v-if="!readonly"
+      type="button" class="me-tool-btn" :class="{ 'is-active': objectSnap }" data-action="snap"
+      :title="messages.objectSnap" :aria-label="messages.objectSnap" :aria-pressed="objectSnap"
+      @click="emit('toggleSnap')"
+    >
+      <Magnet />
     </button>
   </div>
 </template>

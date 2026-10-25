@@ -396,7 +396,7 @@ describe('renderInteractive', () => {
   }
   const overlay = (over = {}) => ({
     selectedIds: new Set<string>(), marquee: null, hoverId: null, draft: null, pointHandles: null, previewSegment: null,
-    erasing: new Set<string>(), laser: [], lasso: null, bindTarget: null,
+    erasing: new Set<string>(), laser: [], lasso: null, bindTarget: null, guides: [],
     ...over,
   })
   const lineInit = (n: number) => ({
@@ -428,6 +428,20 @@ describe('renderInteractive', () => {
     vp.zoom = 2
     renderInteractive(z.ctx, scene, state({ viewport: vp }), overlay({ pointHandles: [{ x: 5, y: 5 }] }))
     expect(z.ctx.calls.find(c => c.name === 'arc')!.args.slice(0, 3)).toEqual([5, 5, 2])
+    scene.destroy()
+  })
+
+  it('draws snap guides as 1 px (screen) accent lines', () => {
+    const { scene } = sceneWith()
+    const { ctx } = newCanvas()
+    const vp = new Viewport()
+    vp.zoom = 2
+    renderInteractive(ctx, scene, state({ viewport: vp }), overlay({ guides: [{ x1: 7, y1: 0, x2: 7, y2: 90 }] }))
+    const i = ctx.calls.findIndex(c => c.name === 'moveTo' && c.args[0] === 7 && c.args[1] === 0)
+    expect(i).toBeGreaterThanOrEqual(0)
+    expect(ctx.calls[i + 1]).toEqual({ name: 'lineTo', args: [7, 90] })
+    const widths = ctx.calls.slice(0, i).filter(c => c.name === 'set:lineWidth')
+    expect(widths[widths.length - 1]!.args[0]).toBe(0.5)
     scene.destroy()
   })
 

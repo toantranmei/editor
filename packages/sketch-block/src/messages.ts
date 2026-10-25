@@ -17,6 +17,10 @@ export interface SketchMessages {
   zoomOut: string
   resetZoom: string
   fit: string
+  /** Grid toggle (shows and snaps to the grid). */
+  grid: string
+  /** Object snap toggle. */
+  objectSnap: string
   /** Accessible name of the tool bar. */
   toolbar: string
   zen: string
@@ -147,6 +151,8 @@ export const messages: Record<'vi' | 'en', SketchMessages> = {
     zoomOut: 'Thu nhỏ',
     resetZoom: 'Đặt lại thu phóng',
     fit: 'Vừa khung nhìn',
+    grid: 'Lưới (Ctrl/⌘+\')',
+    objectSnap: 'Bắt dính đối tượng (Alt+S)',
     toolbar: 'Công cụ vẽ',
     zen: 'Chế độ tập trung',
     viewMode: 'Chế độ xem',
@@ -275,6 +281,8 @@ export const messages: Record<'vi' | 'en', SketchMessages> = {
     zoomOut: 'Zoom out',
     resetZoom: 'Reset zoom',
     fit: 'Zoom to fit',
+    grid: 'Grid (Ctrl/⌘+\')',
+    objectSnap: 'Snap to objects (Alt+S)',
     toolbar: 'Drawing tools',
     zen: 'Zen mode',
     viewMode: 'View mode',

@@ -1,6 +1,7 @@
 import { boxFromPoints } from '../elements/linear'
 import { type Point, snapSegment } from '../geometry'
 import { bindingAt, boundPatch, findBindTarget } from '../geometry/binding'
+import { GRID_SIZE, snapPoint } from '../geometry/snap'
 import { DEFAULT_STYLE, type LinearElement, type LocalPoint, TYPE_DEFAULTS } from '../model/types'
 import type { PointerInput, Tool, ToolHost } from './controller'
 
@@ -36,12 +37,13 @@ export class LinearTool implements Tool {
     return this.multi
   }
 
-  down(_e: PointerInput, p: Point): void {
+  down(e: PointerInput, p: Point): void {
     if (this.host.ctx.readonly()) return
     this.pressed = true
     this.downAt = p
     if (this.pts) return
-    this.pts = [[p.x, p.y]]
+    const at = this.gridSnap(e, p)
+    this.pts = [[at.x, at.y]]
     this.seed = Math.floor(Math.random() * 2 ** 31)
   }
 
@@ -147,10 +149,18 @@ export class LinearTool implements Tool {
     this.host.ctx.invalidate()
   }
 
-  /** Pointer position for the next point; Shift snaps the segment from the last placed point to 15°. */
+  /**
+   * Pointer position for the next point; Shift snaps the segment from the last placed point to 15°, else the grid
+   * (when on) snaps the point.
+   */
   private target(e: PointerInput, p: Point): Point {
     const last = this.pts?.[this.pts.length - 1]
-    return e.shift && last ? snapSegment({ x: last[0], y: last[1] }, p) : p
+    return e.shift && last ? snapSegment({ x: last[0], y: last[1] }, p) : this.gridSnap(e, p)
+  }
+
+  /** `p` on the grid when it is on and Alt is not held (points never object-snap). */
+  private gridSnap(e: PointerInput, p: Point): Point {
+    return this.host.grid.value && !e.alt ? snapPoint(p, GRID_SIZE) : p
   }
 
   /**

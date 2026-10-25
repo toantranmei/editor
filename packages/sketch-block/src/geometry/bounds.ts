@@ -18,6 +18,15 @@ export function elementCorners(el: RotBox): Point[] {
   return el.angle ? corners.map(p => rotatePoint(p, c, el.angle)) : corners
 }
 
+/** Axis-aligned box of the rotated, unpadded corners (what alignment and object snap use). */
+export function cornersBox(el: RotBox): Box {
+  const cs = elementCorners(el)
+  return {
+    minX: Math.min(...cs.map(c => c.x)), minY: Math.min(...cs.map(c => c.y)),
+    maxX: Math.max(...cs.map(c => c.x)), maxY: Math.max(...cs.map(c => c.y)),
+  }
+}
+
 /** Axis-aligned bounds of the rotated element, padded by its kind's visual pad (ink beyond the box). */
 export function elementBounds(el: SketchElement): Box {
   const corners = elementCorners(el)

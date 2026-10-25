@@ -1,12 +1,13 @@
 import { nanoid } from 'nanoid'
 import { type Ref, ref, shallowRef } from 'vue'
 import type { Box, Point } from '../geometry'
-import { boxCenter, elementBounds, elementCorners } from '../geometry/bounds'
+import { boxCenter, cornersBox, elementBounds, elementCorners } from '../geometry/bounds'
 import {
   type AlignMode, alignPatches, canGroup, type DistributeAxis, distributePatches,
 } from '../geometry/align'
 import { boxesIntersect, rotatePoint } from '../geometry/math'
 import { hitElement } from '../geometry/hit'
+import { GRID_SIZE, type Guide, SNAP_PX, Snapper } from '../geometry/snap'
 import type { History } from '../model/history'
 import type { Scene } from '../model/scene'
 import type { BoardStore } from '../model/store'
@@ -100,6 +101,8 @@ export interface ToolControllerContext {
   now?: () => number
   /** Scene point at the center of the visible canvas (where an image without a drop point goes). */
   viewCenter?: () => Point
+  /** Visible scene box (object snap candidates come from it); defaults to the whole content. */
+  viewBox?: () => Box
 }
 
 /** Shared state the individual tools act on. */
@@ -111,6 +114,12 @@ export interface ToolHost {
   readonly cursor: Ref<string>
   /** Style new elements are drawn with (edited by the style panel). */
   readonly currentStyle: Ref<CurrentStyle>
+  /** Grid shown and snapped to (board-local; off by default). */
+  readonly grid: Ref<boolean>
+  /** Object snap during move / resize / create (board-local; on by default). */
+  readonly objectSnap: Ref<boolean>
+  /** Snap guides of the gesture in progress (scene coords); the controller clears them when it ends. */
+  guides: Guide[]
   marquee: Box | null
   hoverId: string | null
   draft: SketchElement | null
@@ -153,6 +162,13 @@ export interface ToolHost {
   createFrame(box: { x: number; y: number; w: number; h: number }): void
   /** `ids` plus every member of each one's outermost group (groups are selected whole). */
   expandGroups(ids: Iterable<string>): Set<string>
+  /**
+   * Snapper for a gesture starting now, under the current grid / object-snap toggles: candidates are the visible
+   * elements' boxes, except `exclude` and the lines bound to them. Built once per gesture (at pointerdown).
+   */
+  snapper(exclude?: Iterable<string>): Snapper
+  /** Sets the snap guides shown (redraws when they change). */
+  setGuides(guides: Guide[]): void
 }
 
 /** A gesture handler; `p` is the pointer in scene coordinates. */
@@ -217,6 +233,9 @@ export class ToolController implements ToolHost {
   readonly selectedIds: Ref<Set<string>> = ref(new Set())
   readonly cursor: Ref<string> = ref('default')
   readonly currentStyle: Ref<CurrentStyle> = ref({ ...INITIAL_STYLE })
+  readonly grid: Ref<boolean> = ref(false)
+  readonly objectSnap: Ref<boolean> = ref(true)
+  guides: Guide[] = []
   marquee: Box | null = null
   hoverId: string | null = null
   draft: SketchElement | null = null
@@ -291,7 +310,31 @@ export class ToolController implements ToolHost {
       crop,
       editingFrameId: this.editing.value?.kind === 'frame' ? this.editing.value.id : null,
       bindTarget: this.bindTarget,
+      guides: this.guides,
     }
+  }
+
+  snapper(exclude: Iterable<string> = []): Snapper {
+    const { scene, viewport } = this.ctx
+    const grid = this.grid.value ? GRID_SIZE : null
+    const candidates: Box[] = []
+    if (this.objectSnap.value) {
+      const out = new Set(exclude)
+      const view = this.ctx.viewBox?.() ?? scene.contentBounds()
+      for (const el of view ? scene.queryBox(view) : []) {
+        if (out.has(el.id)) continue
+        // a line bound to a moving element moves with it
+        if (isLinear(el) && ((el.startBinding && out.has(el.startBinding.id)) || (el.endBinding && out.has(el.endBinding.id)))) continue
+        candidates.push(cornersBox(el))
+      }
+    }
+    return new Snapper(candidates, grid, SNAP_PX / viewport.zoom)
+  }
+
+  setGuides(guides: Guide[]): void {
+    if (!guides.length && !this.guides.length) return
+    this.guides = guides
+    this.ctx.invalidate()
   }
 
   /**
@@ -334,6 +377,7 @@ export class ToolController implements ToolHost {
     this.active?.cancel?.()
     if (pending !== this.active) pending?.cancel?.()
     this.active = null
+    this.setGuides([])
     if (t === 'eyedropper' && this.tool.value !== 'eyedropper') this.prevTool = this.tool.value
     this.tool.value = t
     if (CREATORS.has(t)) this.setSelection([])
@@ -401,6 +445,7 @@ export class ToolController implements ToolHost {
     if (!tool) return
     this.active = null
     tool.up(e, this.toScene(e))
+    this.setGuides([])
     this.afterGesture()
   }
 
@@ -437,6 +482,7 @@ export class ToolController implements ToolHost {
     this.active = null
     tool?.cancel?.()
     if (pending && pending !== tool) pending.cancel?.()
+    this.setGuides([])
     this.resetCursor()
     this.ctx.invalidate()
     this.afterGesture()
@@ -495,6 +541,17 @@ export class ToolController implements ToolHost {
       // mid-gesture: only Escape (cancel) and Space (pan modifier) act
       if (k !== 'Escape') return false
       this.cancelGesture()
+      return true
+    }
+    // snapping toggles (before the mod / alt guards): mod+' grid, Alt+S object snap (by code: Alt composes `key`
+    // on macOS)
+    if (e.mod && !e.alt && !e.shift && (k === "'" || e.code === 'Quote')) {
+      this.grid.value = !this.grid.value
+      this.ctx.invalidate()
+      return true
+    }
+    if (e.alt && !e.mod && !e.shift && e.code === 'KeyS') {
+      this.objectSnap.value = !this.objectSnap.value
       return true
     }
     // quick create (before the mod / alt guards): the next sticky beside the single selected one

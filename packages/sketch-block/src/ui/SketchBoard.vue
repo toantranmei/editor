@@ -88,7 +88,7 @@ const settler = new ZoomSettler(() => scheduler.invalidateStatic())
 
 function renderState(): RenderState {
   return {
-    viewport, widthCss, heightCss, dpr, theme: props.theme, grid: false, cacheZoom: settler.cacheZoom,
+    viewport, widthCss, heightCss, dpr, theme: props.theme, grid: controller.grid.value, cacheZoom: settler.cacheZoom,
   }
 }
 
@@ -156,6 +156,7 @@ const controller = new ToolController({
   store, scene, history, viewport,
   readonly: () => locked.value,
   viewCenter: () => viewport.toScene(center()),
+  viewBox: () => viewport.visibleBox(widthCss, heightCss),
   invalidate: () => {
     scheduler.invalidateInteractive()
     if (controller.erasing !== drawnErasing) scheduler.invalidateStatic()
@@ -164,6 +165,10 @@ const controller = new ToolController({
 })
 const tool = controller.tool
 const toolLocked = controller.toolLocked
+// snapping toggles: board-local, never persisted (grid off, object snap on)
+const grid = controller.grid
+const objectSnap = controller.objectSnap
+watch(grid, () => scheduler.invalidateStatic())
 const cursor = controller.cursor
 const editing = controller.editing
 const { canUndo, canRedo } = history
@@ -786,6 +791,8 @@ defineExpose({
       :can-undo="canUndo"
       :can-redo="canRedo"
       :readonly="locked"
+      :grid="grid"
+      :object-snap="objectSnap"
       :messages="t"
       @undo="undo"
       @redo="redo"
@@ -793,6 +800,8 @@ defineExpose({
       @zoom-out="zoomTo(viewport.zoom / ZOOM_STEP)"
       @reset="zoomTo(1)"
       @fit="fit"
+      @toggle-grid="grid = !grid"
+      @toggle-snap="objectSnap = !objectSnap"
     />
   </div>
 </template>

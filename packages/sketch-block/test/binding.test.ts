@@ -180,6 +180,8 @@ describe('arrow binding (Task 6)', () => {
   it('moving the arrow alone unbinds the ends whose target stays put', () => {
     const { c, store, arrow } = boundPair()
     c.setTool('select')
+    // exact offsets: no object snap
+    c.objectSnap.value = false
     drag(c, [200, 50], [200, 80])
     const moved = store.get(arrow.id) as LinearElement
     expect(moved.startBinding).toBeNull()
@@ -502,7 +504,7 @@ describe('bind target highlight', () => {
   } as unknown as RenderState)
   const overlay = (bindTarget: string | null) => ({
     selectedIds: new Set<string>(), marquee: null, hoverId: null, draft: null, pointHandles: null, previewSegment: null,
-    erasing: new Set<string>(), laser: [], lasso: null, bindTarget,
+    erasing: new Set<string>(), laser: [], lasso: null, bindTarget, guides: [],
   })
 
   it('outlines the target in the accent color', () => {

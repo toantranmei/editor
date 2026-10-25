@@ -5,6 +5,7 @@ import { kindOf } from '../elements/kind'
 import { hasTransformHandles } from '../elements/linear'
 import { type Box, type Handle, handlePositions, type Point } from '../geometry'
 import { bindOutline } from '../geometry/binding'
+import type { Guide } from '../geometry/snap'
 import { getLoadedImage } from '../io/image-loader'
 import type { Scene } from '../model/scene'
 import type { ImageElement, SketchElement } from '../model/types'
@@ -47,6 +48,8 @@ export interface Overlay {
   editingFrameId?: string | null
   /** Element an arrow endpoint being drawn / dragged would bind to: outlined in the accent color. */
   bindTarget: string | null
+  /** Snap guides of the gesture in progress (scene coords): accent lines, 1 screen px. */
+  guides: Guide[]
 }
 
 /** Opacity factor of the image outside the crop rect. */
@@ -350,6 +353,19 @@ export function renderInteractive(
     drawLaser(ctx, state, overlay.laser, overlay.now ?? performance.now())
     ctx.strokeStyle = accent
     ctx.lineWidth = 1 / zoom
+  }
+
+  if (overlay.guides.length) {
+    elementFrame(ctx, state, 0, 0, 0)
+    ctx.strokeStyle = accent
+    ctx.lineWidth = 1 / zoom
+    ctx.setLineDash([])
+    ctx.beginPath()
+    for (const g of overlay.guides) {
+      ctx.moveTo(g.x1, g.y1)
+      ctx.lineTo(g.x2, g.y2)
+    }
+    ctx.stroke()
   }
 
   const m = overlay.marquee

@@ -1,6 +1,6 @@
 import { outermostGroup } from '../elements/group'
 import type { SketchElement } from '../model/types'
-import { elementCorners } from './bounds'
+import { cornersBox as cornerBox } from './bounds'
 import type { Box } from './math'
 
 export type AlignMode = 'left' | 'hcenter' | 'right' | 'top' | 'vcenter' | 'bottom'
@@ -8,15 +8,6 @@ export type DistributeAxis = 'h' | 'v'
 
 /** What align / distribute move as one: an element, or every given member of one outermost group. */
 interface Unit { els: SketchElement[]; box: Box }
-
-/** Axis-aligned box of the element's unpadded, rotated corners. */
-function cornerBox(el: SketchElement): Box {
-  const cs = elementCorners(el)
-  return {
-    minX: Math.min(...cs.map(p => p.x)), minY: Math.min(...cs.map(p => p.y)),
-    maxX: Math.max(...cs.map(p => p.x)), maxY: Math.max(...cs.map(p => p.y)),
-  }
-}
 
 function union(a: Box, b: Box): Box {
   return {

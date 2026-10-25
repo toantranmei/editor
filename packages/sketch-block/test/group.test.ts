@@ -58,7 +58,8 @@ describe('group, ungroup and lock', () => {
     c.setSelection([])
     click(c, 125, 25)
     expect(sel(c)).toEqual([a.id, b.id].sort())
-    // a press on a member of the selected group moves the whole group
+    // a press on a member of the selected group moves the whole group (exact offsets: no object snap)
+    c.objectSnap.value = false
     c.pointerDown(ptr(25, 25))
     c.pointerMove(ptr(35, 45))
     c.pointerUp(ptr(35, 45))

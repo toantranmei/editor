@@ -2,9 +2,10 @@ import { canRotate, membershipPatches, withFrameChildren } from '../elements/fra
 import { kindOf } from '../elements/kind'
 import { hasTransformHandles, linearScenePoints, movePointPatch } from '../elements/linear'
 import {
-  type Box, boxCenter, elementCorners, type Handle, handlePositions, type Point, resizeBox, rotateAngle,
+  type Box, boxCenter, cornersBox, elementCorners, type Handle, handlePositions, type Point, resizeBox, rotateAngle,
   snapSegment,
 } from '../geometry'
+import { GRID_SIZE, type Snapper, snapPoint } from '../geometry/snap'
 import { bindingAt, boundPatch } from '../geometry/binding'
 import { type ElementPatch, isImage, isLinear, type LinearElement, type SketchElement } from '../model/types'
 import { frameLabelAt } from '../render/frame-labels'
@@ -20,8 +21,8 @@ const HANDLE_CURSOR: Record<Handle, string> = {
 }
 
 type Gesture =
-  | { kind: 'move'; start: Point; origins: SketchElement[] }
-  | { kind: 'resize'; handle: Exclude<Handle, 'rotate'>; el: SketchElement }
+  | { kind: 'move'; start: Point; origins: SketchElement[]; box: Box | null; snap: Snapper }
+  | { kind: 'resize'; handle: Exclude<Handle, 'rotate'>; el: SketchElement; snap: Snapper }
   | { kind: 'rotate'; el: SketchElement }
   | { kind: 'point'; el: LinearElement; index: number }
   | { kind: 'marquee'; start: Point; base: Set<string> }
@@ -127,7 +128,7 @@ export class SelectTool implements Tool {
       this.beginWrite()
       this.g = handle.handle === 'rotate'
         ? { kind: 'rotate', el: handle.el }
-        : { kind: 'resize', handle: handle.handle, el: handle.el }
+        : { kind: 'resize', handle: handle.handle, el: handle.el, snap: this.host.snapper([handle.el.id]) }
       return
     }
 
@@ -165,7 +166,16 @@ export class SelectTool implements Tool {
       .map(id => ctx.scene.get(id))
       .filter((el): el is SketchElement => !!el && !el.locked))
     if (origins.length) this.beginWrite()
-    this.g = { kind: 'move', start: p, origins }
+    // the union box of what moves is snapped; candidates exclude it (and the lines bound to it)
+    let box: Box | null = null
+    for (const el of origins) {
+      const b = cornersBox(el)
+      box = box
+        ? { minX: Math.min(box.minX, b.minX), minY: Math.min(box.minY, b.minY), maxX: Math.max(box.maxX, b.maxX), maxY: Math.max(box.maxY, b.maxY) }
+        : b
+    }
+    const snap = this.host.snapper(origins.map(el => el.id))
+    this.g = { kind: 'move', start: p, origins, box, snap }
     this.host.cursor.value = 'move'
   }
 
@@ -174,9 +184,18 @@ export class SelectTool implements Tool {
     if (g.kind !== 'none' && g.kind !== 'marquee') this.dirty = true
     switch (g.kind) {
       case 'move': {
-        const dx = p.x - g.start.x
-        const dy = p.y - g.start.y
         if (!g.origins.length) return
+        let dx = p.x - g.start.x
+        let dy = p.y - g.start.y
+        // Alt (held at this moment) skips snapping
+        if (g.box && !e.alt && !g.snap.idle) {
+          const s = g.snap.move({ minX: g.box.minX + dx, minY: g.box.minY + dy, maxX: g.box.maxX + dx, maxY: g.box.maxY + dy })
+          dx += s.dx
+          dy += s.dy
+          this.host.setGuides(s.guides)
+        } else {
+          this.host.setGuides([])
+        }
         const patches: Record<string, ElementPatch> = {}
         for (const el of g.origins) {
           // a bound line is re-placed from its whole origin geometry (an earlier frame may have rewritten its box)
@@ -191,8 +210,18 @@ export class SelectTool implements Tool {
       case 'resize': {
         // images keep their aspect ratio unless Shift is held; everything else the other way round
         const keepRatio = isImage(g.el) ? !e.shift : e.shift
+        // the moving edge(s) of an unrotated element snap (the edge lands on the pointer); Alt resizes from the
+        // center, so it also skips snapping
+        let target = p
+        if (!e.alt && !g.el.angle && !g.snap.idle) {
+          const s = g.snap.point(p, { x: /[ew]/.test(g.handle), y: /[ns]/.test(g.handle) })
+          target = s.p
+          this.host.setGuides(s.guides)
+        } else {
+          this.host.setGuides([])
+        }
         this.writer.set(this.host.withFollowers({
-          [g.el.id]: kindOf(g.el).resize(g.el, resizeBox(g.el, g.handle, p, { keepRatio, fromCenter: e.alt })),
+          [g.el.id]: kindOf(g.el).resize(g.el, resizeBox(g.el, g.handle, target, { keepRatio, fromCenter: e.alt })),
         }))
         return
       }
@@ -205,6 +234,9 @@ export class SelectTool implements Tool {
           // snap the segment from the neighbouring point
           const scene = linearScenePoints(g.el)
           target = snapSegment(scene[g.index === 0 ? 1 : g.index - 1]!, p)
+        } else if (!e.alt && this.host.grid.value) {
+          // points snap to the grid only (no object snap)
+          target = snapPoint(p, GRID_SIZE)
         }
         this.writer.set({ [g.el.id]: this.pointPatch(g.el, g.index, target) })
         return

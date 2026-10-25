@@ -1,4 +1,5 @@
 import type { Point } from '../geometry'
+import type { Snapper } from '../geometry/snap'
 import type { ShapeType, SketchElement } from '../model/types'
 import type { PointerInput, Tool, ToolHost } from './controller'
 
@@ -22,16 +23,32 @@ export function dragBox(start: Point, p: Point, square: boolean, fromCenter: boo
   return { x: Math.min(start.x, start.x + dx), y: Math.min(start.y, start.y + dy), w: Math.abs(dx), h: Math.abs(dy) }
 }
 
+/**
+ * A creation drag's corner `p` snapped (object edges, else the grid) and the guides shown; Alt held skips
+ * snapping for this event.
+ */
+export function snapCorner(host: ToolHost, snap: Snapper | null, e: PointerInput, p: Point): Point {
+  if (!snap || e.alt || snap.idle) {
+    host.setGuides([])
+    return p
+  }
+  const s = snap.point(p)
+  host.setGuides(s.guides)
+  return s.p
+}
+
 /** Drag-to-create for any shape type. The draft stays out of Y until pointerUp. */
 export class ShapeTool implements Tool {
   private start: Point | null = null
   private seed = 0
+  private snap: Snapper | null = null
 
   constructor(private readonly host: ToolHost, private readonly type: ShapeType) {}
 
-  down(_e: PointerInput, p: Point): void {
+  down(e: PointerInput, p: Point): void {
     if (this.host.ctx.readonly()) return
-    this.start = p
+    this.snap = this.host.snapper()
+    this.start = e.alt || this.snap.idle ? p : this.snap.point(p).p
     this.seed = Math.floor(Math.random() * 2 ** 31)
   }
 
@@ -61,6 +78,7 @@ export class ShapeTool implements Tool {
 
   cancel(): void {
     this.start = null
+    this.snap = null
     if (this.host.draft) {
       this.host.draft = null
       this.host.ctx.invalidate()
@@ -74,7 +92,7 @@ export class ShapeTool implements Tool {
   }
 
   private makeDraft(e: PointerInput, p: Point): SketchElement {
-    const box = dragBox(this.start!, p, e.shift, e.alt)
+    const box = dragBox(this.start!, snapCorner(this.host, this.snap, e, p), e.shift, e.alt)
     return {
       ...this.styleProps(),
       ...box,
