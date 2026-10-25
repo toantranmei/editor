@@ -38,6 +38,8 @@ class FrameWriter {
   readonly touched = new Map<string, Set<string>>()
   /** Each written element as it was before its first write since the last `reset` (what a cancel restores). */
   readonly snapshots = new Map<string, SketchElement>()
+  /** Ids taken out of the gesture since the last `reset` (deleted remotely mid-gesture). */
+  private readonly forgotten = new Set<string>()
 
   constructor(
     private readonly write: (patches: Record<string, ElementPatch>) => void,
@@ -61,26 +63,41 @@ class FrameWriter {
     const p = this.pending
     this.pending = null
     if (!p) return
+    const out: Record<string, ElementPatch> = {}
     for (const [id, patch] of Object.entries(p)) {
+      // left the gesture (deleted by a peer): never written again, even if it comes back
+      if (this.forgotten.has(id)) continue
       let keys = this.touched.get(id)
       if (!keys) {
-        this.touched.set(id, keys = new Set())
         const before = this.snapshot(id)
-        if (before) this.snapshots.set(id, before)
+        // gone (a peer deleted it): nothing to write, and nothing to revert
+        if (!before) continue
+        this.touched.set(id, keys = new Set())
+        this.snapshots.set(id, before)
       }
       for (const k of Object.keys(patch)) keys.add(k)
+      out[id] = patch
     }
-    this.write(p)
+    if (Object.keys(out).length) this.write(out)
   }
 
   drop(): void {
     this.pending = null
   }
 
+  /** Takes `id` out of the gesture: later writes skip it and a revert leaves it alone. */
+  forget(id: string): void {
+    this.forgotten.add(id)
+    this.touched.delete(id)
+    this.snapshots.delete(id)
+    if (this.pending) delete this.pending[id]
+  }
+
   reset(): void {
     this.pending = null
     this.touched.clear()
     this.snapshots.clear()
+    this.forgotten.clear()
   }
 }
 
@@ -318,6 +335,31 @@ export class SelectTool implements Tool {
       this.host.ctx.invalidate()
     }
     this.g = { kind: 'none' }
+  }
+
+  /**
+   * The scene changed (a peer may have deleted elements mid-gesture): every element of the gesture in progress that
+   * no longer exists leaves it for good. Later frames skip it and a cancel does not revert it, even if a peer brings
+   * it back (its undo). A resize / rotate / point drag whose target is gone keeps its undo bracket (bound lines it
+   * already moved stay part of it) but writes nothing more.
+   */
+  prune(): void {
+    if (!this.writing) return
+    const { scene } = this.host.ctx
+    const g = this.g
+    for (const id of [...this.writer.touched.keys()]) if (!scene.get(id)) this.writer.forget(id)
+    if (g.kind === 'move') {
+      const gone = g.origins.filter(el => !scene.get(el.id))
+      if (!gone.length) return
+      for (const el of gone) this.writer.forget(el.id)
+      g.origins = g.origins.filter(el => !gone.includes(el))
+    } else if ((g.kind === 'resize' || g.kind === 'rotate' || g.kind === 'point') && !scene.get(g.el.id)) {
+      this.writer.forget(g.el.id)
+      this.writer.drop()
+      this.setBindTarget(null)
+      this.host.setGuides([])
+      this.g = { kind: 'none' }
+    }
   }
 
   /**

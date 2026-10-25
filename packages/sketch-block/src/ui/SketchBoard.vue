@@ -3,11 +3,11 @@ import { computed, onBeforeUnmount, onMounted, ref, shallowRef, toRaw, watch } f
 import type * as Y from 'yjs'
 import '../styles/sketch.css'
 import {
-  MAX_LASER_POINTS, MAX_SELECTION_IDS, PresencePublisher, PresenceReader, resolveUser, type UserOption,
+  MAX_LASER_POINTS, MAX_SELECTION_IDS, PresencePublisher, PresenceReader, RemoteSelectionBoxes, resolveUser,
+  type UserOption,
 } from '../collab/presence'
 import type { BoardSession } from '../engine'
 import { shapeKeyOf } from '../elements/kind'
-import { elementCorners } from '../geometry/bounds'
 import type { Point } from '../geometry/math'
 import {
   clipboardImageFiles, clipboardTooLarge, parseClipboard, pastedImageFiles, serializeClipboard,
@@ -164,6 +164,28 @@ function syncView(): void {
   publishViewport()
 }
 
+// ---------- presence (networked providers only; fully inert without an awareness) ----------
+// Declared before anything whose closures read them (syncView, the controller's invalidate): no TDZ access.
+const awareness = toRaw(toRaw(props.connection).awareness) ?? null
+const hasPresence = !!awareness
+const publisher = awareness
+  ? new PresencePublisher(awareness, resolveUser(props.user, awareness.clientID, props.locale))
+  : null
+const reader = awareness
+  ? new PresenceReader(awareness, { now: () => controller.now(), locale: () => props.locale, onChange: onRemote })
+  : null
+/** Peers for the avatars list (replaced only when someone joins, leaves or changes name / color). */
+const avatarPeers = shallowRef<AvatarPeer[]>([])
+let avatarKey = ''
+/** Client id whose view we follow (null = none). */
+const following = ref<number | null>(null)
+/** True while follow mode moves the viewport (so syncView does not take it for a local pan). */
+let applyingFollow = false
+/** Remote selection outlines, memoized per peer. */
+const remoteSelections = new RemoteSelectionBoxes()
+/** Newest laser point time last published ('' = empty trail). */
+let laserKey = ''
+
 // ---------- tools ----------
 /** Eraser marks the static layer last skipped (the controller replaces the Set whenever marks change). */
 let drawnErasing: Set<string> = new Set()
@@ -200,25 +222,6 @@ const cursor = controller.cursor
 const editing = controller.editing
 const { canUndo, canRedo } = history
 const currentStyle = controller.currentStyle
-
-// ---------- presence (networked providers only; fully inert without an awareness) ----------
-const awareness = toRaw(toRaw(props.connection).awareness) ?? null
-const hasPresence = !!awareness
-const publisher = awareness
-  ? new PresencePublisher(awareness, resolveUser(props.user, awareness.clientID, props.locale))
-  : null
-const reader = awareness
-  ? new PresenceReader(awareness, { now: () => controller.now(), locale: () => props.locale, onChange: onRemote })
-  : null
-/** Peers for the avatars list (replaced only when someone joins, leaves or changes name / color). */
-const avatarPeers = shallowRef<AvatarPeer[]>([])
-let avatarKey = ''
-/** Client id whose view we follow (null = none). */
-const following = ref<number | null>(null)
-/** True while follow mode moves the viewport (so syncView does not take it for a local pan). */
-let applyingFollow = false
-/** Newest laser point time last published ('' = empty trail). */
-let laserKey = ''
 
 function onRemote(): void {
   refreshAvatars()
@@ -285,16 +288,18 @@ function publishLaser(): void {
   })
 }
 
-/** Remote peers for the overlay: selection boxes of elements we have, laser points not yet faded. */
+/**
+ * Remote peers for the overlay: selection boxes of elements we have (memoized per peer, culled to the view), laser
+ * points not yet faded.
+ */
 function remoteOverlay(now: number): RemoteOverlay[] {
   const out: RemoteOverlay[] = []
   const cutoff = now - LASER_FADE_MS
-  for (const p of reader!.peers()) {
-    const selectionBoxes = []
-    for (const id of p.selection) {
-      const el = scene.get(id)
-      if (el) selectionBoxes.push(elementCorners(el))
-    }
+  const peers = reader!.peers()
+  const view = widthCss > 0 && heightCss > 0 ? viewport.visibleBox(widthCss, heightCss) : null
+  remoteSelections.retain(peers.map(p => p.clientId))
+  for (const p of peers) {
+    const selectionBoxes = remoteSelections.boxes(p, scene, view)
     const laser = p.laser.length && p.laser[p.laser.length - 1]!.t > cutoff ? p.laser.filter(l => l.t > cutoff) : []
     if (!p.cursor && !selectionBoxes.length && !laser.length) continue
     out.push({ clientId: p.clientId, color: p.user.color, name: p.user.name, cursor: p.cursor, selectionBoxes, laser })

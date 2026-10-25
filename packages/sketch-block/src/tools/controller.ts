@@ -1346,6 +1346,8 @@ export class ToolController implements ToolHost {
 
   private pruneSelection(): void {
     const { scene } = this.ctx
+    // elements deleted by a peer leave the move / resize / rotate / point drag in progress
+    this.select.prune()
     const target = this.editing.value
     if (target && !scene.get(target.id)) {
       // deleted remotely while open: close the editor, keeping whatever undo step the edit made

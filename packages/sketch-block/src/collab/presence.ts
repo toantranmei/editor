@@ -4,7 +4,9 @@
  * pulls it into a bundle; with no awareness the board never constructs any of this.
  */
 import type { Awareness } from 'y-protocols/awareness'
-import type { Point } from '../geometry/math'
+import { cornersBox, elementCorners } from '../geometry/bounds'
+import type { Box, Point } from '../geometry/math'
+import type { Scene } from '../model/scene'
 import { MAX_ZOOM, MIN_ZOOM } from '../viewport'
 
 /** Minimum time between two publishes of the local state, ms. */
@@ -146,7 +148,7 @@ export class PresencePublisher {
 
   constructor(
     private readonly awareness: Awareness,
-    user: PresenceUser,
+    private readonly user: PresenceUser,
     private readonly timers: Timers = defaultTimers,
   ) {
     this.write({ user, cursor: null, selection: [], viewport: null, laser: [] })
@@ -177,8 +179,11 @@ export class PresencePublisher {
   }
 
   private write(patch: Partial<PresenceState>): void {
-    // one update for all changed fields; fields the app set itself are kept
-    this.awareness.setLocalState({ ...(this.awareness.getLocalState() ?? {}), ...patch })
+    // one update for all changed fields; fields the app set itself are kept. A state that lost our identity
+    // (cleared or replaced by someone else) gets it back: peers ignore a state without `user`.
+    const cur = this.awareness.getLocalState()
+    const base = cur && isObj(cur.user) ? cur : { ...(cur ?? {}), user: this.user }
+    this.awareness.setLocalState({ ...base, ...patch })
     this.published = true
   }
 }
@@ -252,6 +257,59 @@ export class PresenceReader {
     // the sender's clock is not ours: its newest point counts as "now" when it arrives
     if (state.laser.length && newest !== prev?.laserT) offset = this.opts.now() - newest
     const laser = state.laser.map(p => ({ ...p, t: p.t + offset }))
-    this.entries.set(id, { peer: { ...state, laser, clientId: id }, laserT: newest, offset })
+    // an unchanged selection keeps its array, so per-peer caches keyed on it (selection boxes) stay valid
+    const selection = prev && sameIds(prev.peer.selection, state.selection) ? prev.peer.selection : state.selection
+    this.entries.set(id, { peer: { ...state, selection, laser, clientId: id }, laserT: newest, offset })
+  }
+}
+
+function sameIds(a: readonly string[], b: readonly string[]): boolean {
+  if (a.length !== b.length) return false
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false
+  return true
+}
+
+const overlaps = (a: Box, b: Box): boolean =>
+  a.minX <= b.maxX && a.maxX >= b.minX && a.minY <= b.maxY && a.maxY >= b.minY
+
+/**
+ * Remote peers' selection outlines (element corners), memoized per peer on the identity of its selection array
+ * and of the scene's elements array (the scene replaces it on every change), then culled to the visible box.
+ */
+export class RemoteSelectionBoxes {
+  /** Recomputations so far (for tests). */
+  computed = 0
+  private readonly cache = new Map<number, {
+    selection: readonly string[]
+    elements: unknown
+    boxes: Array<{ corners: Point[]; box: Box }>
+  }>()
+
+  get size(): number {
+    return this.cache.size
+  }
+
+  /** Outlines of the peer's selected elements we have, intersecting `view` (all of them when null). */
+  boxes(peer: { clientId: number; selection: readonly string[] }, scene: Scene, view: Box | null): Point[][] {
+    let hit = this.cache.get(peer.clientId)
+    if (!hit || hit.selection !== peer.selection || hit.elements !== scene.elements) {
+      const boxes: Array<{ corners: Point[]; box: Box }> = []
+      for (const id of peer.selection) {
+        const el = scene.get(id)
+        if (el) boxes.push({ corners: elementCorners(el), box: cornersBox(el) })
+      }
+      hit = { selection: peer.selection, elements: scene.elements, boxes }
+      this.cache.set(peer.clientId, hit)
+      this.computed++
+    }
+    const out: Point[][] = []
+    for (const b of hit.boxes) if (!view || overlaps(b.box, view)) out.push(b.corners)
+    return out
+  }
+
+  /** Forgets the peers not in `clientIds` (they left). */
+  retain(clientIds: Iterable<number>): void {
+    const keep = new Set(clientIds)
+    for (const id of [...this.cache.keys()]) if (!keep.has(id)) this.cache.delete(id)
   }
 }

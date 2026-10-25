@@ -5,7 +5,8 @@ import { applyAwarenessUpdate, Awareness, encodeAwarenessUpdate } from 'y-protoc
 import * as Y from 'yjs'
 
 import {
-  defaultUser, GUEST_COLORS, PresencePublisher, PresenceReader, PRESENCE_THROTTLE_MS, sanitizePresence,
+  defaultUser, GUEST_COLORS, PresencePublisher, PresenceReader, PRESENCE_THROTTLE_MS, RemoteSelectionBoxes,
+  sanitizePresence,
 } from '../src/collab/presence'
 import { SketchBoard } from '../src/engine'
 import { BoardStore } from '../src/model/store'
@@ -147,6 +148,64 @@ describe('presence model', () => {
     expect(a.getLocalState()).toBeNull()
     vi.advanceTimersByTime(200)
     expect(a.getLocalState()).toBeNull()
+  })
+
+  it('publisher re-adds the user when the local state lost it', () => {
+    vi.useFakeTimers()
+    const a = newAwareness()
+    const pub = new PresencePublisher(a, { name: 'Ann', color: '#2f9e44' })
+    // something else cleared (or replaced) the local state
+    a.setLocalState(null)
+    pub.set({ cursor: { x: 1, y: 2 } })
+    vi.advanceTimersByTime(PRESENCE_THROTTLE_MS)
+    expect(a.getLocalState()).toMatchObject({ user: { name: 'Ann', color: '#2f9e44' }, cursor: { x: 1, y: 2 } })
+    a.setLocalState({ app: 1 })
+    pub.set({ cursor: null })
+    pub.flush()
+    expect(a.getLocalState()).toMatchObject({ app: 1, user: { name: 'Ann', color: '#2f9e44' }, cursor: null })
+    pub.destroy()
+  })
+
+  it('reader keeps a peer selection array while its ids do not change', () => {
+    const a = newAwareness()
+    const peer = newAwareness()
+    relay(peer, a)
+    const reader = new PresenceReader(a, { now: () => 0, locale: () => 'en', onChange: () => {} })
+    peer.setLocalState({ user: { name: 'Eve', color: '#0c8599' }, cursor: null, selection: ['x', 'y'], viewport: null, laser: [] })
+    const first = reader.get(peer.clientID)!.selection
+    peer.setLocalState({ ...peer.getLocalState(), cursor: { x: 5, y: 5 } })
+    expect(reader.get(peer.clientID)!.cursor).toEqual({ x: 5, y: 5 })
+    expect(reader.get(peer.clientID)!.selection).toBe(first)
+    peer.setLocalState({ ...peer.getLocalState(), selection: ['x'] })
+    expect(reader.get(peer.clientID)!.selection).toEqual(['x'])
+    reader.destroy()
+  })
+
+  it('remote selection boxes are memoized per peer and culled to the view', () => {
+    const store = new BoardStore(new Y.Doc())
+    const scene = new Scene(store)
+    const near = store.create(init({ x: 0, y: 0 }))
+    const far = store.create(init({ x: 5000, y: 5000 }))
+    const cache = new RemoteSelectionBoxes()
+    const selection = [near.id, far.id, 'missing']
+    const view = { minX: -100, minY: -100, maxX: 800, maxY: 600 }
+    const one = cache.boxes({ clientId: 1, selection }, scene, view)
+    expect(one).toHaveLength(1)
+    expect(one[0]).toEqual([{ x: 0, y: 0 }, { x: 100, y: 0 }, { x: 100, y: 50 }, { x: 0, y: 50 }])
+    expect(cache.boxes({ clientId: 1, selection }, scene, null)).toHaveLength(2)
+    // same selection array and scene elements: nothing is recomputed
+    const computed = cache.computed
+    cache.boxes({ clientId: 1, selection }, scene, view)
+    expect(cache.computed).toBe(computed)
+    // a scene change recomputes
+    store.update(far.id, { x: 10, y: 10 })
+    expect(cache.boxes({ clientId: 1, selection }, scene, view)).toHaveLength(2)
+    expect(cache.computed).toBe(computed + 1)
+    // another peer has its own entry; peers that left are dropped
+    cache.boxes({ clientId: 2, selection: [near.id] }, scene, view)
+    cache.retain([2])
+    expect(cache.size).toBe(1)
+    scene.destroy()
   })
 
   it('reader exposes sanitized remote peers and re-times their laser', () => {
