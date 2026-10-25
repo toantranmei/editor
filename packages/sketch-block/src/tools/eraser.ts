@@ -1,5 +1,5 @@
-import { frameDeletePatches } from '../elements/frame'
 import { hitElement, type Point } from '../geometry'
+import { deletePatches } from '../geometry/binding'
 import type { PointerInput, Tool, ToolHost } from './controller'
 
 /** Hit distance from the swept path, and the step between samples along it, in screen px. */
@@ -40,8 +40,8 @@ export class EraserTool implements Tool {
     this.cancel()
     if (!ids.length || readonly()) return
     history.stopCapturing()
-    // an erased frame's children leave it, in the same transaction
-    store.remove(ids, frameDeletePatches(scene, ids))
+    // an erased frame's children leave it and lines bound to the erased come loose, in the same transaction
+    store.remove(ids, deletePatches(scene, ids))
     history.stopCapturing()
   }
 

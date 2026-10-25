@@ -4,6 +4,7 @@ import { drawImagePlaceholder } from '../elements/image'
 import { kindOf } from '../elements/kind'
 import { hasTransformHandles } from '../elements/linear'
 import { type Box, type Handle, handlePositions, type Point } from '../geometry'
+import { bindOutline } from '../geometry/binding'
 import { getLoadedImage } from '../io/image-loader'
 import type { Scene } from '../model/scene'
 import type { ImageElement, SketchElement } from '../model/types'
@@ -43,6 +44,8 @@ export interface Overlay {
   crop?: CropOverlay | null
   /** Frame being renamed: its name label is left to the editor. */
   editingFrameId?: string | null
+  /** Element an arrow endpoint being drawn / dragged would bind to: outlined in the accent color. */
+  bindTarget: string | null
 }
 
 /** Opacity factor of the image outside the crop rect. */
@@ -57,6 +60,8 @@ const LASER_WIDTH_PX = 4
 const FALLBACK_ACCENT = '#2383e2'
 const HANDLE_PX = 8
 const SELECTION_GAP_PX = 4
+/** Line width of the bind target's outline, screen px. */
+const BIND_TARGET_PX = 2
 
 let accentCache = new WeakMap<HTMLCanvasElement, string>()
 
@@ -190,8 +195,8 @@ function outline(ctx: CanvasRenderingContext2D, el: SketchElement, gap: number):
 }
 
 /**
- * Draws transient UI: the draft element (its kind's full-fidelity draw), the multi-point preview segment,
- * hover, selection, handles, point handles, marquee.
+ * Draws transient UI: the draft element (its kind's full-fidelity draw), the multi-point preview segment, the
+ * bind target, hover, selection, handles, point handles, marquee.
  */
 export function renderInteractive(
   ctx: CanvasRenderingContext2D,
@@ -230,6 +235,21 @@ export function renderInteractive(
     ctx.lineTo(seg[1].x, seg[1].y)
     ctx.stroke()
     ctx.setLineDash([])
+  }
+
+  const bind = overlay.bindTarget ? scene.get(overlay.bindTarget) : undefined
+  if (bind) {
+    // the outline the endpoint will bind to, slightly bolder than the hover outline
+    const pts = bindOutline(bind)
+    ctx.setLineDash([])
+    ctx.lineWidth = BIND_TARGET_PX / zoom
+    elementFrame(ctx, state, bind.x + bind.w / 2, bind.y + bind.h / 2, bind.angle)
+    ctx.translate(-bind.w / 2, -bind.h / 2)
+    ctx.beginPath()
+    pts.forEach(([x, y], i) => (i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)))
+    ctx.closePath()
+    ctx.stroke()
+    ctx.lineWidth = 1 / zoom
   }
 
   if (overlay.hoverId && !overlay.selectedIds.has(overlay.hoverId)) {

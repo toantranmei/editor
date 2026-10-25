@@ -135,8 +135,9 @@ describe('isRenderable (M2)', () => {
     expect(isRenderable({ ...base, groupIds: [1] })).toBe(false)
     expect(isRenderable({ ...base, frameId: 3 })).toBe(false)
     expect(isRenderable({ ...M1_ARROW, startBinding: { id: 'r', ax: 0, ay: 1 }, endBinding: null })).toBe(true)
-    expect(isRenderable({ ...M1_ARROW, startBinding: { id: 'r', ax: Number.NaN, ay: 1 } })).toBe(false)
-    expect(isRenderable({ ...M1_ARROW, endBinding: 'r' })).toBe(false)
+    // a malformed binding no longer hides the line: it is normalized to null on read (see binding.test.ts)
+    expect(isRenderable({ ...M1_ARROW, startBinding: { id: 'r', ax: Number.NaN, ay: 1 } })).toBe(true)
+    expect(isRenderable({ ...M1_ARROW, endBinding: 'r' })).toBe(true)
   })
 
   it('accepts new shapes and validates new element types structurally', () => {
@@ -181,11 +182,13 @@ describe('clipboard (M2)', () => {
     expect(bad.elements[0]!.groupIds).toEqual([])
   })
 
-  it('keeps an arrow label, drops bindings', () => {
+  it('keeps an arrow label and well-formed bindings (the paster remaps or drops them)', () => {
     const r = paste({
-      ...M1_ARROW, label: 'yes', startBinding: { id: 'x', ax: 0, ay: 0 }, endBinding: { id: 'y', ax: 1, ay: 1 },
+      ...M1_ARROW, label: 'yes', startBinding: { id: 'x', ax: 0, ay: 0 }, endBinding: { id: 'y', ax: 1, ay: 'a' },
     }) as { elements: ElementInit[] }
-    expect(r.elements[0]).toMatchObject({ type: 'arrow', label: 'yes', startBinding: null, endBinding: null })
+    expect(r.elements[0]).toMatchObject({
+      type: 'arrow', label: 'yes', startBinding: { id: 'x', ax: 0, ay: 0 }, endBinding: null,
+    })
   })
 
   it('skips element types without a registered kind', () => {

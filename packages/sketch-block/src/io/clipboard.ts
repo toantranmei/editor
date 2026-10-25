@@ -1,5 +1,5 @@
 import { hasKind } from '../elements/kind'
-import { ELEMENT_TYPES, type ElementInit, isImageSrc, normalizeElement, type SketchElement } from '../model/types'
+import { cleanBinding, ELEMENT_TYPES, type ElementInit, isImageSrc, normalizeElement, type SketchElement } from '../model/types'
 import { isImageFile } from './image-insert'
 
 export const CLIPBOARD_TYPE = 'mei-sketch/clipboard'
@@ -22,6 +22,8 @@ const MAX_POINTS = 20_000
 const MAX_GROUP_IDS = 16
 /** Characters kept per group id. */
 const MAX_GROUP_ID_CHARS = 64
+/** Characters of a source element id kept (to remap bindings among pasted elements); longer ids are dropped. */
+const MAX_ID_CHARS = 64
 /** A frame's name is cut to this length. */
 const MAX_FRAME_NAME_CHARS = 200
 /** An image's natural width / height is clamped to this (px). */
@@ -170,11 +172,18 @@ function sanitizeElement(raw: unknown): ElementInit | null {
   }
   const g = raw.groupIds
   if (Array.isArray(g) && g.every(isString)) out.groupIds = (g as string[]).slice(0, MAX_GROUP_IDS).map(s => s.slice(0, MAX_GROUP_ID_CHARS))
-  // frame membership is recomputed and bindings are remapped by the paster; never trust the payload's ids
+  // the source id only lets the paster remap bindings to the copies: it never becomes a stored id
+  if (typeof raw.id === 'string' && raw.id.length <= MAX_ID_CHARS) out.id = raw.id
+  // frame membership is recomputed by the paster; never trust the payload's frame id
   out.frameId = null
   if (type === 'line' || type === 'arrow') {
-    out.startBinding = null
-    out.endBinding = null
+    // kept when well-formed; the paster keeps only those whose target is pasted along (remapped to its copy)
+    const bound = (v: unknown) => {
+      const b = cleanBinding(v)
+      return b && b.id.length <= MAX_ID_CHARS ? b : null
+    }
+    out.startBinding = bound(raw.startBinding)
+    out.endBinding = bound(raw.endBinding)
   }
   if (finite(raw.opacity)) out.opacity = Math.min(1, Math.max(0, raw.opacity))
   if (type === 'image' && !sanitizeImage(raw, out)) return null

@@ -19,6 +19,50 @@ export function routePoints(el: LinearElement): LocalPoint[] {
   return [p0, [p0[0], my], [pn[0], my], pn]
 }
 
+/** Samples per curve span in `curvePoints`. */
+const CURVE_STEPS = 16
+
+/**
+ * The curve roughjs draws through `route` (`generator.curve`, curveTightness 0, before its random offsets): a
+ * Catmull-Rom spline as cubic Béziers, the end points doubled. Sampled CURVE_STEPS per span; every route point is
+ * on it. Fewer than 3 points: the route itself.
+ */
+export function curvePoints(route: readonly LocalPoint[]): LocalPoint[] {
+  if (route.length < 3) return route.map(p => [p[0], p[1]])
+  const pts = [route[0]!, ...route, route[route.length - 1]!]
+  const out: LocalPoint[] = [[pts[1]![0], pts[1]![1]]]
+  for (let i = 1; i + 2 < pts.length; i++) {
+    const p0 = pts[i - 1]!
+    const p1 = pts[i]!
+    const p2 = pts[i + 1]!
+    const p3 = pts[i + 2]!
+    const c1: LocalPoint = [p1[0] + (p2[0] - p0[0]) / 6, p1[1] + (p2[1] - p0[1]) / 6]
+    const c2: LocalPoint = [p2[0] + (p1[0] - p3[0]) / 6, p2[1] + (p1[1] - p3[1]) / 6]
+    for (let k = 1; k <= CURVE_STEPS; k++) {
+      if (k === CURVE_STEPS) {
+        out.push([p2[0], p2[1]])
+        break
+      }
+      const t = k / CURVE_STEPS
+      const u = 1 - t
+      const a = u * u * u
+      const b = 3 * u * u * t
+      const c = 3 * u * t * t
+      const d = t * t * t
+      out.push([a * p1[0] + b * c1[0] + c * c2[0] + d * p2[0], a * p1[1] + b * c1[1] + c * c2[1] + d * p2[1]])
+    }
+  }
+  return out
+}
+
+const isCurved = (el: LinearElement, route: readonly LocalPoint[]): boolean => el.routing === 'curved' && route.length > 2
+
+/** The polyline the shaft is drawn along (local frame): the sampled curve for a curved line, else the route. */
+export function shaftPoints(el: LinearElement): LocalPoint[] {
+  const route = routePoints(el)
+  return isCurved(el, route) ? curvePoints(route) : route
+}
+
 export interface ArrowheadShape {
   kind: 'polyline' | 'polygon' | 'circle' | 'line'
   points: LocalPoint[]
@@ -102,22 +146,40 @@ export function movePointPatch(
 /** Resize / rotate handles apply to everything except a plain 2-point line or arrow. */
 export const hasTransformHandles = (el: SketchElement): boolean => !isLinear(el) || el.points.length > 2
 
-/** Heads with their tip and the route point the shaft arrives from (the nearest distinct one). */
+/**
+ * Heads with their tip and the point the shaft arrives from: the nearest distinct route point, or on a curve the
+ * first point along it at least a head length from the tip (so the head follows the bend, not the chord).
+ */
 function heads(el: LinearElement, route: LocalPoint[]): ArrowheadShape[] {
   const out: ArrowheadShape[] = []
   if (route.length === 0) return out
-  const from = (tip: LocalPoint, seq: LocalPoint[]): LocalPoint =>
-    seq.find(p => p[0] !== tip[0] || p[1] !== tip[1]) ?? tip
+  const curved = isCurved(el, route)
+  const shaft = curved ? curvePoints(route) : route
+  const reach = arrowheadLength(el.strokeWidth)
+  const from = (tip: LocalPoint, seq: LocalPoint[]): LocalPoint => {
+    if (curved) {
+      let last = tip
+      for (const p of seq) {
+        if (p[0] !== tip[0] || p[1] !== tip[1]) last = p
+        if (Math.hypot(p[0] - tip[0], p[1] - tip[1]) >= reach) return p
+      }
+      return last
+    }
+    return seq.find(p => p[0] !== tip[0] || p[1] !== tip[1]) ?? tip
+  }
   if (el.startArrowhead !== 'none') {
-    const tip = route[0]!
-    out.push(arrowheadPoints(el.startArrowhead, tip, from(tip, route.slice(1)), el.strokeWidth))
+    const tip = shaft[0]!
+    out.push(arrowheadPoints(el.startArrowhead, tip, from(tip, shaft.slice(1)), el.strokeWidth))
   }
   if (el.endArrowhead !== 'none') {
-    const tip = route[route.length - 1]!
-    out.push(arrowheadPoints(el.endArrowhead, tip, from(tip, route.slice(0, -1).reverse()), el.strokeWidth))
+    const tip = shaft[shaft.length - 1]!
+    out.push(arrowheadPoints(el.endArrowhead, tip, from(tip, shaft.slice(0, -1).reverse()), el.strokeWidth))
   }
   return out
 }
+
+/** The arrowheads of `el` in its local frame. */
+export const arrowheadsOf = (el: LinearElement): ArrowheadShape[] => heads(el, routePoints(el))
 
 const hasHead = (el: LinearElement): boolean => el.startArrowhead !== 'none' || el.endArrowhead !== 'none'
 
@@ -203,7 +265,7 @@ export const linearKind: ElementKind<LinearElement> = {
     ctx.lineJoin = 'round'
     ctx.lineCap = 'round'
     const route = routePoints(el)
-    plainPolyline(ctx, route)
+    plainPolyline(ctx, isCurved(el, route) ? curvePoints(route) : route)
     ctx.stroke()
     for (const h of heads(el, route)) {
       if (h.kind === 'circle') {
@@ -231,7 +293,7 @@ export const linearKind: ElementKind<LinearElement> = {
     }).join('')
   },
 
-  hit: (el, local, tol) => polylineDistance(routePoints(el), local) <= tol + el.strokeWidth / 2,
+  hit: (el, local, tol) => polylineDistance(shaftPoints(el), local) <= tol + el.strokeWidth / 2,
 
   resize: (el, next) => ({
     x: next.x, y: next.y, w: next.w, h: next.h, points: scalePoints(el.points, el, next) as LocalPoint[],

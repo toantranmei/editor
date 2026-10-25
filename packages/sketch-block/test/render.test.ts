@@ -396,7 +396,7 @@ describe('renderInteractive', () => {
   }
   const overlay = (over = {}) => ({
     selectedIds: new Set<string>(), marquee: null, hoverId: null, draft: null, pointHandles: null, previewSegment: null,
-    erasing: new Set<string>(), laser: [], lasso: null,
+    erasing: new Set<string>(), laser: [], lasso: null, bindTarget: null,
     ...over,
   })
   const lineInit = (n: number) => ({

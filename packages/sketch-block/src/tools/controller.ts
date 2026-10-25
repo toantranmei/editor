@@ -1,3 +1,4 @@
+import { nanoid } from 'nanoid'
 import { type Ref, ref, shallowRef } from 'vue'
 import type { Box, Point } from '../geometry'
 import { elementCorners } from '../geometry/bounds'
@@ -7,13 +8,14 @@ import type { Scene } from '../model/scene'
 import type { BoardStore } from '../model/store'
 import { type CurrentStyle, INITIAL_STYLE, styleOf, stylePatchFor } from '../model/style'
 import type {
-  ElementInit, ElementPatch, ElementType, ImageElement, LinearType, ShapeType, SketchElement, StickyElement,
+  Binding, ElementInit, ElementPatch, ElementType, ImageElement, LinearType, ShapeType, SketchElement, StickyElement,
   TextElement, TextStyle,
 } from '../model/types'
 import {
-  cleanFrameName, frameDeletePatches, membershipPatches, withFrameChildren,
+  cleanFrameName, membershipPatches, withFrameChildren,
 } from '../elements/frame'
 import { linearScenePoints } from '../elements/linear'
+import { deletePatches, withFollowers } from '../geometry/binding'
 import { editedTextBox } from '../elements/text'
 import {
   DEFAULT_STYLE, isFrame, isImage, isImageSrc, isLinear, isShape, isSticky, isText, LINEAR_TYPES, SHAPE_TYPES,
@@ -115,6 +117,8 @@ export interface ToolHost {
   readonly laser: LaserPoint[]
   /** Lasso polygon in progress (scene coords). */
   lasso: Point[] | null
+  /** Element an arrow endpoint being drawn / dragged would bind to (highlighted); null = none. */
+  bindTarget: string | null
   /** Host clock in ms. */
   now(): number
   setSelection(ids: Iterable<string>): void
@@ -134,6 +138,12 @@ export interface ToolHost {
    * inside the undo bracket of that change, after the box is final.
    */
   created(ids: Iterable<string>): void
+  /**
+   * `patches` plus the patches making the lines bound to the elements they move / resize / rotate follow them,
+   * merged per element. Every writer that changes a bindable element's box writes this in place of `patches` (one
+   * write, so undo and Escape cover the lines too).
+   */
+  withFollowers(patches: Record<string, ElementPatch>): Record<string, ElementPatch>
   /** Creates a frame with box `box` named "Frame N", at the back, taking in the elements inside it. */
   createFrame(box: { x: number; y: number; w: number; h: number }): void
 }
@@ -196,6 +206,7 @@ export class ToolController implements ToolHost {
   erasing: Set<string> = new Set()
   readonly laser: LaserPoint[] = []
   lasso: Point[] | null = null
+  bindTarget: string | null = null
   /** Text / label being edited in the overlay (null = none). Editing counts as an active gesture. */
   readonly editing: Ref<EditingTarget | null> = shallowRef(null)
   /** Id of the image in crop mode (null = none). Cropping counts as an active gesture. */
@@ -261,6 +272,7 @@ export class ToolController implements ToolHost {
       now: this.now(),
       crop,
       editingFrameId: this.editing.value?.kind === 'frame' ? this.editing.value.id : null,
+      bindTarget: this.bindTarget,
     }
   }
 
@@ -556,8 +568,8 @@ export class ToolController implements ToolHost {
     if (!ids.length) return
     const { history, store, scene } = this.ctx
     history.stopCapturing()
-    // a deleted frame's children leave it, in the same transaction
-    store.remove(ids, frameDeletePatches(scene, ids))
+    // a deleted frame's children leave it and lines bound to the deleted come loose, in the same transaction
+    store.remove(ids, deletePatches(scene, ids))
     history.stopCapturing()
   }
 
@@ -569,7 +581,9 @@ export class ToolController implements ToolHost {
 
   /**
    * Creates copies of `inits` with new ids, keeping their relative layout and z-order, above everything else.
-   * The group's top-left lands at `at`, or +16,+16 from the originals when null. One undo step; selects them.
+   * The group's top-left lands at `at`, or +16,+16 from the originals when null. Bindings are remapped to the
+   * copies of their targets (null when the target was not among `inits`); group ids are replaced by fresh ones.
+   * One undo step; selects them.
    */
   pasteElements(inits: ElementInit[], at: Point | null): void {
     if (this.ctx.readonly() || this.isGestureActive() || !inits.length) return
@@ -583,13 +597,38 @@ export class ToolController implements ToolHost {
     }
     const dx = at ? at.x - minX : PASTE_OFFSET
     const dy = at ? at.y - minY : PASTE_OFFSET
-    const copies = inits.map(init => {
-      // new id; the store assigns index / version
-      const { id: _id, index: _index, version: _version, ...rest } = init as ElementInit & Partial<SketchElement>
-      const copy = { ...rest, x: init.x + dx, y: init.y + dy } as ElementInit
+    // fresh ids up front, so bindings among the pasted elements can point at the copies
+    const newIds = new Map<string, string>()
+    const ids = inits.map((init) => {
+      const id = nanoid(10)
+      const src = (init as { id?: unknown }).id
+      if (typeof src === 'string' && !newIds.has(src)) newIds.set(src, id)
+      return id
+    })
+    // fresh groups too (the same source group → the same new group), never merged with existing ones
+    const newGroups = new Map<string, string>()
+    const group = (g: string): string => {
+      let id = newGroups.get(g)
+      if (!id) newGroups.set(g, id = nanoid(10))
+      return id
+    }
+    const rebind = (b: Binding | null | undefined): Binding | null => {
+      const id = b ? newIds.get(b.id) : undefined
+      return b && id ? { id, ax: b.ax, ay: b.ay } : null
+    }
+    const copies = inits.map((init, i) => {
+      // the store assigns index / version
+      const { index: _index, version: _version, ...rest } = init as ElementInit & Partial<SketchElement>
+      const copy = { ...rest, id: ids[i]!, x: init.x + dx, y: init.y + dy } as ElementInit
       // fresh arrays: never share a source's arrays
       if ('points' in copy) copy.points = copy.points.map(p => [p[0], p[1]])
       if ('pressures' in copy) copy.pressures = [...copy.pressures]
+      copy.groupIds = (init.groupIds ?? []).map(group)
+      // a binding survives only when its target was pasted along (then it points at that copy)
+      if (copy.type === 'line' || copy.type === 'arrow') {
+        copy.startBinding = rebind(copy.startBinding)
+        copy.endBinding = rebind(copy.endBinding)
+      }
       return copy
     })
     this.insert(copies)
@@ -685,10 +724,12 @@ export class ToolController implements ToolHost {
       patches[el.id] = isText(el) ? { ...p, ...editedTextBox({ ...el, ...p } as TextElement, el.text) } : p
     }
     if (!Object.keys(patches).length) return
+    // a refitted text's bound lines follow it
+    const all = this.withFollowers(patches)
     this.ctx.history.beginGesture()
-    this.ctx.store.updateMany(patches)
-    // a refitted text may have grown out of (or into) a frame
-    this.created(Object.keys(patches).filter(id => 'w' in patches[id]! || 'h' in patches[id]!))
+    this.ctx.store.updateMany(all)
+    // a refitted text (or a line following it) may have grown out of (or into) a frame
+    this.created(Object.keys(all).filter(id => 'w' in all[id]! || 'h' in all[id]!))
     this.ctx.history.endGesture()
   }
 
@@ -773,8 +814,10 @@ export class ToolController implements ToolHost {
     const patch = cur && isImage(cur) && !this.ctx.readonly() ? this.crop.patch(cur) : null
     this.endCrop()
     if (patch) {
-      store.update(id, patch)
-      this.created([id])
+      // the box changes: lines bound to the image follow, in the same write
+      const all = this.withFollowers({ [id]: patch })
+      store.updateMany(all)
+      this.created(Object.keys(all))
       history.endGesture()
     } else {
       history.discardGesture()
@@ -832,9 +875,11 @@ export class ToolController implements ToolHost {
         else history.endGesture()
       } else {
         const patch = changedProps(el, { text: value, ...editedTextBox(el, value) })
-        if (patch) store.update(el.id, patch)
+        // a refitted box takes its bound lines along
+        const all = patch ? this.withFollowers({ [el.id]: patch }) : {}
+        if (patch) store.updateMany(all)
         // the box is final (autosized): frame membership, in the same undo step
-        this.created([el.id])
+        this.created([el.id, ...Object.keys(all)])
         history.endGesture()
         this.setSelection([el.id])
       }
@@ -894,6 +939,10 @@ export class ToolController implements ToolHost {
   created(ids: Iterable<string>): void {
     const patches = membershipPatches(this.ctx.scene, ids)
     if (Object.keys(patches).length) this.ctx.store.updateMany(patches)
+  }
+
+  withFollowers(patches: Record<string, ElementPatch>): Record<string, ElementPatch> {
+    return withFollowers(this.ctx.store, this.ctx.scene, patches)
   }
 
   createFrame(box: { x: number; y: number; w: number; h: number }): void {
@@ -999,15 +1048,19 @@ export class ToolController implements ToolHost {
     this.off()
   }
 
-  /** Moves the selection (frames with their children) and recomputes frame membership: one undo step. */
+  /**
+   * Moves the selection (frames with their children; bound lines follow) and recomputes frame membership: one undo
+   * step.
+   */
   private nudge(dx: number, dy: number): void {
     const { scene, store, history } = this.ctx
     const patches: Record<string, ElementPatch> = {}
     for (const el of withFrameChildren(scene, this.movableSelection())) patches[el.id] = { x: el.x + dx, y: el.y + dy }
     if (!Object.keys(patches).length) return
+    const all = this.withFollowers(patches)
     history.beginGesture()
-    store.updateMany(patches)
-    this.created(Object.keys(patches))
+    store.updateMany(all)
+    this.created(Object.keys(all))
     history.endGesture()
   }
 

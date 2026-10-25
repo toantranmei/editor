@@ -1,5 +1,6 @@
 import { boxFromPoints } from '../elements/linear'
 import { type Point, snapSegment } from '../geometry'
+import { bindingAt, boundPatch, findBindTarget } from '../geometry/binding'
 import { DEFAULT_STYLE, type LinearElement, type LocalPoint, TYPE_DEFAULTS } from '../model/types'
 import type { PointerInput, Tool, ToolHost } from './controller'
 
@@ -52,6 +53,7 @@ export class LinearTool implements Tool {
     }
     // first press being dragged: a 2-point draft
     const end = this.target(e, p)
+    this.highlight(end)
     this.setDraft([...this.pts, [end.x, end.y]])
   }
 
@@ -84,6 +86,7 @@ export class LinearTool implements Tool {
     if (!this.multi || !this.pts) return
     const last = this.pts[this.pts.length - 1]!
     const end = this.target(e, p)
+    this.highlight(end)
     this.host.previewSegment = [{ x: last[0], y: last[1] }, end]
     this.setDraft(this.pts)
   }
@@ -98,7 +101,7 @@ export class LinearTool implements Tool {
     const { store, history, readonly } = this.host.ctx
     if (distinct.length < 2 || readonly()) return
     history.beginGesture()
-    const el = store.create({ ...this.props(), ...boxFromPoints(distinct), seed })
+    const el = store.create({ ...this.props(), ...this.bound(distinct), seed })
     this.host.created([el.id])
     history.endGesture()
     this.host.setSelection([el.id])
@@ -109,11 +112,38 @@ export class LinearTool implements Tool {
     this.pts = null
     this.multi = false
     this.pressed = false
-    if (this.host.draft || this.host.previewSegment) {
+    if (this.host.draft || this.host.previewSegment || this.host.bindTarget) {
       this.host.draft = null
       this.host.previewSegment = null
+      this.host.bindTarget = null
       this.host.ctx.invalidate()
     }
+  }
+
+  /**
+   * Box and points for absolute points `abs`, with an arrow's ends bound to the shapes they start / end near
+   * (snapped onto their anchors). A line never binds; both ends on one shape need different anchors.
+   */
+  private bound(abs: LocalPoint[]): ReturnType<typeof boxFromPoints> & Partial<Pick<LinearElement, 'startBinding' | 'endBinding' | 'angle'>> {
+    const box = boxFromPoints(abs)
+    if (this.type !== 'arrow') return box
+    const { scene, viewport } = this.host.ctx
+    const at = (pt: LocalPoint): Point => ({ x: pt[0], y: pt[1] })
+    const me = { id: '', type: this.type }
+    const startBinding = bindingAt(scene, me, at(abs[0]!), viewport.zoom, null)
+    const endBinding = bindingAt(scene, me, at(abs[abs.length - 1]!), viewport.zoom, startBinding)
+    if (!startBinding && !endBinding) return box
+    const el = { ...this.props(), ...box, id: '', index: 'a0', seed: 0, version: 0, startBinding, endBinding } as LinearElement
+    return { ...box, startBinding, endBinding, ...boundPatch(el, id => scene.get(id)) }
+  }
+
+  /** Highlights the shape the end point at `p` would bind to (arrows only). */
+  private highlight(p: Point): void {
+    const { scene, viewport } = this.host.ctx
+    const id = this.type === 'arrow' ? findBindTarget(scene, p, viewport.zoom, new Set())?.id ?? null : null
+    if (id === this.host.bindTarget) return
+    this.host.bindTarget = id
+    this.host.ctx.invalidate()
   }
 
   /** Pointer position for the next point; Shift snaps the segment from the last placed point to 15°. */

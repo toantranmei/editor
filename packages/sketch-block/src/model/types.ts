@@ -235,8 +235,20 @@ export function isOrderKey(key: unknown): key is string {
 
 const isFinitePair = (p: unknown): boolean => Array.isArray(p) && p.length >= 2 && isFiniteNumber(p[0]) && isFiniteNumber(p[1])
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v)
-const isBindingValue = (v: unknown): boolean =>
-  v === null || (isRecord(v) && typeof v.id === 'string' && isFiniteNumber(v.ax) && isFiniteNumber(v.ay))
+/** Anchors may sit a little outside the target's unit box (a bound tip is pushed off the outline). */
+const BINDING_MIN = -0.5
+const BINDING_MAX = 1.5
+const isAnchorCoord = (v: unknown): v is number =>
+  typeof v === 'number' && Number.isFinite(v) && v >= BINDING_MIN && v <= BINDING_MAX
+
+/**
+ * A stored / pasted binding as a clean `Binding` (only id, ax, ay), or null when it is not one: an object with a
+ * string `id` and finite `ax` / `ay` in [-0.5, 1.5].
+ */
+export function cleanBinding(v: unknown): Binding | null {
+  if (!isRecord(v) || typeof v.id !== 'string' || !isAnchorCoord(v.ax) || !isAnchorCoord(v.ay)) return null
+  return { id: v.id, ax: v.ax, ay: v.ay }
+}
 const isCropValue = (v: unknown): boolean =>
   v === null || (isRecord(v) && isFiniteNumber(v.x) && isFiniteNumber(v.y) && isFiniteNumber(v.w) && isFiniteNumber(v.h))
 const isStringArray = (v: unknown): boolean => Array.isArray(v) && v.every(s => typeof s === 'string')
@@ -254,8 +266,7 @@ const OPTIONAL_CHECKS: Record<string, (v: unknown) => boolean> = {
   crop: isCropValue,
   groupIds: isStringArray,
   frameId: v => v === null || typeof v === 'string',
-  startBinding: isBindingValue,
-  endBinding: isBindingValue,
+  // bindings are not checked here: a malformed one is normalized to null on read (the line stays visible)
 }
 
 /**
@@ -291,6 +302,10 @@ export function normalizeElement(raw: Record<string, unknown>): SketchElement {
   }
   for (const [k, v] of Object.entries(raw)) {
     if (v !== undefined) out[k] = v
+  }
+  if (LINEAR_SET.has(raw.type as string)) {
+    out.startBinding = cleanBinding(out.startBinding)
+    out.endBinding = cleanBinding(out.endBinding)
   }
   return out as unknown as SketchElement
 }

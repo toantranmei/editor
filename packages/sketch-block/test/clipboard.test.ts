@@ -72,8 +72,9 @@ describe('serializeClipboard / parseClipboard', () => {
     expect(out[0]).toMatchObject({ type: 'rectangle', x: 5, y: 6, w: 100, h: 50, label: 'hi', seed: els[0]!.seed })
     expect(out[1]).toMatchObject({ type: 'line', points: [[0, 0], [40, 30]] })
     expect(out[2]).toMatchObject({ type: 'freedraw', points: [[0, 0], [5, 5]], pressures: [0.5, 0.6] })
-    for (const e of out) {
-      expect(e).not.toHaveProperty('id')
+    for (const [i, e] of out.entries()) {
+      // the source id is carried only so the paster can remap bindings (pasteElements always assigns new ids)
+      expect(e.id).toBe(els[i]!.id)
       expect(e).not.toHaveProperty('index')
       expect(e).not.toHaveProperty('version')
     }

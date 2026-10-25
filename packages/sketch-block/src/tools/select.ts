@@ -5,6 +5,7 @@ import {
   type Box, boxCenter, elementCorners, type Handle, handlePositions, type Point, resizeBox, rotateAngle,
   snapSegment,
 } from '../geometry'
+import { bindingAt, boundPatch } from '../geometry/binding'
 import { type ElementPatch, isImage, isLinear, type LinearElement, type SketchElement } from '../model/types'
 import { frameLabelAt } from '../render/frame-labels'
 import type { PointerInput, Tool, ToolHost } from './controller'
@@ -32,8 +33,13 @@ class FrameWriter {
   private scheduled = false
   /** Keys written to the store per element id since the last `reset`. */
   readonly touched = new Map<string, Set<string>>()
+  /** Each written element as it was before its first write since the last `reset` (what a cancel restores). */
+  readonly snapshots = new Map<string, SketchElement>()
 
-  constructor(private readonly write: (patches: Record<string, ElementPatch>) => void) {}
+  constructor(
+    private readonly write: (patches: Record<string, ElementPatch>) => void,
+    private readonly snapshot: (id: string) => SketchElement | undefined,
+  ) {}
 
   set(patches: Record<string, ElementPatch>): void {
     this.pending = patches
@@ -54,7 +60,11 @@ class FrameWriter {
     if (!p) return
     for (const [id, patch] of Object.entries(p)) {
       let keys = this.touched.get(id)
-      if (!keys) this.touched.set(id, keys = new Set())
+      if (!keys) {
+        this.touched.set(id, keys = new Set())
+        const before = this.snapshot(id)
+        if (before) this.snapshots.set(id, before)
+      }
       for (const k of Object.keys(patch)) keys.add(k)
     }
     this.write(p)
@@ -67,14 +77,15 @@ class FrameWriter {
   reset(): void {
     this.pending = null
     this.touched.clear()
+    this.snapshots.clear()
   }
 }
 
 /**
- * Patches restoring, from each origin snapshot, only the keys the gesture wrote, so concurrent remote edits
+ * Patches restoring, from each snapshot, only the keys the gesture wrote, so concurrent remote edits
  * to other props (and untouched arrays such as `points`) survive the cancel.
  */
-function revertPatches(origins: SketchElement[], touched: Map<string, Set<string>>): Record<string, ElementPatch> {
+function revertPatches(origins: Iterable<SketchElement>, touched: Map<string, Set<string>>): Record<string, ElementPatch> {
   const out: Record<string, ElementPatch> = {}
   for (const el of origins) {
     const keys = touched.get(el.id)
@@ -96,7 +107,7 @@ export class SelectTool implements Tool {
   private readonly writer: FrameWriter
 
   constructor(private readonly host: ToolHost) {
-    this.writer = new FrameWriter(patches => host.ctx.store.updateMany(patches))
+    this.writer = new FrameWriter(patches => host.ctx.store.updateMany(patches), id => host.ctx.scene.get(id))
   }
 
   down(e: PointerInput, p: Point): void {
@@ -162,20 +173,26 @@ export class SelectTool implements Tool {
         const dy = p.y - g.start.y
         if (!g.origins.length) return
         const patches: Record<string, ElementPatch> = {}
-        for (const el of g.origins) patches[el.id] = { x: el.x + dx, y: el.y + dy }
-        this.writer.set(patches)
+        for (const el of g.origins) {
+          // a bound line is re-placed from its whole origin geometry (an earlier frame may have rewritten its box)
+          patches[el.id] = isLinear(el) && (el.startBinding || el.endBinding)
+            ? { x: el.x + dx, y: el.y + dy, w: el.w, h: el.h, angle: el.angle, points: el.points }
+            : { x: el.x + dx, y: el.y + dy }
+        }
+        // bound lines follow in the same write (and are reverted with it on cancel)
+        this.writer.set(this.host.withFollowers(patches))
         return
       }
       case 'resize': {
         // images keep their aspect ratio unless Shift is held; everything else the other way round
         const keepRatio = isImage(g.el) ? !e.shift : e.shift
-        this.writer.set({
+        this.writer.set(this.host.withFollowers({
           [g.el.id]: kindOf(g.el).resize(g.el, resizeBox(g.el, g.handle, p, { keepRatio, fromCenter: e.alt })),
-        })
+        }))
         return
       }
       case 'rotate':
-        this.writer.set({ [g.el.id]: { angle: rotateAngle(boxCenter(g.el), p, e.shift) } })
+        this.writer.set(this.host.withFollowers({ [g.el.id]: { angle: rotateAngle(boxCenter(g.el), p, e.shift) } }))
         return
       case 'point': {
         let target = p
@@ -184,7 +201,7 @@ export class SelectTool implements Tool {
           const scene = linearScenePoints(g.el)
           target = snapSegment(scene[g.index === 0 ? 1 : g.index - 1]!, p)
         }
-        this.writer.set({ [g.el.id]: movePointPatch(g.el, g.index, target) })
+        this.writer.set({ [g.el.id]: this.pointPatch(g.el, g.index, target) })
         return
       }
       case 'marquee': {
@@ -217,6 +234,7 @@ export class SelectTool implements Tool {
       this.host.marquee = null
       this.host.ctx.invalidate()
     }
+    this.setBindTarget(null)
     this.endWrite()
     this.g = { kind: 'none' }
     this.hover(e, p)
@@ -242,9 +260,10 @@ export class SelectTool implements Tool {
   /** Aborts the gesture; a move/resize/rotate that already wrote is reverted to its origins (no undo step). */
   cancel(): void {
     this.writer.drop()
+    this.setBindTarget(null)
     if (this.writing) {
       const { store, history } = this.host.ctx
-      const patches = revertPatches(this.origins(), this.writer.touched)
+      const patches = revertPatches(this.writer.snapshots.values(), this.writer.touched)
       if (Object.keys(patches).length) store.updateMany(patches)
       this.writing = false
       history.discardGesture()
@@ -288,9 +307,29 @@ export class SelectTool implements Tool {
     this.writing = true
   }
 
-  private origins(): SketchElement[] {
-    const g = this.g
-    return g.kind === 'move' ? g.origins : g.kind === 'resize' || g.kind === 'rotate' || g.kind === 'point' ? [g.el] : []
+  /**
+   * Patch moving point `index` of `el` (the gesture's snapshot) to `p`. An arrow's end point binds to the shape it
+   * is dropped near (snapping onto its anchor) and comes loose anywhere else; the bind target is highlighted.
+   */
+  private pointPatch(el: LinearElement, index: number, p: Point): ElementPatch {
+    const patch: ElementPatch = movePointPatch(el, index, p)
+    const last = el.points.length - 1
+    if (last < 1 || (index !== 0 && index !== last)) return patch
+    const key = index === 0 ? 'startBinding' : 'endBinding'
+    const other = index === 0 ? el.endBinding : el.startBinding
+    if (el.type !== 'arrow' && !el[key]) return patch
+    const { scene, viewport } = this.host.ctx
+    const b = bindingAt(scene, el, p, viewport.zoom, other)
+    this.setBindTarget(b?.id ?? null)
+    if (!b) return { ...patch, [key]: null }
+    const next = { ...el, ...patch, [key]: b } as LinearElement
+    return { ...patch, [key]: b, ...boundPatch(next, id => scene.get(id)) }
+  }
+
+  private setBindTarget(id: string | null): void {
+    if (this.host.bindTarget === id) return
+    this.host.bindTarget = id
+    this.host.ctx.invalidate()
   }
 
   private endWrite(): void {

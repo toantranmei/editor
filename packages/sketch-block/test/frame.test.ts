@@ -303,7 +303,7 @@ describe('frame rendering', () => {
       const ctx = canvas.getContext('2d') as unknown as FakeCtx
       renderInteractive(ctx, scene, state({ viewport: Object.assign(new Viewport(), { x: 0, y: 0, zoom }) }), {
         selectedIds: new Set(), marquee: null, hoverId: null, draft: null, pointHandles: null, previewSegment: null,
-        erasing: new Set(), laser: [], lasso: null,
+        erasing: new Set(), laser: [], lasso: null, bindTarget: null,
       })
       const text = ctx.calls.find(c => c.name === 'fillText')!
       expect(text.args[0]).toBe('Plan')
