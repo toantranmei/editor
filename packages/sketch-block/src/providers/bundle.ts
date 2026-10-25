@@ -27,7 +27,10 @@ export interface ImportResult {
   doc: JSONContent
   /** Boards merged into the provider. */
   imported: string[]
-  /** Malformed boards (bad base64 or Yjs data) and boards the provider failed to write. */
+  /**
+   * Boards not imported: ones the bundled document does not reference, malformed ones (bad base64 or Yjs data)
+   * and ones the provider failed to write.
+   */
   skipped: string[]
 }
 
@@ -100,8 +103,9 @@ function utf8Length(s: string, max: number): number {
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v)
 
 /**
- * Reads a bundle (a Blob / File, or its text) and merges each board into `provider` (connect, `Y.applyUpdate`,
- * wait for it to persist, destroy). Yjs updates merge: state a board already has is kept. Throws when the file is
+ * Reads a bundle (a Blob / File, or its text) and merges each board the bundled document references
+ * (`collectBoardIds`) into `provider` (connect, `Y.applyUpdate`, wait for it to persist, destroy); other board ids
+ * are skipped. Yjs updates merge: state a board already has is kept. Throws when the file is
  * over 50 MB, not JSON, or not a `mei-sketch/bundle` version 1; never for a single board: malformed ones are
  * skipped and reported.
  */
@@ -122,7 +126,13 @@ export async function importBoards(input: Blob | string, provider: SketchProvide
 
   const imported: string[] = []
   const skipped: string[] = []
+  // only boards the bundled document shows: a crafted bundle must not write to other boards of the provider
+  const referenced = new Set(collectBoardIds(data.doc as JSONContent))
   for (const [id, b64] of Object.entries(boards)) {
+    if (!referenced.has(id)) {
+      skipped.push(id)
+      continue
+    }
     const bytes = typeof b64 === 'string' && id ? fromBase64(b64) : null
     if (!bytes) {
       skipped.push(id)

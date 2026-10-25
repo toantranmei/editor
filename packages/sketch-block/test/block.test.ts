@@ -708,6 +708,21 @@ describe('clone on paste and duplicate', () => {
     expect(sketchNodes(editor).map(n => n.boardId)).toEqual([ORIGINAL, nodes[1]!.boardId])
   })
 
+  it('redo of a paste does not clone again', async () => {
+    const base = await seeded(1)
+    const clone = vi.fn(async (_from: string, _to: string) => {})
+    const provider: SketchProvider = { ...base, connect: id => base.connect(id), clone }
+    const { editor } = await setup({ provider, content: { type: 'doc', content: [{ type: 'sketch', attrs }, { type: 'paragraph' }] } })
+    pasteAtEnd(editor, editor.getHTML())
+    const copyId = sketchNodes(editor)[1]!.boardId
+    await vi.waitFor(() => expect(clone).toHaveBeenCalledWith(ORIGINAL, copyId))
+    undo(editor.state, editor.view.dispatch)
+    redo(editor.state, editor.view.dispatch)
+    expect(sketchNodes(editor).map(n => n.boardId)).toEqual([ORIGINAL, copyId])
+    await settle()
+    expect(clone).toHaveBeenCalledTimes(1)
+  })
+
   it('two pastes → two independent boards', async () => {
     const provider = await seeded(1)
     const { editor } = await setup({ provider, content: { type: 'doc', content: [{ type: 'sketch', attrs }, { type: 'paragraph' }] } })
@@ -853,6 +868,34 @@ describe('clone on paste and duplicate', () => {
     }
     await cloneBoard(networked, ORIGINAL, 'bd_copy000003')
     expect(destroyed).toHaveBeenLastCalledWith('saved')
+    // a networked connection that ends up offline / in error loses the write unless it has an offline cache
+    for (const final of ['error', 'offline'] as const) {
+      for (const offline of [false, true]) {
+        const lossy: SketchProvider = {
+          async connect(id) {
+            const conn = await provider.connect(id)
+            let s: string = 'saved'
+            const subs = new Set<(v: string) => void>()
+            conn.doc.on('update', () => {
+              s = 'saving'
+              setTimeout(() => {
+                s = final
+                for (const cb of subs) cb(final)
+              }, 10)
+            })
+            return {
+              ...conn,
+              networked: true,
+              offline,
+              status: { get: () => s as never, on: (cb) => { subs.add(cb as never); return () => subs.delete(cb as never) } },
+            }
+          },
+        }
+        const to = `bd_lossy_${final}_${offline}`
+        if (offline) await expect(cloneBoard(lossy, ORIGINAL, to)).resolves.toBeUndefined()
+        else await expect(cloneBoard(lossy, ORIGINAL, to)).rejects.toThrow(final)
+      }
+    }
     // an unknown source is an error (nothing to copy)
     const empty = memory()
     await expect(cloneBoard({ connect: id => empty.connect(id) }, 'bd_missing001', 'bd_x')).rejects.toThrow()

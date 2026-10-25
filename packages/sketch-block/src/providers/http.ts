@@ -217,6 +217,7 @@ export function http(opts: HttpProviderOptions): SketchProvider {
         existed: doc.getMap('elements').size > 0,
         status,
         networked: true,
+        offline: persistence !== null,
         maxInlineImageBytes,
         destroy() {
           if (destroyed) return

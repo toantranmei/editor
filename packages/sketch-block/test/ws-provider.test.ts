@@ -124,6 +124,7 @@ describe('websocket provider', () => {
     expect(conn.existed).toBe(true)
     expect(conn.doc.getMap('elements').size).toBe(3)
     expect(conn.status!.get()).toBe('offline')
+    expect(conn.offline).toBe(true)
     const p = FakeProvider.instances.at(-1)!
     expect(p.destroyed).toBe(false) // keeps reconnecting in the background
     // a later sync turns it online
@@ -134,6 +135,7 @@ describe('websocket provider', () => {
     // without offline: an empty doc
     const bare = await websocket({ url: 'ws://down', connectTimeoutMs: 30, offline: false }).connect('ws-cached')
     expect(bare.existed).toBe(false)
+    expect(bare.offline).toBe(false)
     expect(bare.doc.getMap('elements').size).toBe(0)
     bare.destroy()
   })

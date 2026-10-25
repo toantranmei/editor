@@ -14,24 +14,31 @@ export const PERSIST_WAIT_MS = 10_000
 
 /**
  * Resolves once the connection has nothing pending: at once without a status (memory, indexeddb), else when the
- * status leaves 'connecting' / 'saving', or after `maxMs`.
+ * status leaves 'connecting' / 'saving', or after `maxMs`. Rejects when it settles on 'error' or 'offline' and the
+ * connection has no offline cache (`conn.offline`): the write would be lost when the connection is destroyed.
  */
 function whenPersisted(conn: BoardConnection, maxMs: number): Promise<void> {
   const status = conn.status
   const busy = (s: string) => s === 'connecting' || s === 'saving'
+  const lost = (s: string) => !conn.offline && (s === 'error' || s === 'offline')
+  const failure = (s: string) => new Error(`sketch-block: the board could not be saved (${s})`)
   // a debounced save may only be scheduled: give the provider one turn to report 'saving'
   return new Promise<void>(resolve => setTimeout(resolve, 0)).then(() => {
-    if (!status || !busy(status.get())) return
-    return new Promise<void>((resolve) => {
+    if (!status) return
+    const now = status.get()
+    if (lost(now)) throw failure(now)
+    if (!busy(now)) return
+    return new Promise<void>((resolve, reject) => {
       let off: () => void = () => {}
-      const timer = setTimeout(done, maxMs)
-      function done() {
+      const timer = setTimeout(() => finish(null), maxMs)
+      function finish(s: string | null) {
         clearTimeout(timer)
         off()
-        resolve()
+        if (s !== null && lost(s)) reject(failure(s))
+        else resolve()
       }
       off = status.on((s) => {
-        if (!busy(s)) done()
+        if (!busy(s)) finish(s)
       })
     })
   })

@@ -22,6 +22,11 @@ export interface BoardConnection {
   /** true when the board is shared through a server (http, websocket) */
   networked?: boolean
   /**
+   * true when the connection also keeps the board in a local offline cache (http / websocket with `offline`):
+   * edits the server has not acknowledged yet are not lost.
+   */
+  offline?: boolean
+  /**
    * Networked boards without an image uploader refuse inline (data URL) images larger than this many bytes
    * (default 256 000 when `networked`).
    */

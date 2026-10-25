@@ -121,6 +121,8 @@ describe('board bundles', () => {
     json.boards.bd_bad = '%%% not base64 %%%'
     json.boards.bd_junk = btoa('definitely not a yjs update')
     json.boards.bd_num = 42
+    // referenced by the document, so only their content gets them skipped
+    json.doc.content.push(sketch('bd_bad'), sketch('bd_junk'), sketch('bd_num'))
     const target = memory()
     const result = await importBoards(JSON.stringify(json), target)
     expect(result.imported).toEqual(['bd_good'])
@@ -128,6 +130,24 @@ describe('board bundles', () => {
     expect(await elementIds(target, 'bd_good')).toHaveLength(1)
     // nothing half-written for a skipped board
     expect(await elementIds(target, 'bd_junk')).toEqual([])
+  })
+
+  it('imports only the boards the bundled document references', async () => {
+    const source = memory()
+    await seed(source, 'bd_shown', 1)
+    await seed(source, 'bd_victim', 2)
+    const json = await parse(await exportBoards({ type: 'doc', content: [sketch('bd_shown')] }, source))
+    // a crafted bundle smuggling in another board's state
+    const extra = await parse(await exportBoards({ type: 'doc', content: [sketch('bd_victim')] }, source))
+    json.boards.bd_victim = extra.boards.bd_victim
+    const target = memory()
+    const before = await seed(target, 'bd_victim', 1, 500)
+    const result = await importBoards(JSON.stringify(json), target)
+    expect(result.imported).toEqual(['bd_shown'])
+    expect(result.skipped).toEqual(['bd_victim'])
+    // the unreferenced board was not touched
+    expect(await elementIds(target, 'bd_victim')).toEqual(before)
+    expect(await elementIds(target, 'bd_shown')).toHaveLength(1)
   })
 
   it('import does not overwrite existing board state but merges', async () => {

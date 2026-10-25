@@ -61,6 +61,7 @@ describe('http provider', () => {
     expect(server.load).toHaveBeenCalledWith('b1')
     expect(conn.existed).toBe(true)
     expect(conn.networked).toBe(true)
+    expect(conn.offline).toBe(false)
     expect(conn.doc.getMap('elements').size).toBe(2)
     conn.destroy()
 
@@ -168,6 +169,7 @@ describe('http provider', () => {
 
     const conn = await http({ load: server.load, save: server.save, debounceMs: 10 }).connect('b5')
     expect(conn.doc.getMap('elements').size).toBe(2)
+    expect(conn.offline).toBe(true)
     await vi.waitFor(() => expect(server.save).toHaveBeenCalledTimes(1))
     const sent = new Y.Doc()
     Y.applyUpdate(sent, server.saves[0]!.update)
