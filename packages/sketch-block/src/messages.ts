@@ -22,6 +22,8 @@ export interface SketchMessages {
   zen: string
   viewMode: string
   exitZen: string
+  /** Inline error shown for 4 s when an image cannot be inserted. */
+  imageError: Record<'type' | 'size' | 'upload', string>
   style: StyleMessages
 }
 
@@ -135,6 +137,11 @@ export const messages: Record<'vi' | 'en', SketchMessages> = {
     zen: 'Chế độ tập trung',
     viewMode: 'Chế độ xem',
     exitZen: 'Thoát chế độ tập trung',
+    imageError: {
+      type: 'Tệp này không phải ảnh được hỗ trợ.',
+      size: 'Ảnh quá lớn (tối đa 4 MB).',
+      upload: 'Không tải được ảnh lên.',
+    },
     style: {
       panel: 'Kiểu dáng',
       collapse: 'Thu gọn bảng kiểu dáng',
@@ -244,6 +251,11 @@ export const messages: Record<'vi' | 'en', SketchMessages> = {
     zen: 'Zen mode',
     viewMode: 'View mode',
     exitZen: 'Exit zen mode',
+    imageError: {
+      type: 'This file is not a supported image.',
+      size: 'The image is too large (max 4 MB).',
+      upload: 'The image could not be uploaded.',
+    },
     style: {
       panel: 'Style',
       collapse: 'Collapse style panel',

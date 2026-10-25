@@ -29,8 +29,11 @@ type Kind = ElementType
 const SHAPES: readonly Kind[] = SHAPE_TYPES
 const LINEAR: readonly Kind[] = LINEAR_TYPES
 const ALL: readonly Kind[] = ELEMENT_TYPES
-/** Sticky notes draw no outline: their text is always dark and the fill is the sticky color. */
-const OUTLINED: readonly Kind[] = ALL.filter(t => t !== 'sticky')
+/**
+ * Sticky notes draw no outline (their text is always dark and the fill is the sticky color); images draw only
+ * their pixels.
+ */
+const OUTLINED: readonly Kind[] = ALL.filter(t => t !== 'sticky' && t !== 'image')
 
 /** Panel order; `keys` are written by the section, `types` are the element types it applies to. */
 export const STYLE_SECTIONS: readonly { id: StyleSection; keys: StyleKey[]; types: readonly Kind[] }[] = [

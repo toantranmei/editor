@@ -1,10 +1,24 @@
 import { blendsMultiply } from '../elements/freedraw'
+import { drawImagePlaceholder } from '../elements/image'
 import { kindOf } from '../elements/kind'
 import { hasTransformHandles } from '../elements/linear'
 import { type Box, type Handle, handlePositions, type Point } from '../geometry'
+import { getLoadedImage } from '../io/image-loader'
 import type { Scene } from '../model/scene'
-import type { SketchElement } from '../model/types'
+import type { ImageElement, SketchElement } from '../model/types'
+import { cropHandles } from '../tools/crop'
 import { applyViewTransform, type RenderState } from './static'
+
+/** A rect in an element's unrotated local frame (origin at its box's top-left). */
+export interface CropBox { x: number; y: number; w: number; h: number }
+
+/** Crop mode: the whole image (`full`) and the crop rect, both in the image's local frame. */
+export interface CropOverlay {
+  id: string
+  el: ImageElement
+  full: CropBox
+  rect: CropBox
+}
 
 export interface Overlay {
   selectedIds: Set<string>
@@ -23,7 +37,12 @@ export interface Overlay {
   lasso: Point[] | null
   /** Current clock time for the laser fade (defaults to `performance.now()`). */
   now?: number
+  /** Image being cropped (its static rendering is hidden meanwhile). */
+  crop?: CropOverlay | null
 }
+
+/** Opacity factor of the image outside the crop rect. */
+export const CROP_DIM_ALPHA = 0.35
 
 /** Opacity factor of erase-marked elements. */
 export const ERASING_ALPHA = 0.3
@@ -118,6 +137,50 @@ function drawLaser(ctx: CanvasRenderingContext2D, state: RenderState, trail: Ove
   ctx.lineJoin = 'miter'
 }
 
+/** Crop mode: the whole image dimmed, the crop rect at full opacity, its outline and 8 handles. */
+function drawCrop(ctx: CanvasRenderingContext2D, state: RenderState, crop: CropOverlay, accent: string): void {
+  const { el, full, rect } = crop
+  const zoom = state.viewport.zoom
+  elementFrame(ctx, state, el.x + el.w / 2, el.y + el.h / 2, el.angle)
+  ctx.translate(-el.w / 2, -el.h / 2)
+  const found = getLoadedImage(el.src)
+  const img = found && found !== 'error' ? found : null
+  const paint = (): void => {
+    if (img) {
+      try {
+        ctx.drawImage(img, 0, 0, el.naturalW, el.naturalH, full.x, full.y, full.w, full.h)
+        return
+      } catch {
+        // undecodable: placeholder below
+      }
+    }
+    ctx.save()
+    ctx.translate(full.x, full.y)
+    drawImagePlaceholder(ctx, full.w, full.h, state.theme)
+    ctx.restore()
+  }
+  ctx.globalAlpha = el.opacity * CROP_DIM_ALPHA
+  paint()
+  ctx.globalAlpha = el.opacity
+  ctx.save()
+  ctx.beginPath()
+  ctx.rect(rect.x, rect.y, rect.w, rect.h)
+  ctx.clip()
+  paint()
+  ctx.restore()
+  ctx.globalAlpha = 1
+  ctx.setLineDash([])
+  ctx.strokeStyle = accent
+  ctx.lineWidth = 1 / zoom
+  ctx.strokeRect(rect.x, rect.y, rect.w, rect.h)
+  const size = HANDLE_PX / zoom
+  ctx.fillStyle = '#ffffff'
+  for (const p of Object.values(cropHandles(rect))) {
+    ctx.fillRect(p.x - size / 2, p.y - size / 2, size, size)
+    ctx.strokeRect(p.x - size / 2, p.y - size / 2, size, size)
+  }
+}
+
 function outline(ctx: CanvasRenderingContext2D, el: SketchElement, gap: number): void {
   ctx.strokeRect(-el.w / 2 - gap, -el.h / 2 - gap, el.w + 2 * gap, el.h + 2 * gap)
 }
@@ -145,6 +208,8 @@ export function renderInteractive(
 
   const { draft } = overlay
   if (draft) drawElement(ctx, state, draft, draft.opacity)
+
+  if (overlay.crop) drawCrop(ctx, state, overlay.crop, accent)
 
   ctx.strokeStyle = accent
   ctx.lineWidth = 1 / zoom

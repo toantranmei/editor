@@ -1,5 +1,6 @@
 import { hasKind } from '../elements/kind'
-import { ELEMENT_TYPES, type ElementInit, normalizeElement, type SketchElement } from '../model/types'
+import { ELEMENT_TYPES, type ElementInit, isImageSrc, normalizeElement, type SketchElement } from '../model/types'
+import { isImageFile } from './image-insert'
 
 export const CLIPBOARD_TYPE = 'mei-sketch/clipboard'
 
@@ -21,6 +22,8 @@ const MAX_POINTS = 20_000
 const MAX_GROUP_IDS = 16
 /** Characters kept per group id. */
 const MAX_GROUP_ID_CHARS = 64
+/** An image's natural width / height is clamped to this (px). */
+const MAX_NATURAL = 1e5
 
 const KNOWN_TYPES: ReadonlySet<string> = new Set<string>(ELEMENT_TYPES)
 
@@ -172,5 +175,53 @@ function sanitizeElement(raw: unknown): ElementInit | null {
     out.endBinding = null
   }
   if (finite(raw.opacity)) out.opacity = Math.min(1, Math.max(0, raw.opacity))
+  if (type === 'image' && !sanitizeImage(raw, out)) return null
   return normalizeElement(out) as unknown as ElementInit
+}
+
+/**
+ * Image props into `out`; false when the image cannot be used. `src` must be an http(s) or raster data URL
+ * (blob: URLs die with the page that made them, so they are refused too); the natural size is clamped to
+ * [0, 1e5] (0 = unknown) and the crop to the natural image (an empty or invalid crop becomes null).
+ */
+function sanitizeImage(raw: Record<string, unknown>, out: Record<string, unknown>): boolean {
+  if (!isImageSrc(raw.src, false)) return false
+  out.src = raw.src
+  const nw = finite(raw.naturalW) ? clamp(raw.naturalW, 0, MAX_NATURAL) : 0
+  const nh = finite(raw.naturalH) ? clamp(raw.naturalH, 0, MAX_NATURAL) : 0
+  out.naturalW = nw
+  out.naturalH = nh
+  out.crop = null
+  const c = raw.crop
+  if (isRecord(c) && finite(c.x) && finite(c.y) && finite(c.w) && finite(c.h) && nw > 0 && nh > 0) {
+    const x = clamp(c.x, 0, nw)
+    const y = clamp(c.y, 0, nh)
+    const w = clamp(c.w, 0, nw - x)
+    const h = clamp(c.h, 0, nh - y)
+    if (w > 0 && h > 0) out.crop = { x, y, w, h }
+  }
+  return true
+}
+
+/** The parts of a DataTransfer that `clipboardImageFiles` reads. */
+export interface FileSource {
+  files?: FileList | readonly File[] | null
+  items?: DataTransferItemList | ArrayLike<Pick<DataTransferItem, 'kind' | 'type' | 'getAsFile'>> | null
+}
+
+/**
+ * Image files on a paste / drop payload: from `files`, else from file `items`. Non-image files (and SVG) are
+ * left out; the caller ignores them.
+ */
+export function clipboardImageFiles(data: FileSource | null | undefined): File[] {
+  if (!data) return []
+  const out: File[] = []
+  for (const f of Array.from(data.files ?? [])) if (isImageFile(f)) out.push(f)
+  if (out.length || !data.items) return out
+  for (const item of Array.from(data.items as ArrayLike<DataTransferItem>)) {
+    if (item.kind !== 'file' || !isImageFile(item)) continue
+    const f = item.getAsFile()
+    if (f && isImageFile(f)) out.push(f)
+  }
+  return out
 }

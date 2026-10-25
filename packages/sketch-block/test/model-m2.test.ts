@@ -143,9 +143,11 @@ describe('isRenderable (M2)', () => {
     expect(isRenderable({ ...base, type: 'blockArrow' })).toBe(true)
     expect(isRenderable({ ...base, type: 'sticky', text: 'a', color: '#fff3bf' })).toBe(true)
     expect(isRenderable({ ...base, type: 'sticky', color: 5 })).toBe(false)
-    expect(isRenderable({ ...base, type: 'image', src: 'x', naturalW: 1, naturalH: 1, crop: null })).toBe(true)
+    const src = 'https://cdn.example/a.png'
+    expect(isRenderable({ ...base, type: 'image', src, naturalW: 1, naturalH: 1, crop: null })).toBe(true)
     expect(isRenderable({ ...base, type: 'image', src: 5 })).toBe(false)
-    expect(isRenderable({ ...base, type: 'image', src: 'x', crop: { x: 0, y: 0, w: 'a', h: 1 } })).toBe(false)
+    expect(isRenderable({ ...base, type: 'image', src: 'javascript:alert(1)' })).toBe(false)
+    expect(isRenderable({ ...base, type: 'image', src, crop: { x: 0, y: 0, w: 'a', h: 1 } })).toBe(false)
     expect(isRenderable({ ...base, type: 'frame', name: 'F' })).toBe(true)
     expect(isRenderable({ ...base, type: 'frame', name: [] })).toBe(false)
   })

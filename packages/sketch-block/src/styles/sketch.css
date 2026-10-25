@@ -65,6 +65,21 @@
     right: var(--me-space-4);
     bottom: var(--me-space-4);
   }
+  /* Inline image error (4 s), above the zoom controls. */
+  .me-sketch-board .me-sketch-toast {
+    position: absolute;
+    left: 50%;
+    bottom: var(--me-space-4);
+    transform: translateX(-50%);
+    margin: 0;
+    padding: var(--me-space-2) var(--me-space-3);
+    border-radius: var(--me-popover-radius);
+    background: var(--me-popover-bg);
+    box-shadow: var(--me-popover-shadow);
+    color: var(--me-color-danger);
+    font-size: var(--me-font-size-sm);
+    pointer-events: none;
+  }
   /* Zen mode's way out, and the view-mode pill (click leaves view mode). */
   .me-sketch-board :is(.me-sketch-exit-zen, .me-sketch-view-mode) {
     position: absolute;

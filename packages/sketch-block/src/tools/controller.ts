@@ -7,15 +7,20 @@ import type { Scene } from '../model/scene'
 import type { BoardStore } from '../model/store'
 import { type CurrentStyle, INITIAL_STYLE, styleOf, stylePatchFor } from '../model/style'
 import type {
-  ElementInit, ElementPatch, ElementType, LinearType, ShapeType, SketchElement, StickyElement, TextElement, TextStyle,
+  ElementInit, ElementPatch, ElementType, ImageElement, LinearType, ShapeType, SketchElement, StickyElement,
+  TextElement, TextStyle,
 } from '../model/types'
 import { linearScenePoints } from '../elements/linear'
 import { editedTextBox } from '../elements/text'
-import { DEFAULT_STYLE, isLinear, isShape, isSticky, isText, LINEAR_TYPES, SHAPE_TYPES, stickyInit } from '../model/types'
+import {
+  DEFAULT_STYLE, isImage, isImageSrc, isLinear, isShape, isSticky, isText, LINEAR_TYPES, SHAPE_TYPES, stickyInit,
+} from '../model/types'
+import { fitWithin, type PreparedImage } from '../io/image-insert'
 import { stripControl } from '../io/xml'
 import { measureText } from '../text/measure'
 import type { Overlay } from '../render/interactive'
 import type { Viewport } from '../viewport'
+import { CropTool } from './crop'
 import { EraserTool } from './eraser'
 import { EyedropperTool } from './eyedropper'
 import { HandTool } from './hand'
@@ -76,6 +81,8 @@ export interface ToolControllerContext {
   invalidate: () => void
   /** Clock for the laser trail, in ms (defaults to `performance.now`). */
   now?: () => number
+  /** Scene point at the center of the visible canvas (where an image without a drop point goes). */
+  viewCenter?: () => Point
 }
 
 /** Shared state the individual tools act on. */
@@ -147,6 +154,8 @@ const PASTE_OFFSET = 16
 const STICKY_GAP = 20
 /** Hit tolerance for picking the element to edit, in screen px. */
 const EDIT_HIT_PX = 6
+/** An inserted image is scaled down (never up) to fit a square of this side, scene units. */
+export const IMAGE_INSERT_BOX = 600
 const NUDGE: Record<string, [number, number]> = {
   ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1],
 }
@@ -172,6 +181,8 @@ export class ToolController implements ToolHost {
   lasso: Point[] | null = null
   /** Text / label being edited in the overlay (null = none). Editing counts as an active gesture. */
   readonly editing: Ref<EditingTarget | null> = shallowRef(null)
+  /** Id of the image in crop mode (null = none). Cropping counts as an active gesture. */
+  readonly cropping: Ref<string | null> = ref(null)
 
   /**
    * The edited element was created for this edit: cancel removes it, leaving no undo step (an empty commit too,
@@ -185,6 +196,7 @@ export class ToolController implements ToolHost {
   /** Tool at the last pointer press; a dblclick only acts when it was the select tool. */
   private downTool: ToolName | null = null
   private readonly hand: HandTool
+  private readonly crop: CropTool
   private readonly tools: Record<PointerToolName, Tool>
   private active: Tool | null = null
   private spaceHeld = false
@@ -192,6 +204,7 @@ export class ToolController implements ToolHost {
 
   constructor(readonly ctx: ToolControllerContext) {
     this.hand = new HandTool(this)
+    this.crop = new CropTool(this)
     const select = new SelectTool(this)
     this.tools = {
       select,
@@ -211,10 +224,12 @@ export class ToolController implements ToolHost {
   }
 
   overlay(): Overlay {
+    const crop = this.cropping.value ? this.crop.overlay() : null
     return {
-      selectedIds: this.selectedIds.value,
+      // the crop UI replaces the selection box and hover outline
+      selectedIds: crop ? new Set() : this.selectedIds.value,
       marquee: this.marquee,
-      hoverId: this.hoverId,
+      hoverId: crop ? null : this.hoverId,
       draft: this.draft,
       pointHandles: this.pointHandles(),
       previewSegment: this.previewSegment,
@@ -222,6 +237,7 @@ export class ToolController implements ToolHost {
       laser: this.laserTrail() as LaserPoint[],
       lasso: this.lasso,
       now: this.now(),
+      crop,
     }
   }
 
@@ -252,6 +268,7 @@ export class ToolController implements ToolHost {
   /** Switches tool; tools without an implementation yet are ignored. */
   setTool(t: ToolName): void {
     if (t !== 'hand' && !(t in this.tools)) return
+    if (this.cropping.value) this.commitCrop()
     const pending = this.pendingTool()
     this.active?.cancel?.()
     if (pending !== this.active) pending?.cancel?.()
@@ -293,6 +310,13 @@ export class ToolController implements ToolHost {
     const panning = e.button === 1 || this.spaceHeld || this.tool.value === 'hand'
     this.downTool = panning ? 'hand' : this.tool.value
     if (!panning && e.button !== 0) return
+    if (!panning && this.cropping.value) {
+      // a press on the crop rect / handles drags it; anywhere else commits the crop (and does nothing more)
+      this.downTool = null
+      if (this.crop.grab(this.toScene(e))) this.active = this.crop
+      else this.commitCrop()
+      return
+    }
     this.active = panning ? this.hand : this.tools[this.tool.value as PointerToolName]
     this.active.down(e, this.toScene(e))
   }
@@ -304,7 +328,8 @@ export class ToolController implements ToolHost {
       return
     }
     if (this.spaceHeld || this.tool.value === 'hand') return
-    this.tools[this.tool.value as PointerToolName].hover?.(e, p)
+    if (this.cropping.value) this.crop.hover(e, p)
+    else this.tools[this.tool.value as PointerToolName].hover?.(e, p)
   }
 
   pointerUp(e: PointerInput): void {
@@ -332,10 +357,15 @@ export class ToolController implements ToolHost {
    */
   isGestureActive(): boolean {
     return this.active !== null || this.pendingTool() !== null || this.editing.value !== null
+      || this.cropping.value !== null
   }
 
-  /** Aborts the gesture: drafts are discarded, a move/resize/rotate reverts with no undo step. */
+  /** Aborts the gesture: drafts are discarded, a move/resize/rotate reverts with no undo step, crop mode ends. */
   cancelGesture(): void {
+    if (this.cropping.value) {
+      if (this.active === this.crop) this.active = null
+      this.cancelCrop()
+    }
     const tool = this.active
     const pending = this.pendingTool()
     if (!tool && !pending) return
@@ -366,6 +396,14 @@ export class ToolController implements ToolHost {
     if (this.editing.value) return false
     const ro = this.ctx.readonly()
     const k = e.key.length === 1 ? e.key.toLowerCase() : e.key
+    if (this.cropping.value && (k === 'Enter' || k === 'Escape')) {
+      // Enter commits the crop, Escape cancels it
+      if (this.active === this.crop) this.active = null
+      if (k === 'Enter') this.commitCrop()
+      else this.cancelCrop()
+      this.resetCursor()
+      return true
+    }
     const pending = this.pendingTool()
     if (pending && (k === 'Enter' || k === 'Escape') && this.active !== this.hand) {
       // Enter / Escape complete a multi-point line or arrow (fewer than 2 points → nothing)
@@ -423,6 +461,11 @@ export class ToolController implements ToolHost {
     // Alt+letter is a menu / OS shortcut on Windows and Linux, and Alt / mod combos are reserved for explicit
     // shortcuts: tool letters and the lock toggle only act on the bare key
     if (e.alt && k.length === 1) return false
+    if (k === 'Enter' && !e.shift && !e.alt) {
+      // Enter with one image selected: crop it
+      const id = this.selectedIds.value.size === 1 ? [...this.selectedIds.value][0]! : null
+      if (id && this.startCrop(id)) return true
+    }
     const t = TOOL_KEYS[k]
     if (t) {
       if (ro && WRITERS.has(t)) return false
@@ -503,6 +546,26 @@ export class ToolController implements ToolHost {
       return copy
     })
     this.insert(copies)
+  }
+
+  /**
+   * Creates an image element from a prepared image: scaled down to fit IMAGE_INSERT_BOX (ratio kept), centered
+   * at `at`, else at the view center. One undo step; selects it. Ignored for a src with a disallowed scheme.
+   */
+  insertImage(info: PreparedImage, at: Point | null): void {
+    if (this.ctx.readonly() || this.isGestureActive()) return
+    const { src, naturalW, naturalH } = info
+    if (!isImageSrc(src) || !(naturalW > 0 && naturalH > 0)) return
+    const { w, h } = fitWithin(naturalW, naturalH, IMAGE_INSERT_BOX)
+    const c = at ?? this.ctx.viewCenter?.() ?? (() => {
+      const p = this.ctx.viewport.toScene({ x: PASTE_OFFSET, y: PASTE_OFFSET })
+      return { x: p.x + w / 2, y: p.y + h / 2 }
+    })()
+    this.insert([{
+      ...DEFAULT_STYLE, opacity: 1,
+      type: 'image', src, naturalW, naturalH, crop: null,
+      x: c.x - w / 2, y: c.y - h / 2, w, h, angle: 0, locked: false,
+    }])
   }
 
   /** Creates an auto-sized text element (current text style) with its top-left at `at`; one undo step. */
@@ -596,11 +659,66 @@ export class ToolController implements ToolHost {
    */
   doubleClick(screen: Point): void {
     if (this.ctx.readonly() || this.editing.value || this.active) return
+    if (this.cropping.value) {
+      // a double-click on the crop rect finishes cropping
+      this.commitCrop()
+      return
+    }
     if (this.tool.value !== 'select' || this.downTool !== 'select') return
     const p = this.ctx.viewport.toScene(screen)
     const hit = this.editableAt(p)
     if (!hit) this.createText(p)
+    else if (isImage(hit)) this.startCrop(hit.id)
     else this.editElement(hit)
+  }
+
+  // ---------- crop ----------
+
+  /**
+   * Enters crop mode on the unlocked image `id` (it becomes the only selected element). The crop is one undo
+   * step: nothing is written until `commitCrop`. False when it does not apply.
+   */
+  startCrop(id: string): boolean {
+    if (this.ctx.readonly() || this.editing.value || this.cropping.value || this.active || this.pendingTool()) return false
+    const el = this.ctx.scene.get(id)
+    if (!el || el.locked || !isImage(el) || !this.crop.begin(el as ImageElement)) return false
+    this.ctx.history.beginGesture()
+    this.setSelection([id])
+    this.cropping.value = id
+    this.hoverId = null
+    this.ctx.invalidate()
+    return true
+  }
+
+  /** Leaves crop mode writing the new crop and box (one undo step; none when nothing changed or read-only). */
+  commitCrop(): void {
+    const id = this.cropping.value
+    if (!id) return
+    const patch = this.crop.patch()
+    this.endCrop()
+    const { store, scene, history } = this.ctx
+    // the board may have turned read-only meanwhile: then nothing is written
+    if (patch && scene.get(id) && !this.ctx.readonly()) {
+      store.update(id, patch)
+      history.endGesture()
+    } else {
+      history.discardGesture()
+    }
+    this.ctx.invalidate()
+  }
+
+  /** Leaves crop mode without writing. */
+  cancelCrop(): void {
+    if (!this.cropping.value) return
+    this.endCrop()
+    this.ctx.history.discardGesture()
+    this.ctx.invalidate()
+  }
+
+  private endCrop(): void {
+    if (this.active === this.crop) this.active = null
+    this.crop.end()
+    this.cropping.value = null
   }
 
   editAt(p: Point): void {
@@ -768,6 +886,7 @@ export class ToolController implements ToolHost {
 
   destroy(): void {
     this.cancelEditing()
+    this.cancelCrop()
     const pending = this.pendingTool()
     this.active?.cancel?.()
     if (pending !== this.active) pending?.cancel?.()
@@ -803,6 +922,8 @@ export class ToolController implements ToolHost {
       this.ctx.history.endGesture()
       this.ctx.invalidate()
     }
+    // the image being cropped was deleted remotely: leave crop mode (nothing was written)
+    if (this.cropping.value && !scene.get(this.cropping.value)) this.cancelCrop()
     const cur = this.selectedIds.value
     const kept = [...cur].filter(id => scene.get(id))
     if (kept.length !== cur.size) this.setSelection(kept)

@@ -71,6 +71,10 @@ const connection = shallowRef<BoardConnection | null>(null)
 const session = shallowRef<BoardSession | null>(null)
 const notOnDevice = ref(false)
 let provider: SketchProvider | null = null
+/** The provider's image uploader, set once the provider is loaded. */
+const providerUpload = shallowRef<((file: File) => Promise<string>) | null>(null)
+/** Image uploader for the board: the provider's, else the editor's `uploadImage`, else none (data URLs). */
+const imageUploader = computed(() => providerUpload.value ?? props.editor.storage.meiConfig?.uploadImage ?? null)
 let opening: Promise<boolean> | null = null
 let disposed = false
 
@@ -98,6 +102,7 @@ async function open(): Promise<boolean> {
       return false
     }
     provider = prov
+    providerUpload.value = prov.uploadImage ? markRaw((file: File) => prov.uploadImage!(file)) : null
     engine.value = markRaw(mod)
     connection.value = markRaw(conn)
     session.value = markRaw(mod.createBoardSession(conn))
@@ -377,6 +382,7 @@ onMounted(() => {
           :readonly="!editable"
           :locale="locale"
           :theme="theme"
+          :upload-image="imageUploader"
           @change="onChange"
           @exit="leave"
         />
@@ -420,6 +426,7 @@ onMounted(() => {
               :readonly="!editable"
               :locale="locale"
               :theme="theme"
+              :upload-image="imageUploader"
               @change="onChange"
               @exit="leave"
             />

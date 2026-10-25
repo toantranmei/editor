@@ -7,9 +7,11 @@ import {
 } from '../src/model/types'
 import { CREATOR_TOOLS, TOOL_ELEMENT_TYPES } from '../src/tools/controller'
 
-/** Element types whose kinds (and tools) land in later M2 tasks (image: 4, frame: 5); hidden until then. */
-const PENDING_KINDS: readonly ElementType[] = ['image', 'frame']
+/** Element types whose kinds (and tools) land in later M2 tasks (frame: 5); hidden until then. */
+const PENDING_KINDS: readonly ElementType[] = ['frame']
 const READY_TYPES = ELEMENT_TYPES.filter(t => !PENDING_KINDS.includes(t))
+/** Element types placed by an insert flow (file picker, paste, drop) rather than drawn with a tool. */
+const INSERTED_TYPES: readonly ElementType[] = ['image']
 
 /** A minimal valid element of `type` (points for the types that need them). */
 function sample(type: ElementType): SketchElement {
@@ -17,6 +19,7 @@ function sample(type: ElementType): SketchElement {
     id: `id-${type}`, type, x: 0, y: 0, w: 10, h: 10, angle: 0, index: 'a0', seed: 1, version: 1, locked: false,
     ...DEFAULT_STYLE,
     ...(type === 'line' || type === 'arrow' || type === 'freedraw' ? { points: [[0, 0], [10, 10]] } : {}),
+    ...(type === 'image' ? { src: 'https://cdn.example/a.png', naturalW: 10, naturalH: 10 } : {}),
   })
 }
 
@@ -56,7 +59,7 @@ describe('element type lists derive from SHAPE_TYPES / ELEMENT_TYPES', () => {
       expect(CREATOR_TOOLS.has(t)).toBe(true)
     }
     const created = new Set(Object.values(TOOL_ELEMENT_TYPES))
-    for (const t of READY_TYPES) expect(created.has(t), t).toBe(true)
+    for (const t of READY_TYPES) expect(created.has(t), t).toBe(!INSERTED_TYPES.includes(t))
     for (const tool of Object.keys(TOOL_ELEMENT_TYPES)) expect(CREATOR_TOOLS.has(tool as never)).toBe(true)
   })
 })

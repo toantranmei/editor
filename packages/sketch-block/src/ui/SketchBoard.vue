@@ -3,13 +3,16 @@ import { computed, onBeforeUnmount, onMounted, ref, shallowRef, toRaw, watch } f
 import type * as Y from 'yjs'
 import '../styles/sketch.css'
 import type { BoardSession } from '../engine'
+import { shapeKeyOf } from '../elements/kind'
 import type { Point } from '../geometry/math'
-import { parseClipboard, serializeClipboard } from '../io/clipboard'
+import { clipboardImageFiles, parseClipboard, serializeClipboard } from '../io/clipboard'
+import { ImageInsertError, type ImageInsertErrorCode, type ImageUploader, prepareImage } from '../io/image-insert'
+import { onImageLoaded } from '../io/image-loader'
 import { messages as allMessages } from '../messages'
 import { History } from '../model/history'
 import { Scene } from '../model/scene'
 import { BoardStore } from '../model/store'
-import { isShape, isSticky, type SketchElement } from '../model/types'
+import { isImage, isShape, isSticky, type SketchElement } from '../model/types'
 import type { BoardConnection } from '../providers/types'
 import { BitmapCache, bindCacheInvalidation } from '../render/bitmap-cache'
 import { renderInteractive, resetAccentCache } from '../render/interactive'
@@ -31,7 +34,9 @@ const props = withDefaults(defineProps<{
   theme?: 'light' | 'dark'
   /** Store + history shared across mounts (inline ↔ fullscreen). Owned by the caller: never destroyed here. */
   session?: BoardSession
-}>(), { readonly: false, locale: 'vi', theme: 'light', session: undefined })
+  /** Uploads an inserted image and resolves to its URL; without one, images are stored as data URLs. */
+  uploadImage?: ImageUploader | null
+}>(), { readonly: false, locale: 'vi', theme: 'light', session: undefined, uploadImage: null })
 
 const emit = defineEmits<{
   /** Any local edit (including undo/redo); the caller debounces preview generation. */
@@ -41,6 +46,8 @@ const emit = defineEmits<{
 }>()
 
 const ZOOM_STEP = 1.25
+/** How long an image error stays on screen, ms. */
+const IMAGE_ERROR_MS = 4000
 
 const root = shallowRef<HTMLDivElement | null>(null)
 const staticCanvas = shallowRef<HTMLCanvasElement | null>(null)
@@ -98,6 +105,9 @@ function drawStatic(): void {
   if (el && isShape(el)) substitutes = new Map([[el.id, { ...el, label: '' }]])
   else if (el && isSticky(el)) substitutes = new Map([[el.id, { ...el, text: '' }]])
   else if (el) (skip ??= new Set()).add(el.id)
+  // the image being cropped is drawn by the interactive layer's crop UI
+  const cropping = controller.cropping.value
+  if (cropping) (skip ??= new Set()).add(cropping)
   renderStatic(ctx, scene, renderState(), cache, skip, substitutes)
 }
 
@@ -144,6 +154,7 @@ const locked = computed(() => props.readonly || viewMode.value)
 const controller = new ToolController({
   store, scene, history, viewport,
   readonly: () => locked.value,
+  viewCenter: () => viewport.toScene(center()),
   invalidate: () => {
     scheduler.invalidateInteractive()
     if (controller.erasing !== drawnErasing) scheduler.invalidateStatic()
@@ -192,6 +203,7 @@ function refreshEditing(): void {
 }
 
 watch(editing, refreshEditing, { flush: 'sync' })
+watch(controller.cropping, () => scheduler.invalidateStatic(), { flush: 'sync' })
 
 function onEditorCommit(value: string): void {
   // a keyboard commit (Escape, Ctrl/Cmd+Enter) leaves focus on the removed textarea: hand it back to the board
@@ -219,6 +231,16 @@ offs.push(bindCacheInvalidation(scene, cache))
 offs.push(scene.onChange(invalidateAll))
 offs.push(scene.onChange(refreshEditing))
 offs.push(scene.onChange(() => sceneVersion.value++))
+// an image finished loading: its placeholder bitmaps are stale (the shape key includes the load state)
+offs.push(onImageLoaded(src => {
+  let hit = false
+  for (const el of scene.elements) {
+    if (!isImage(el) || el.src !== src) continue
+    hit = true
+    cache.pruneElement(el.id, `${el.id}:${shapeKeyOf(el)}:`)
+  }
+  if (hit) invalidateAll()
+}))
 
 const onAfterTransaction = (tr: Y.Transaction) => {
   if (tr.local && tr.changed.size > 0) emit('change')
@@ -235,6 +257,7 @@ watch(() => props.theme, () => {
 watch(() => props.readonly, ro => {
   if (!ro) return
   editor.value?.commit()
+  controller.cancelCrop()
   toolLocked.value = false
   if (tool.value !== 'hand' && tool.value !== 'select') controller.setTool(viewMode.value ? 'hand' : 'select')
 })
@@ -496,9 +519,15 @@ function onCut(e: ClipboardEvent): void {
   onCopy(e, true)
 }
 
-/** Pastes sketch elements, or plain text as a text element, at the last pointer position. */
+/** Pastes image files, sketch elements, or plain text as a text element, at the last pointer position. */
 function onPaste(e: ClipboardEvent): void {
   if (!boardClipboardTarget(e) || editing.value || locked.value || controller.isGestureActive()) return
+  const files = clipboardImageFiles(e.clipboardData)
+  if (files.length) {
+    e.preventDefault()
+    void insertFiles(files, lastPointer ? viewport.toScene(lastPointer) : null)
+    return
+  }
   const parsed = parseClipboard(e.clipboardData?.getData('text/plain') ?? '')
   if (!parsed) return
   e.preventDefault()
@@ -508,6 +537,81 @@ function onPaste(e: ClipboardEvent): void {
 }
 
 const onDocCopy = (e: ClipboardEvent) => onCopy(e)
+
+// ---------- images ----------
+const fileInput = shallowRef<HTMLInputElement | null>(null)
+/** Inline image error message (null = none); cleared after IMAGE_ERROR_MS. */
+const imageError = ref<string | null>(null)
+let imageErrorTimer: ReturnType<typeof setTimeout> | null = null
+
+function showImageError(code: ImageInsertErrorCode): void {
+  imageError.value = t.value.imageError[code]
+  if (imageErrorTimer) clearTimeout(imageErrorTimer)
+  imageErrorTimer = setTimeout(() => {
+    imageErrorTimer = null
+    imageError.value = null
+  }, IMAGE_ERROR_MS)
+}
+
+/**
+ * Prepares (uploads, or encodes as a data URL) and inserts each file, centered at `at` (else the view center),
+ * later ones offset so they do not stack exactly. Failures show the inline error.
+ */
+async function insertFiles(files: File[], at: Point | null): Promise<void> {
+  let offset = 0
+  for (const file of files) {
+    try {
+      const info = await prepareImage(file, props.uploadImage ?? null)
+      if (unmounted) return
+      const c = at ?? viewport.toScene(center())
+      controller.insertImage(info, { x: c.x + offset, y: c.y + offset })
+      offset += 20
+    } catch (err) {
+      if (unmounted) return
+      if (err instanceof ImageInsertError) showImageError(err.code)
+      else {
+        console.warn('sketch-block: image insert failed', err)
+        showImageError('upload')
+      }
+    }
+  }
+}
+
+/** Opens the image file picker (no-op when read-only). */
+function insertImage(): void {
+  if (locked.value) return
+  fileInput.value?.click()
+}
+
+function onFileChosen(): void {
+  const input = fileInput.value
+  if (!input) return
+  const files = Array.from(input.files ?? [])
+  // the same file can be picked again
+  input.value = ''
+  if (files.length && !locked.value) void insertFiles(files, null)
+}
+
+const hasFiles = (e: DragEvent): boolean => Array.from(e.dataTransfer?.types ?? []).includes('Files')
+
+function onDragOver(e: DragEvent): void {
+  if (locked.value || !hasFiles(e)) return
+  e.preventDefault()
+  if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy'
+}
+
+/** Dropped image files are inserted at the drop point; a drop with only other files says so. */
+function onDrop(e: DragEvent): void {
+  if (locked.value || !hasFiles(e)) return
+  e.preventDefault()
+  const files = clipboardImageFiles(e.dataTransfer)
+  if (!files.length) {
+    if (e.dataTransfer?.files.length) showImageError('type')
+    return
+  }
+  const rect = canvasRect()
+  void insertFiles(files, viewport.toScene({ x: e.clientX - rect.left, y: e.clientY - rect.top }))
+}
 
 function onKeyUp(e: KeyboardEvent): void {
   if (isTextTarget(e.target)) return
@@ -543,6 +647,8 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   unmounted = true
+  if (imageErrorTimer) clearTimeout(imageErrorTimer)
+  imageErrorTimer = null
   // keep what is being typed (the editor unmounts after the board's hook)
   editor.value?.commit()
   root.value?.removeEventListener('wheel', onWheel)
@@ -570,6 +676,8 @@ defineExpose({
   selectAll: (): void => controller.selectAll(),
   /** Scene point → px relative to the board canvas' top-left corner. */
   toScreen: (p: Point): Point => viewport.toScreen(p),
+  /** Opens the image file picker; the chosen images are inserted at the view center. */
+  insertImage,
 })
 </script>
 
@@ -582,6 +690,8 @@ defineExpose({
     tabindex="0"
     @keydown="onKeyDown"
     @keyup="onKeyUp"
+    @dragover="onDragOver"
+    @drop="onDrop"
   >
     <canvas ref="staticCanvas" class="me-sketch-canvas" aria-hidden="true" />
     <canvas
@@ -597,6 +707,19 @@ defineExpose({
       @contextmenu.prevent
       @dblclick="onDblClick"
     />
+    <input
+      ref="fileInput"
+      type="file"
+      accept="image/*"
+      multiple
+      hidden
+      tabindex="-1"
+      aria-hidden="true"
+      @change="onFileChosen"
+    >
+    <p v-if="imageError" class="me-sketch-toast" role="alert">
+      {{ imageError }}
+    </p>
     <TextEditor
       v-if="editing && editingEl"
       ref="editor"

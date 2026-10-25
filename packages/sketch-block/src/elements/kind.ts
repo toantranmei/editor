@@ -2,6 +2,7 @@ import type { Point } from '../geometry/math'
 import { type ElementPatch, type ElementType, LINEAR_TYPES, SHAPE_TYPES, type SketchElement } from '../model/types'
 import type { Theme } from '../render/shapes'
 import { freedrawKind } from './freedraw'
+import { imageKind } from './image'
 import { linearKind } from './linear'
 import { shapeKind } from './shape'
 import { stickyKind } from './sticky'
@@ -13,6 +14,11 @@ export interface ElementKind<E extends SketchElement = SketchElement> {
   visualPad(el: E): number
   /** Changes iff the unrotated rendering changes (not x, y, angle, index, version, locked). */
   shapeKey(el: E): string
+  /**
+   * The shape key also depends on state outside the element (an image's load state), so `shapeKeyOf` must not
+   * memoize it per element snapshot.
+   */
+  volatileKey?: boolean
   /** Local frame, box (0,0)–(w,h), full fidelity. */
   draw(ctx: CanvasRenderingContext2D, el: E, theme: Theme): void
   /** Centered frame (origin at the box center), cheap plain paths for low zoom. */
@@ -40,6 +46,7 @@ function registerBuiltins(): void {
   }
   if (!registry.has('text')) registry.set('text', textKind as ElementKind)
   if (!registry.has('sticky')) registry.set('sticky', stickyKind as ElementKind)
+  if (!registry.has('image')) registry.set('image', imageKind as ElementKind)
   if (!registry.has('freedraw')) registry.set('freedraw', freedrawKind as ElementKind)
   for (const t of LINEAR_TYPES) {
     if (!registry.has(t)) registry.set(t, linearKind as ElementKind)
@@ -66,10 +73,15 @@ export function kindOf(el: SketchElement): ElementKind {
 
 const shapeKeys = new WeakMap<SketchElement, string>()
 
-/** `kindOf(el).shapeKey(el)`, memoized per element object (elements are immutable snapshots). */
+/**
+ * `kindOf(el).shapeKey(el)`, memoized per element object (elements are immutable snapshots), except for kinds
+ * whose key is volatile (they memoize their own static part).
+ */
 export function shapeKeyOf(el: SketchElement): string {
+  const kind = kindOf(el)
+  if (kind.volatileKey) return kind.shapeKey(el)
   let k = shapeKeys.get(el)
-  if (k === undefined) shapeKeys.set(el, (k = kindOf(el).shapeKey(el)))
+  if (k === undefined) shapeKeys.set(el, (k = kind.shapeKey(el)))
   return k
 }
 

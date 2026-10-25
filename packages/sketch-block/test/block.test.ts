@@ -343,6 +343,35 @@ describe('sketch block', () => {
     expect(board.querySelector('[data-tool="hand"]')!.getAttribute('title')).toBe(messages.en.tools.hand)
   })
 
+  it('passes the image uploader: provider.uploadImage, then meiConfig.uploadImage, then null', async () => {
+    const attrs = { boardId: 'bd_x', preview: null, height: null, version: 0 }
+    const fromConfig = vi.fn(async () => 'https://cdn/config.png')
+    const fromProvider = vi.fn(async () => 'https://cdn/provider.png')
+    // the node view renders in its own app: read the board's props off its root element (dev builds)
+    const uploaderOf = (_wrapper: VueWrapper) => {
+      const el = document.querySelector('.me-sketch-board') as unknown as { __vueParentComponent: { props: Record<string, unknown> } }
+      return el.__vueParentComponent.props.uploadImage as ((f: File) => Promise<string>) | null
+    }
+
+    const a = await setup({ attrs, config: { uploadImage: fromConfig }, provider: { ...memory(), uploadImage: fromProvider } })
+    await enter(a.wrapper)
+    const f = new File(['x'], 'a.png', { type: 'image/png' })
+    expect(await uploaderOf(a.wrapper)!(f)).toBe('https://cdn/provider.png')
+    expect(fromProvider).toHaveBeenCalledWith(f)
+    a.editor.destroy()
+    await settle()
+
+    const b = await setup({ attrs, config: { uploadImage: fromConfig } })
+    await enter(b.wrapper)
+    expect(uploaderOf(b.wrapper)).toBe(fromConfig)
+    b.editor.destroy()
+    await settle()
+
+    const c = await setup({ attrs })
+    await enter(c.wrapper)
+    expect(uploaderOf(c.wrapper)).toBeNull()
+  })
+
   it('follows the app dark class unless the editor scope forces light', async () => {
     document.documentElement.classList.add('dark')
     try {

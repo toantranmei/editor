@@ -200,6 +200,21 @@ export function stickyInit(x: number, y: number, over: Partial<Omit<StickyElemen
   }
 }
 
+/** Raster data URLs an image may use (SVG and other types can carry script or are not images). */
+const IMAGE_DATA_RE = /^data:image\/(?:png|jpeg|webp|gif)[;,]/i
+const IMAGE_URL_RE = /^https?:\/\//i
+const IMAGE_BLOB_RE = /^blob:/i
+
+/**
+ * Whether `src` may be used as an image source: an http(s) URL, a png / jpeg / webp / gif data URL, or (when
+ * `allowBlob`) a blob: URL. Anything else (`javascript:`, `file:`, SVG data, leading spaces...) is refused.
+ * blob: URLs only live as long as the page that made them, so pasted ones are refused (`allowBlob` false).
+ */
+export function isImageSrc(src: unknown, allowBlob = true): src is string {
+  if (typeof src !== 'string') return false
+  return IMAGE_URL_RE.test(src) || IMAGE_DATA_RE.test(src) || (allowBlob && IMAGE_BLOB_RE.test(src))
+}
+
 const KNOWN_TYPES: ReadonlySet<string> = new Set<string>(ELEMENT_TYPES)
 const POINTS_TYPES: ReadonlySet<string> = new Set<string>([...LINEAR_TYPES, 'freedraw'])
 const isFiniteNumber = (v: unknown): boolean => typeof v === 'number' && Number.isFinite(v)
@@ -245,7 +260,8 @@ const OPTIONAL_CHECKS: Record<string, (v: unknown) => boolean> = {
 
 /**
  * Whether a stored element (raw Y map JSON) is structurally sound: a known type, string id, valid order key, finite
- * geometry, a `points` array of finite [x, y] pairs where the type needs one, and well-typed optional props.
+ * geometry, a `points` array of finite [x, y] pairs where the type needs one, an allowed `src` for an image
+ * (see `isImageSrc`), and well-typed optional props.
  * Anything else (a newer client's type, a corrupt peer) is skipped by the store's reads and left untouched in Y.
  * (The store additionally hides types whose element kind is not registered yet.)
  */
@@ -255,6 +271,8 @@ export function isRenderable(raw: Record<string, unknown>): boolean {
   if (!isFiniteNumber(raw.x) || !isFiniteNumber(raw.y) || !isFiniteNumber(raw.w) || !isFiniteNumber(raw.h)) return false
   if (!isFiniteNumber(raw.angle)) return false
   if (POINTS_TYPES.has(raw.type) && !(Array.isArray(raw.points) && raw.points.every(isFinitePair))) return false
+  // an image needs a src with an allowed scheme (never `javascript:` and the like)
+  if (raw.type === 'image' && !isImageSrc(raw.src)) return false
   for (const [k, ok] of Object.entries(OPTIONAL_CHECKS)) {
     if (raw[k] !== undefined && !ok(raw[k])) return false
   }

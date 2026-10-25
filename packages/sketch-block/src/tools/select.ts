@@ -4,7 +4,7 @@ import {
   type Box, boxCenter, elementCorners, type Handle, handlePositions, type Point, resizeBox, rotateAngle,
   snapSegment,
 } from '../geometry'
-import { type ElementPatch, isLinear, type LinearElement, type SketchElement } from '../model/types'
+import { type ElementPatch, isImage, isLinear, type LinearElement, type SketchElement } from '../model/types'
 import type { PointerInput, Tool, ToolHost } from './controller'
 
 /** Hit tolerances in screen px (divided by zoom → scene units). */
@@ -163,11 +163,14 @@ export class SelectTool implements Tool {
         this.writer.set(patches)
         return
       }
-      case 'resize':
+      case 'resize': {
+        // images keep their aspect ratio unless Shift is held; everything else the other way round
+        const keepRatio = isImage(g.el) ? !e.shift : e.shift
         this.writer.set({
-          [g.el.id]: kindOf(g.el).resize(g.el, resizeBox(g.el, g.handle, p, { keepRatio: e.shift, fromCenter: e.alt })),
+          [g.el.id]: kindOf(g.el).resize(g.el, resizeBox(g.el, g.handle, p, { keepRatio, fromCenter: e.alt })),
         })
         return
+      }
       case 'rotate':
         this.writer.set({ [g.el.id]: { angle: rotateAngle(boxCenter(g.el), p, e.shift) } })
         return
