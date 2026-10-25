@@ -9,6 +9,7 @@ import { GRID_SIZE, type Snapper, snapPoint } from '../geometry/snap'
 import { bindingAt, boundPatch, followBindings } from '../geometry/binding'
 import { type ElementPatch, isImage, isLinear, type LinearElement, type SketchElement } from '../model/types'
 import { frameLabelAt } from '../render/frame-labels'
+import { onLinkBadge } from '../render/interactive'
 import type { PointerInput, Tool, ToolHost } from './controller'
 
 /** Hit tolerances in screen px (divided by zoom → scene units). */
@@ -135,6 +136,13 @@ export class SelectTool implements Tool {
     const ro = ctx.readonly()
     this.downAt = p
     this.dirty = false
+    // a link badge (screen size, outside the element) follows its link, also when read-only
+    const badge = this.badgeAt(e)
+    if (badge) {
+      this.g = { kind: 'none' }
+      this.host.followLink(badge.id)
+      return
+    }
     // point handles win over the resize handles they may overlap
     const point = ro ? null : this.pointAt(p)
     if (point) {
@@ -152,6 +160,11 @@ export class SelectTool implements Tool {
     }
 
     const hit = this.hitAt(p)
+    // mod+click follows the element's link (instead of selecting it)
+    if (hit?.link && e.mod && this.host.followLink(hit.id)) {
+      this.g = { kind: 'none' }
+      return
+    }
     const sel = this.host.selectedIds.value
     if (!hit) {
       const base = e.shift ? new Set(sel) : new Set<string>()
@@ -302,8 +315,13 @@ export class SelectTool implements Tool {
     this.hover(e, p)
   }
 
-  hover(_e: PointerInput, p: Point): void {
+  hover(e: PointerInput, p: Point): void {
     const { ctx } = this.host
+    // the hovered element keeps its hover while the pointer is on its link badge (outside its box)
+    if (this.badgeAt(e)) {
+      this.host.cursor.value = 'pointer'
+      return
+    }
     const hit = this.hitAt(p)
     const hoverId = hit?.id ?? null
     if (hoverId !== this.host.hoverId) {
@@ -379,6 +397,18 @@ export class SelectTool implements Tool {
    */
   movedIds(): string[] {
     return this.g.kind === 'move' ? this.g.origins.map(el => el.id) : []
+  }
+
+  /** The element whose link badge (shown on the hovered and selected elements with a link) is under the pointer. */
+  private badgeAt(e: PointerInput): SketchElement | null {
+    const { scene, viewport } = this.host.ctx
+    const ids = new Set(this.host.selectedIds.value)
+    if (this.host.hoverId) ids.add(this.host.hoverId)
+    for (const id of ids) {
+      const el = scene.get(id)
+      if (el?.link && onLinkBadge(el, viewport, e.screen)) return el
+    }
+    return null
   }
 
   /** Element under `p`: a frame name label (drawn on top of everything) first, then the scene hit-test. */

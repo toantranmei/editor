@@ -58,7 +58,7 @@ const count = (ctx: FakeCtx, name: string) => ctx.calls.filter(c => c.name === n
 
 const el = (over: Partial<ShapeElement> = {}): ShapeElement => ({
   id: 'a', type: 'rectangle', x: 0, y: 0, w: 100, h: 50, angle: 0, index: 'a0',
-  ...DEFAULT_STYLE, groupIds: [], frameId: null, label: '', seed: 42, version: 1, locked: false, ...over,
+  ...DEFAULT_STYLE, groupIds: [], frameId: null, link: null, label: '', seed: 42, version: 1, locked: false, ...over,
 })
 
 const init = (over: Partial<ShapeElement> = {}) => ({

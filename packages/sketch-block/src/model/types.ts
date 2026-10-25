@@ -1,3 +1,5 @@
+import { sanitizeLink } from '../io/links'
+
 /** Shape element types: the single source for every shape list (kinds, clipboard, style panel, tools). */
 export const SHAPE_TYPES = [
   'rectangle', 'ellipse', 'diamond', 'triangle', 'pentagon', 'hexagon', 'star', 'parallelogram', 'trapezoid',
@@ -47,6 +49,11 @@ export interface CommonProps {
   groupIds: string[]
   /** The frame containing this element (null = none). */
   frameId: string | null
+  /**
+   * Link followed from the element's badge / mod+click: an http(s) / mailto URL or an internal `#el:<id>`
+   * (null = none). Disallowed values are read as null (see `sanitizeLink`).
+   */
+  link: string | null
 }
 
 /** An arrow endpoint attached to an element; (ax, ay) is the anchor in the target's unrotated unit box (0..1). */
@@ -134,7 +141,7 @@ export type AllProps =
 export type ElementPatch = Partial<Omit<AllProps, 'id' | 'version'>>
 
 /** Props an init may leave out; `normalizeElement` fills them in on read. */
-type DefaultedProp = 'groupIds' | 'frameId' | 'label' | 'startBinding' | 'endBinding'
+type DefaultedProp = 'groupIds' | 'frameId' | 'link' | 'label' | 'startBinding' | 'endBinding'
 
 export type ElementInit =
   & DistributiveOmit<SketchElement, 'id' | 'index' | 'seed' | 'version' | DefaultedProp>
@@ -177,7 +184,7 @@ const LINEAR_DEFAULTS = {
   routing: 'straight', startArrowhead: 'none', label: '', startBinding: null, endBinding: null,
 } as const
 /** Defaults every element type shares (beyond DEFAULT_STYLE). */
-const COMMON_DEFAULTS: Pick<CommonProps, 'groupIds' | 'frameId'> = { groupIds: [], frameId: null }
+const COMMON_DEFAULTS: Pick<CommonProps, 'groupIds' | 'frameId' | 'link'> = { groupIds: [], frameId: null, link: null }
 
 /** Type-specific defaults filled in when a stored element lacks the field. */
 export const TYPE_DEFAULTS: { [T in ElementType]: Partial<ElementOf<T>> } = {
@@ -270,6 +277,8 @@ const OPTIONAL_CHECKS: Record<string, (v: unknown) => boolean> = {
   crop: isCropValue,
   groupIds: isStringArray,
   frameId: v => v === null || typeof v === 'string',
+  // any string is accepted here: a disallowed link is read as null (normalizeElement), the element stays visible
+  link: v => v === null || typeof v === 'string',
   // bindings are not checked here: a malformed one is normalized to null on read (the line stays visible)
 }
 
@@ -309,6 +318,8 @@ export function normalizeElement(raw: Record<string, unknown>): SketchElement {
   for (const [k, v] of Object.entries(raw)) {
     if (v !== undefined) out[k] = v
   }
+  // the link allowlist is enforced on every read
+  out.link = sanitizeLink(out.link)
   if (LINEAR_SET.has(raw.type as string)) {
     out.startBinding = cleanBinding(out.startBinding)
     out.endBinding = cleanBinding(out.endBinding)

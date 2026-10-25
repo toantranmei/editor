@@ -355,9 +355,9 @@ describe('StylePanel', () => {
 
   it('shows sections by relevance', () => {
     expect(sections(panel({ elements: [el({ type: 'rectangle' })] }))).toEqual([
-      'stroke', 'background', 'fillStyle', 'strokeWidth', 'strokeStyle', 'sloppiness', 'edges', 'font', 'opacity', 'layers', 'arrange',
+      'stroke', 'background', 'fillStyle', 'strokeWidth', 'strokeStyle', 'sloppiness', 'edges', 'font', 'opacity', 'layers', 'link', 'arrange',
     ])
-    expect(sections(panel({ elements: [el({ type: 'text' })] }))).toEqual(['stroke', 'font', 'opacity', 'layers', 'arrange'])
+    expect(sections(panel({ elements: [el({ type: 'text' })] }))).toEqual(['stroke', 'font', 'opacity', 'layers', 'link', 'arrange'])
     expect(sections(panel({ tool: 'pen' }))).toEqual(['stroke', 'strokeWidth', 'opacity'])
     expect(sections(panel({ tool: 'ellipse' }))).not.toContain('edges')
   })

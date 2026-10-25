@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
+import { sanitizeLink } from '../io/links'
 import type { SketchMessages, StyleMessages } from '../messages'
 import { type CurrentStyle, relevantStyleKeys, STYLE_SECTIONS, type StyleKey, type StyleSection } from '../model/style'
 import { type ElementType, type SketchElement, STICKY_COLORS } from '../model/types'
@@ -33,6 +34,8 @@ const emit = defineEmits<{
   group: []
   ungroup: []
   lock: []
+  /** New link of the single selected element ('' = remove); only allowed values are emitted. */
+  link: [value: string]
 }>()
 
 /** Element type each drawing tool creates. */
@@ -215,6 +218,43 @@ const distributeAxes = computed(() => [
 ])
 const canUngroup = computed(() => props.elements.some(el => !el.locked && el.groupIds.length > 0))
 const allLocked = computed(() => props.elements.length > 0 && props.elements.every(el => el.locked))
+
+// ---------- link (single selection) ----------
+const linkTarget = computed(() => (props.elements.length === 1 ? props.elements[0]! : null))
+const linkDraft = ref('')
+const linkInvalid = ref(false)
+// the field follows the selected element (and remote / undo changes of its link)
+watch(() => [linkTarget.value?.id, linkTarget.value?.link] as const, () => {
+  linkDraft.value = linkTarget.value?.link ?? ''
+  linkInvalid.value = false
+}, { immediate: true })
+
+/** Blur / Enter: an allowed link (or '' to remove it) is emitted; anything else shows the hint and is not saved. */
+function commitLink(): void {
+  const el = linkTarget.value
+  if (!el) return
+  const raw = linkDraft.value.trim()
+  if (raw && !sanitizeLink(raw)) {
+    linkInvalid.value = true
+    return
+  }
+  linkInvalid.value = false
+  if (raw === (el.link ?? '')) return
+  emit('link', raw)
+}
+
+function onLinkKey(e: KeyboardEvent): void {
+  if (e.key === 'Enter') {
+    e.preventDefault()
+    commitLink()
+  } else if (e.key === 'Escape') {
+    // back to the stored value
+    e.preventDefault()
+    linkDraft.value = linkTarget.value?.link ?? ''
+    linkInvalid.value = false
+    ;(e.target as HTMLInputElement).blur()
+  }
+}
 </script>
 
 <template>
@@ -459,6 +499,30 @@ const allLocked = computed(() => props.elements.length > 0 && props.elements.eve
             <BringToFront />
           </button>
         </div>
+      </section>
+
+      <section v-if="linkTarget" class="me-sketch-style-section" data-section="link">
+        <h3 class="me-sketch-style-label">
+          {{ m.link }}
+        </h3>
+        <input
+          v-model="linkDraft"
+          type="url"
+          class="me-sketch-link-input"
+          :class="{ 'is-invalid': linkInvalid }"
+          :placeholder="m.linkPlaceholder"
+          :aria-label="m.link"
+          :aria-invalid="linkInvalid"
+          :disabled="linkTarget.locked"
+          spellcheck="false"
+          autocomplete="off"
+          maxlength="2048"
+          @keydown.stop="onLinkKey"
+          @blur="commitLink"
+        >
+        <p v-if="linkInvalid" class="me-sketch-link-hint" role="alert">
+          {{ m.linkInvalid }}
+        </p>
       </section>
 
       <section v-if="elements.length" class="me-sketch-style-section" data-section="arrange">

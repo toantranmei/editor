@@ -28,6 +28,7 @@ import {
   stickyInit,
 } from '../model/types'
 import { fitWithin, type PreparedImage } from '../io/image-insert'
+import { internalLinkTarget, openLink, sanitizeLink } from '../io/links'
 import { stripControl } from '../io/xml'
 import { measureText } from '../text/measure'
 import { frameLabelAt } from '../render/frame-labels'
@@ -42,6 +43,7 @@ import { LASER_FADE_MS, type LaserPoint, LaserTool } from './laser'
 import { LassoTool } from './lasso'
 import { LinearTool } from './linear'
 import { PenTool } from './pen'
+import { focusElement as centerOn } from './search'
 import { SelectTool } from './select'
 import { ShapeTool } from './shape'
 import { StickyTool } from './sticky'
@@ -174,6 +176,8 @@ export interface ToolHost {
   snapper(exclude?: Iterable<string>): Snapper
   /** Sets the snap guides shown (redraws when they change). */
   setGuides(guides: Guide[]): void
+  /** Follows element `id`'s link (see `openLink`); false when it has none or nothing happened. */
+  followLink(id: string): boolean
 }
 
 /** A gesture handler; `p` is the pointer in scene coordinates. */
@@ -729,6 +733,10 @@ export class ToolController implements ToolHost {
       if ('points' in copy) copy.points = copy.points.map(p => [p[0], p[1]])
       if ('pressures' in copy) copy.pressures = [...copy.pressures]
       copy.groupIds = (init.groupIds ?? []).map(group)
+      // an internal link to an element pasted along points at its copy
+      const target = copy.link ? internalLinkTarget(copy.link) : null
+      const linked = target ? newIds.get(target) : undefined
+      if (linked) copy.link = `#el:${linked}`
       // a binding survives only when its target was pasted along (then it points at that copy)
       if (copy.type === 'line' || copy.type === 'arrow') {
         copy.startBinding = rebind(copy.startBinding)
@@ -913,6 +921,45 @@ export class ToolController implements ToolHost {
     if (!Object.keys(patches).length) return
     this.ctx.history.gesture(() => this.ctx.store.updateMany(patches))
     this.ctx.invalidate()
+  }
+
+  /**
+   * Sets element `id`'s link (trimmed; '' clears it) in one undo step. False, writing nothing, when the board is
+   * read-only, the element is gone or locked, or the value is not an allowed link (`sanitizeLink`).
+   */
+  setLink(id: string, raw: string): boolean {
+    if (this.ctx.readonly() || this.editing.value || this.cropping.value) return false
+    const el = this.ctx.scene.get(id)
+    if (!el || el.locked) return false
+    const link = raw.trim() ? sanitizeLink(raw) : null
+    if (raw.trim() && !link) return false
+    if (link === el.link) return true
+    this.ctx.history.gesture(() => this.ctx.store.update(id, { link }))
+    this.ctx.invalidate()
+    return true
+  }
+
+  /**
+   * Centers element `id` in the view (the zoom is kept when it fits, else it is fitted) and selects it; false when
+   * it does not exist. Search and internal links both land here.
+   */
+  focusElement(id: string): boolean {
+    const el = this.ctx.scene.get(id)
+    if (!el) return false
+    const { viewport } = this.ctx
+    const view = this.ctx.viewBox?.()
+    if (view) {
+      const z = viewport.zoom
+      centerOn(viewport, el, (view.maxX - view.minX) * z, (view.maxY - view.minY) * z)
+    }
+    this.setSelection([id])
+    this.ctx.invalidate()
+    return true
+  }
+
+  followLink(id: string): boolean {
+    const link = this.ctx.scene.get(id)?.link
+    return link ? openLink(link, { focus: target => this.focusElement(target) }) : false
   }
 
   /** Aligns the selected, unlocked elements (groups as one unit) to their union box's edge / center. One undo step. */

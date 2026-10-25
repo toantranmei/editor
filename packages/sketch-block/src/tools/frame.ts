@@ -65,7 +65,7 @@ export class FrameTool implements Tool {
   private draft(box: { x: number; y: number; w: number; h: number }): SketchElement {
     return {
       ...DEFAULT_STYLE, ...box, type: 'frame', name: '', angle: 0, locked: false,
-      id: 'draft', index: 'a0', seed: 0, version: 1, groupIds: [], frameId: null,
+      id: 'draft', index: 'a0', seed: 0, version: 1, groupIds: [], frameId: null, link: null,
     }
   }
 }

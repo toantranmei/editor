@@ -4,7 +4,7 @@ import { DEFAULT_STYLE, type FreedrawElement, type ShapeElement, type SketchElem
 
 const el = (over: Partial<ShapeElement> = {}): SketchElement => ({
   id: 'a', type: 'rectangle', x: 0, y: 0, w: 100, h: 50, angle: 0, index: 'a0', seed: 7, version: 1,
-  locked: false, ...DEFAULT_STYLE, groupIds: [], frameId: null, label: '', ...over,
+  locked: false, ...DEFAULT_STYLE, groupIds: [], frameId: null, link: null, label: '', ...over,
 })
 
 describe('svg export', () => {
@@ -76,7 +76,7 @@ describe('svg export', () => {
 })
 
 describe('svg export: M1 kinds', () => {
-  const base = { angle: 0, version: 1, locked: false, ...DEFAULT_STYLE, groupIds: [], frameId: null }
+  const base = { angle: 0, version: 1, locked: false, ...DEFAULT_STYLE, groupIds: [], frameId: null, link: null }
   const pen = (over: Partial<FreedrawElement> = {}): SketchElement => ({
     ...base, id: 'p', type: 'freedraw', x: 0, y: 0, w: 40, h: 20, index: 'a0', seed: 1,
     points: [[0, 0], [10, 5], [20, 10], [40, 20]], pressures: [], highlighter: false, ...over,
@@ -124,7 +124,7 @@ describe('svg export: M1 kinds', () => {
 })
 
 describe('svg export: M2 kinds', () => {
-  const base = { angle: 0, version: 1, locked: false, ...DEFAULT_STYLE, groupIds: [], frameId: null }
+  const base = { angle: 0, version: 1, locked: false, ...DEFAULT_STYLE, groupIds: [], frameId: null, link: null }
 
   it('svg exports sticky, frame, image, labeled arrow', () => {
     const sticky = {

@@ -4,7 +4,7 @@ import { DEFAULT_STYLE, type ShapeElement, type SketchElement } from '../src/mod
 
 const el = (over: Partial<ShapeElement> = {}): SketchElement => ({
   id: 'a', type: 'rectangle', x: 0, y: 0, w: 100, h: 50, angle: 0, index: 'a0',
-  seed: 1, version: 1, locked: false, ...DEFAULT_STYLE, groupIds: [], frameId: null, label: '', ...over,
+  seed: 1, version: 1, locked: false, ...DEFAULT_STYLE, groupIds: [], frameId: null, link: null, label: '', ...over,
 })
 const filled = { fill: '#f00', fillStyle: 'solid' as const }
 

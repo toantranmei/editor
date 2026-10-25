@@ -3,6 +3,7 @@ import {
   cleanBinding, ELEMENT_TYPES, type ElementInit, isImageSrc, MAX_IMAGE_SRC_CHARS, normalizeElement, type SketchElement,
 } from '../model/types'
 import { isImageFile } from './image-insert'
+import { sanitizeLink } from './links'
 
 export const CLIPBOARD_TYPE = 'mei-sketch/clipboard'
 
@@ -196,6 +197,8 @@ function sanitizeElement(raw: unknown): ElementInit | null {
   if (typeof raw.id === 'string' && raw.id.length <= MAX_ID_CHARS) out.id = raw.id
   // frame membership is recomputed by the paster; never trust the payload's frame id
   out.frameId = null
+  // only allowed links survive (anything else is pasted without a link)
+  out.link = sanitizeLink(raw.link)
   if (type === 'line' || type === 'arrow') {
     // kept when well-formed; the paster keeps only those whose target is pasted along (remapped to its copy)
     const bound = (v: unknown) => {

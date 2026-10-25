@@ -189,7 +189,7 @@ export class LinearTool implements Tool {
       startBinding: null,
       endBinding: null,
       groupIds: [],
-      frameId: null,
+      frameId: null, link: null,
       routing: style.routing,
       startArrowhead: heads.startArrowhead,
       endArrowhead: heads.endArrowhead,

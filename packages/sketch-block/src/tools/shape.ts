@@ -100,7 +100,7 @@ export class ShapeTool implements Tool {
       type: this.type,
       label: '',
       groupIds: [],
-      frameId: null,
+      frameId: null, link: null,
       angle: 0,
       index: 'a0',
       seed: this.seed,

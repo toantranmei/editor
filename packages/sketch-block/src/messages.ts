@@ -142,6 +142,11 @@ export interface StyleMessages {
   ungroup: string
   /** Lock toggle (a constant name; its pressed state says whether the selection is locked). */
   lock: string
+  /** Element link field (single selection). */
+  link: string
+  linkPlaceholder: string
+  /** Inline hint for a link that is not allowed (it is not saved). */
+  linkInvalid: string
 }
 
 export const messages: Record<'vi' | 'en', SketchMessages> = {
@@ -295,6 +300,9 @@ export const messages: Record<'vi' | 'en', SketchMessages> = {
       group: 'Nhóm',
       ungroup: 'Bỏ nhóm',
       lock: 'Khóa',
+      link: 'Liên kết',
+      linkPlaceholder: 'https://… hoặc #el:id',
+      linkInvalid: 'Chỉ hỗ trợ liên kết https, http, mailto hoặc #el:<id>.',
     },
   },
   en: {
@@ -447,6 +455,9 @@ export const messages: Record<'vi' | 'en', SketchMessages> = {
       group: 'Group',
       ungroup: 'Ungroup',
       lock: 'Lock',
+      link: 'Link',
+      linkPlaceholder: 'https://… or #el:id',
+      linkInvalid: 'Only https, http, mailto or #el:<id> links are supported.',
     },
   },
 }

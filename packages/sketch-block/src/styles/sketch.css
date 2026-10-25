@@ -375,6 +375,28 @@
   .me-sketch-board .me-sketch-color-input::-webkit-color-swatch-wrapper { padding: 0; }
   .me-sketch-board .me-sketch-color-input::-webkit-color-swatch { border: none; border-radius: var(--me-radius-sm); }
   .me-sketch-board .me-sketch-color-input::-moz-color-swatch { border: none; border-radius: var(--me-radius-sm); }
+  .me-sketch-board .me-sketch-link-input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: var(--me-space-1) var(--me-space-2);
+    border: var(--me-border-width-thin) solid var(--me-color-border);
+    border-radius: var(--me-popover-radius);
+    background: transparent;
+    color: var(--me-color-text);
+    font: inherit;
+    font-size: var(--me-font-size-xs);
+  }
+  .me-sketch-board .me-sketch-link-input:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 var(--me-border-width-thick) var(--me-input-focus-ring);
+  }
+  .me-sketch-board .me-sketch-link-input.is-invalid { border-color: var(--me-color-danger); }
+  .me-sketch-board .me-sketch-link-hint {
+    max-width: 14em;
+    margin: 0;
+    color: var(--me-color-danger);
+    font-size: var(--me-font-size-xs);
+  }
   .me-sketch-board .me-sketch-style-range {
     width: 100%;
     margin: 0;

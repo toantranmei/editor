@@ -372,6 +372,21 @@ distribute (horizontally, vertically; 3 or more) buttons. Each is one undo step.
 - `Ctrl/⌘ + D` duplicates the selection.
 - `Ctrl/⌘ + Alt + C` copies the style of the selected element; `Ctrl/⌘ + Alt + V` applies it to the selection.
 
+### Search and links
+
+- `Ctrl/⌘ + F` inside the board opens a search box (top right) instead of the browser's find. It matches text
+  elements, shape and arrow labels, sticky notes and frame names, ignoring case and Vietnamese diacritics
+  (`duong` finds "Đường"). Matches are highlighted; `Enter` / `Shift + Enter` step to the next / previous
+  match, centering it (the zoom changes only when the match does not fit) and selecting it. `Esc` closes the box.
+- With one element selected, the style panel's **Link** field sets the element's link (on `Enter` or when the
+  field loses focus; empty removes it). Allowed: `https:`, `http:` and `mailto:` URLs, and `#el:<id>` links to
+  another element of the board. Anything else (`javascript:`, `data:`, relative URLs...) shows a hint and is
+  not saved, and is read as "no link" wherever it comes from (a peer, a paste, an old board).
+- An element with a link shows a small link badge at its top-right corner when hovered or selected. Clicking the
+  badge, or `Ctrl/⌘ + click` on the element, follows the link: web and mail links open in a new tab (with no
+  opener or referrer); `#el:` links pan and zoom to their element and select it. Copies of linked elements pasted
+  together keep their `#el:` links pointing at each other.
+
 ### Fonts
 
 Text uses **[Patrick Hand](https://fonts.google.com/specimen/Patrick+Hand)** (SIL Open Font License 1.1,
@@ -391,6 +406,8 @@ font by name only and fall back to a cursive font where it is not installed.
 | `Delete` / `Backspace` | Delete the selection |
 | Arrow keys (`Shift` = 10 px) | Nudge the selection |
 | `Ctrl/⌘ + A` | Select all |
+| `Ctrl/⌘ + F` | [Search](#search-and-links) (`Enter` / `Shift + Enter` next / previous, `Esc` closes) |
+| `Ctrl/⌘ + click` | Follow the element's [link](#search-and-links) |
 | `Ctrl/⌘ + C` / `X` / `V` | Copy, cut, paste |
 | `Ctrl/⌘ + D` | Duplicate |
 | `Tab`, `Ctrl/⌘ + Enter` | Next sticky note (one note selected, or while typing in one: `Tab`) |

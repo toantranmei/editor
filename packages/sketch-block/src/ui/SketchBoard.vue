@@ -31,7 +31,7 @@ import { loadFonts } from '../text/fonts'
 import { clearTextCache } from '../text/measure'
 import { type CurrentStyle, type PointerInput, ToolController, type ToolName } from '../tools/controller'
 import { LASER_FADE_MS } from '../tools/laser'
-import { focusElement, searchElements } from '../tools/search'
+import { searchElements } from '../tools/search'
 import { Viewport } from '../viewport'
 import Avatars, { type AvatarPeer } from './Avatars.vue'
 import SearchBox from './SearchBox.vue'
@@ -361,6 +361,12 @@ function applyStyle(patch: Partial<CurrentStyle>): void {
   controller.applyStyle(patch)
 }
 
+/** The style panel's link field (single selection; already validated there, re-checked by the controller). */
+function setLink(value: string): void {
+  const el = selectedEls.value.length === 1 ? selectedEls.value[0]! : null
+  if (el) controller.setLink(el.id, value)
+}
+
 function reorder(to: 'front' | 'back'): void {
   controller.reorderSelection(to)
 }
@@ -399,16 +405,6 @@ function closeSearch(): void {
   void nextTick(() => root.value?.focus({ preventScroll: true }))
 }
 
-/** Pans / zooms so element `id` is centered (keeping the zoom when it fits) and selects it; false when gone. */
-function focusOn(id: string): boolean {
-  const el = scene.get(id)
-  if (!el) return false
-  focusElement(viewport, el, widthCss, heightCss)
-  syncView()
-  controller.setSelection([id])
-  return true
-}
-
 /** Enter (+1) / Shift+Enter (-1): the next / previous match, wrapping around. */
 function stepSearch(dir: 1 | -1): void {
   const m = searchMatches.value
@@ -416,7 +412,8 @@ function stepSearch(dir: 1 | -1): void {
   const i = searchIndex.value
   const next = i < 0 ? (dir > 0 ? 0 : m.length - 1) : (i + dir + m.length) % m.length
   searchIndex.value = next
-  focusOn(m[next]!)
+  // centered (zoom kept when it fits) and selected: the same helper internal links use
+  controller.focusElement(m[next]!)
 }
 
 // ---------- text editing ----------
@@ -1045,6 +1042,7 @@ defineExpose({
       @group="controller.group()"
       @ungroup="controller.ungroup()"
       @lock="controller.toggleLock()"
+      @link="setLink"
     />
     <Toolbar
       v-if="!zen"

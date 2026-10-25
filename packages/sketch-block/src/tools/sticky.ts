@@ -69,7 +69,7 @@ export class StickyTool implements Tool {
     const { color, fontFamily, textAlign, opacity } = this.host.currentStyle.value
     return {
       ...stickyInit(box.x, box.y, { ...box, color, fontFamily, textAlign, opacity }),
-      id: 'draft', index: 'a0', seed: 0, version: 1, groupIds: [], frameId: null,
+      id: 'draft', index: 'a0', seed: 0, version: 1, groupIds: [], frameId: null, link: null,
     } as SketchElement
   }
 }

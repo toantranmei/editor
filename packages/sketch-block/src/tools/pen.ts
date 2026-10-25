@@ -123,7 +123,7 @@ export class PenTool implements Tool {
     const draft: FreedrawElement = {
       ...this.styleProps(),
       groupIds: [],
-      frameId: null,
+      frameId: null, link: null,
       x: minX,
       y: minY,
       w: this.maxX - minX,

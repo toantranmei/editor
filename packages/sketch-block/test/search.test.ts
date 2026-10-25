@@ -151,7 +151,10 @@ describe('SketchBoard search', () => {
     await open()
     await type('ung dung')
     expect(wrapper.find('.me-sketch-search-status').text()).toBe('0/2')
-    const centerOf = (x: number, y: number) => vm.toScreen({ x: x + 50, y: y + 25 })
+    const centerOf = (x: number, y: number) => {
+      const p = vm.toScreen({ x: x + 50, y: y + 25 })
+      return { x: Math.round(p.x * 1e6) / 1e6, y: Math.round(p.y * 1e6) / 1e6 }
+    }
     const selectedIds = () => wrapper.findComponent({ name: 'StylePanel' }).props('elements').map((e: { id: string }) => e.id)
 
     await input().trigger('keydown', { key: 'Enter' })

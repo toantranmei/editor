@@ -3,12 +3,13 @@ import { blendsMultiply } from '../elements/freedraw'
 import { drawImagePlaceholder } from '../elements/image'
 import { kindOf } from '../elements/kind'
 import { hasTransformHandles } from '../elements/linear'
-import { type Box, type Handle, handlePositions, type Point } from '../geometry'
+import { type Box, elementCorners, type Handle, handlePositions, type Point } from '../geometry'
 import { bindOutline } from '../geometry/binding'
 import type { Guide } from '../geometry/snap'
 import { getLoadedImage } from '../io/image-loader'
 import type { Scene } from '../model/scene'
 import type { ImageElement, SketchElement } from '../model/types'
+import type { Viewport } from '../viewport'
 import { cropHandles } from '../tools/crop'
 import { bitmapPad, bitmapScale, buildBitmap, cacheKey } from './bitmap-cache'
 import { drawFrameLabels } from './frame-labels'
@@ -82,6 +83,10 @@ const FALLBACK_ACCENT = '#2383e2'
 /** Fill opacity of a search match's highlight, and of the active match's. */
 export const SEARCH_ALPHA = 0.15
 export const SEARCH_ACTIVE_ALPHA = 0.35
+/** Link badge side, screen px. */
+export const LINK_BADGE_PX = 14
+/** Offset of the link badge's center from the element's top-right corner (along its rotated axes), screen px. */
+const LINK_BADGE_OFFSET_PX = 16
 /** Search highlight margin around the element's box, screen px. */
 const SEARCH_PAD_PX = 4
 const HANDLE_PX = 8
@@ -328,6 +333,61 @@ function drawSearchMatches(
   ctx.globalAlpha = 1
 }
 
+/**
+ * Screen position (canvas px) of the center of `el`'s link badge: just outside its top-right corner, along the
+ * element's rotated axes (clear of the resize handle at that corner).
+ */
+export function linkBadgeCenter(el: SketchElement, viewport: Viewport): Point {
+  const corner = viewport.toScreen(elementCorners(el)[1]!)
+  const cos = Math.cos(el.angle)
+  const sin = Math.sin(el.angle)
+  const d = LINK_BADGE_OFFSET_PX
+  // local (+d, -d) rotated by the element's angle
+  return { x: corner.x + d * cos + d * sin, y: corner.y + d * sin - d * cos }
+}
+
+/** Whether screen point `p` is on `el`'s link badge (a little forgiving). */
+export function onLinkBadge(el: SketchElement, viewport: Viewport, p: Point): boolean {
+  const c = linkBadgeCenter(el, viewport)
+  const r = LINK_BADGE_PX / 2 + 2
+  return Math.abs(p.x - c.x) <= r && Math.abs(p.y - c.y) <= r
+}
+
+/** The link badge: a 14 px rounded square with a chain glyph drawn from two capsules, at screen size. */
+function drawLinkBadge(ctx: CanvasRenderingContext2D, state: RenderState, el: SketchElement, accent: string): void {
+  const c = linkBadgeCenter(el, state.viewport)
+  const half = LINK_BADGE_PX / 2
+  ctx.setTransform(state.dpr, 0, 0, state.dpr, 0, 0)
+  ctx.globalAlpha = 1
+  ctx.setLineDash([])
+  ctx.fillStyle = '#ffffff'
+  ctx.strokeStyle = accent
+  ctx.lineWidth = 1
+  ctx.beginPath()
+  ctx.rect(c.x - half, c.y - half, LINK_BADGE_PX, LINK_BADGE_PX)
+  ctx.fill()
+  ctx.stroke()
+  // chain: two capsule outlines on a 45° axis, overlapping in the middle
+  ctx.translate(c.x, c.y)
+  ctx.rotate(-Math.PI / 4)
+  ctx.lineWidth = 1.5
+  ctx.lineCap = 'round'
+  const capsule = (cx: number) => {
+    const r = 1.75
+    ctx.beginPath()
+    ctx.moveTo(cx - 1.5, -r)
+    ctx.lineTo(cx + 1.5, -r)
+    ctx.arc(cx + 1.5, 0, r, -Math.PI / 2, Math.PI / 2)
+    ctx.lineTo(cx - 1.5, r)
+    ctx.arc(cx - 1.5, 0, r, Math.PI / 2, Math.PI * 1.5)
+    ctx.stroke()
+  }
+  capsule(-2)
+  capsule(2)
+  ctx.lineCap = 'butt'
+  ctx.setTransform(state.dpr, 0, 0, state.dpr, 0, 0)
+}
+
 function outline(ctx: CanvasRenderingContext2D, el: SketchElement, gap: number): void {
   ctx.strokeRect(-el.w / 2 - gap, -el.h / 2 - gap, el.w + 2 * gap, el.h + 2 * gap)
 }
@@ -425,6 +485,17 @@ export function renderInteractive(
       ctx.fillRect(-size / 2, -size / 2, size, size)
       ctx.strokeRect(-size / 2, -size / 2, size, size)
     }
+  }
+
+  // link badges on the hovered and selected elements that have a link (screen size)
+  const linked = new Set<SketchElement>()
+  const hovered = overlay.hoverId ? scene.get(overlay.hoverId) : undefined
+  if (hovered?.link) linked.add(hovered)
+  for (const el of selected) if (el.link) linked.add(el)
+  for (const el of linked) drawLinkBadge(ctx, state, el, accent)
+  if (linked.size) {
+    ctx.strokeStyle = accent
+    ctx.lineWidth = 1 / zoom
   }
 
   if (overlay.pointHandles) {

@@ -30,7 +30,7 @@ afterEach(() => {
 
 const ln = (over: Partial<LinearElement> = {}): LinearElement => ({
   id: 'l', type: 'arrow', x: 0, y: 0, w: 200, h: 0, angle: 0, index: 'a0',
-  ...DEFAULT_STYLE, groupIds: [], frameId: null, label: '', startBinding: null, endBinding: null, seed: 3, version: 1,
+  ...DEFAULT_STYLE, groupIds: [], frameId: null, link: null, label: '', startBinding: null, endBinding: null, seed: 3, version: 1,
   locked: false, points: [[0, 0], [200, 0]], routing: 'straight', startArrowhead: 'none', endArrowhead: 'arrow', ...over,
 })
 

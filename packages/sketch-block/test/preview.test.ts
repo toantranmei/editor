@@ -21,7 +21,7 @@ vi.mock('../src/io/image-loader', async orig => ({
   isImageTainted: vi.fn((src: string) => loader.tainted.has(src)),
 }))
 
-const base = { angle: 0, version: 1, locked: false, ...DEFAULT_STYLE, groupIds: [], frameId: null }
+const base = { angle: 0, version: 1, locked: false, ...DEFAULT_STYLE, groupIds: [], frameId: null, link: null }
 const rect = (over: Record<string, unknown> = {}): SketchElement => ({
   ...base, id: 'a', type: 'rectangle', x: 0, y: 0, w: 100, h: 50, index: 'a0', seed: 7, label: '', ...over,
 } as SketchElement)

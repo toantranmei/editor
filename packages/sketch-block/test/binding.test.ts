@@ -462,7 +462,7 @@ describe('binding geometry', () => {
 describe('curved lines use the real curve', () => {
   const curved = (over: Partial<LinearElement> = {}): LinearElement => ({
     ...DEFAULT_STYLE, id: 'c', type: 'arrow', index: 'a0', seed: 1, version: 1, locked: false, groupIds: [],
-    frameId: null, label: '', startBinding: null, endBinding: null, x: 0, y: 0, w: 200, h: 100, angle: 0,
+    frameId: null, link: null, label: '', startBinding: null, endBinding: null, x: 0, y: 0, w: 200, h: 100, angle: 0,
     points: [[0, 0], [100, 100], [200, 0]] as LocalPoint[], routing: 'curved', startArrowhead: 'none',
     endArrowhead: 'arrow', strokeWidth: 2, ...over,
   })

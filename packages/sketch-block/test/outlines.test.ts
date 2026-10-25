@@ -12,7 +12,7 @@ afterEach(() => {
 
 const el = (over: Partial<ShapeElement> = {}): ShapeElement => ({
   id: 's', type: 'triangle', x: 0, y: 0, w: 100, h: 100, angle: 0, index: 'a0',
-  ...DEFAULT_STYLE, groupIds: [], frameId: null, label: '', seed: 5, version: 1, locked: false, ...over,
+  ...DEFAULT_STYLE, groupIds: [], frameId: null, link: null, label: '', seed: 5, version: 1, locked: false, ...over,
 })
 const filled = { fill: '#ffc9c9', fillStyle: 'solid' } as const
 const NEW_TYPES = SHAPE_TYPES.filter(t => t !== 'rectangle' && t !== 'ellipse' && t !== 'diamond')
