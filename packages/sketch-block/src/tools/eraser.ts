@@ -1,3 +1,4 @@
+import { frameDeletePatches } from '../elements/frame'
 import { hitElement, type Point } from '../geometry'
 import type { PointerInput, Tool, ToolHost } from './controller'
 
@@ -39,7 +40,8 @@ export class EraserTool implements Tool {
     this.cancel()
     if (!ids.length || readonly()) return
     history.stopCapturing()
-    store.remove(ids)
+    // an erased frame's children leave it, in the same transaction
+    store.remove(ids, frameDeletePatches(scene, ids))
     history.stopCapturing()
   }
 

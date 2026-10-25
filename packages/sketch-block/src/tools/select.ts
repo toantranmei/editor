@@ -1,3 +1,4 @@
+import { canRotate, membershipPatches, withFrameChildren } from '../elements/frame'
 import { kindOf } from '../elements/kind'
 import { hasTransformHandles, linearScenePoints, movePointPatch } from '../elements/linear'
 import {
@@ -5,6 +6,7 @@ import {
   snapSegment,
 } from '../geometry'
 import { type ElementPatch, isImage, isLinear, type LinearElement, type SketchElement } from '../model/types'
+import { frameLabelAt } from '../render/frame-labels'
 import type { PointerInput, Tool, ToolHost } from './controller'
 
 /** Hit tolerances in screen px (divided by zoom → scene units). */
@@ -118,7 +120,7 @@ export class SelectTool implements Tool {
       return
     }
 
-    const hit = ctx.scene.hitTest(p, HIT_PX / ctx.viewport.zoom)
+    const hit = this.hitAt(p)
     const sel = this.host.selectedIds.value
     if (!hit) {
       const base = e.shift ? new Set(sel) : new Set<string>()
@@ -142,9 +144,10 @@ export class SelectTool implements Tool {
       this.g = { kind: 'none' }
       return
     }
-    const origins = [...this.host.selectedIds.value]
+    // a frame takes its children along (each element moves once, selected or not)
+    const origins = withFrameChildren(ctx.scene, [...this.host.selectedIds.value]
       .map(id => ctx.scene.get(id))
-      .filter((el): el is SketchElement => !!el && !el.locked)
+      .filter((el): el is SketchElement => !!el && !el.locked))
     if (origins.length) this.beginWrite()
     this.g = { kind: 'move', start: p, origins }
     this.host.cursor.value = 'move'
@@ -209,6 +212,7 @@ export class SelectTool implements Tool {
       // a plain click must not write (no version bump, no empty undo step)
       if (this.dirty || p.x !== this.downAt.x || p.y !== this.downAt.y) this.move(e, p)
       this.writer.flush()
+      this.writeMembership()
     } else if (g.kind === 'marquee') {
       this.host.marquee = null
       this.host.ctx.invalidate()
@@ -220,7 +224,7 @@ export class SelectTool implements Tool {
 
   hover(_e: PointerInput, p: Point): void {
     const { ctx } = this.host
-    const hit = ctx.scene.hitTest(p, HIT_PX / ctx.viewport.zoom)
+    const hit = this.hitAt(p)
     const hoverId = hit?.id ?? null
     if (hoverId !== this.host.hoverId) {
       this.host.hoverId = hoverId
@@ -252,6 +256,31 @@ export class SelectTool implements Tool {
     this.g = { kind: 'none' }
   }
 
+  /**
+   * Ids of every element the move gesture in progress moves (frame children included); empty when no move is
+   * in progress. Elements moved indirectly need the same follow-up (e.g. bound arrows) as selected ones.
+   */
+  movedIds(): string[] {
+    return this.g.kind === 'move' ? this.g.origins.map(el => el.id) : []
+  }
+
+  /** Element under `p`: a frame name label (drawn on top of everything) first, then the scene hit-test. */
+  private hitAt(p: Point): SketchElement | undefined {
+    const { scene, viewport } = this.host.ctx
+    return frameLabelAt(scene, p, viewport.zoom) ?? scene.hitTest(p, HIT_PX / viewport.zoom)
+  }
+
+  /**
+   * After the gesture's last write (before its undo step closes): recomputes frame membership for what it
+   * changed, writing `frameId` only where it differs.
+   */
+  private writeMembership(): void {
+    if (!this.writing || !this.writer.touched.size) return
+    const { scene, store } = this.host.ctx
+    const patches = membershipPatches(scene, this.writer.touched.keys())
+    if (Object.keys(patches).length) store.updateMany(patches)
+  }
+
   /** Opens one undo step spanning the whole move/resize/rotate gesture (pauses included). */
   private beginWrite(): void {
     this.host.ctx.history.beginGesture()
@@ -280,6 +309,7 @@ export class SelectTool implements Tool {
     const tol = HANDLE_HIT_PX / viewport.zoom
     const handles = handlePositions(el, viewport.zoom)
     for (const k of Object.keys(handles) as Handle[]) {
+      if (k === 'rotate' && !canRotate(el)) continue
       const h = handles[k]
       if (Math.abs(h.x - p.x) <= tol && Math.abs(h.y - p.y) <= tol) return { el, handle: k }
     }

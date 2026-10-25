@@ -1,3 +1,4 @@
+import { canRotate } from '../elements/frame'
 import { blendsMultiply } from '../elements/freedraw'
 import { drawImagePlaceholder } from '../elements/image'
 import { kindOf } from '../elements/kind'
@@ -7,6 +8,7 @@ import { getLoadedImage } from '../io/image-loader'
 import type { Scene } from '../model/scene'
 import type { ImageElement, SketchElement } from '../model/types'
 import { cropHandles } from '../tools/crop'
+import { drawFrameLabels } from './frame-labels'
 import { applyViewTransform, type RenderState } from './static'
 
 /** A rect in an element's unrotated local frame (origin at its box's top-left). */
@@ -39,6 +41,8 @@ export interface Overlay {
   now?: number
   /** Image being cropped (its static rendering is hidden meanwhile). */
   crop?: CropOverlay | null
+  /** Frame being renamed: its name label is left to the editor. */
+  editingFrameId?: string | null
 }
 
 /** Opacity factor of the image outside the crop rect. */
@@ -199,6 +203,9 @@ export function renderInteractive(
   const accent = readAccent(ctx.canvas)
   applyViewTransform(ctx, state)
 
+  // frame names sit above the static layer, in screen-size text
+  drawFrameLabels(ctx, scene, state, overlay.editingFrameId ?? null)
+
   // erase-marked elements are skipped on the static layer and drawn faded here, in z-order
   if (overlay.erasing.size) {
     for (const el of scene.elements) {
@@ -252,6 +259,7 @@ export function renderInteractive(
     const handles = handlePositions(el, zoom)
     ctx.fillStyle = '#ffffff'
     for (const k of Object.keys(handles) as Handle[]) {
+      if (k === 'rotate' && !canRotate(el)) continue
       const p = handles[k]
       elementFrame(ctx, state, p.x, p.y, el.angle)
       ctx.fillRect(-size / 2, -size / 2, size, size)

@@ -7,8 +7,8 @@ import {
 } from '../src/model/types'
 import { CREATOR_TOOLS, TOOL_ELEMENT_TYPES } from '../src/tools/controller'
 
-/** Element types whose kinds (and tools) land in later M2 tasks (frame: 5); hidden until then. */
-const PENDING_KINDS: readonly ElementType[] = ['frame']
+/** Element types whose kinds (and tools) land in later M2 tasks; hidden until then. */
+const PENDING_KINDS: readonly ElementType[] = []
 const READY_TYPES = ELEMENT_TYPES.filter(t => !PENDING_KINDS.includes(t))
 /** Element types placed by an insert flow (file picker, paste, drop) rather than drawn with a tool. */
 const INSERTED_TYPES: readonly ElementType[] = ['image']

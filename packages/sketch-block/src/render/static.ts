@@ -2,7 +2,7 @@ import { blendsMultiply } from '../elements/freedraw'
 import { kindOf } from '../elements/kind'
 import type { Box } from '../geometry'
 import type { Scene } from '../model/scene'
-import type { SketchElement } from '../model/types'
+import { isFrame, type SketchElement } from '../model/types'
 import type { Viewport } from '../viewport'
 import { type BitmapCache, bitmapPad, bitmapScale, buildBitmap, cacheKey } from './bitmap-cache'
 import type { Theme } from './shapes'
@@ -97,10 +97,20 @@ export function renderStatic(
   for (const found of scene.queryBox(box)) {
     if (skipIds?.has(found.id)) continue
     const el = substitutes?.get(found.id) ?? found
+    // a frame's children are clipped to its box (z-order stays global)
+    const frame = el.frameId ? scene.get(el.frameId) : undefined
+    const clip = frame && isFrame(frame) ? frame : null
+    if (clip) {
+      ctx.save()
+      ctx.beginPath()
+      ctx.rect(clip.x, clip.y, clip.w, clip.h)
+      ctx.clip()
+    }
     ctx.globalAlpha = el.opacity
     enterElementFrame(ctx, el)
     if (lod) kindOf(el).drawLod(ctx, el, state.theme, vp.zoom)
     else drawBitmap(ctx, el, state, cache)
+    if (clip) ctx.restore()
     ctx.setTransform(s, 0, 0, s, -vp.x * s, -vp.y * s)
     drawn++
   }

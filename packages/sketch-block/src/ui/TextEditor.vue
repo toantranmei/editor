@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef } from 'vue'
+import { FRAME_COLOR, FRAME_LABEL_PX, FRAME_NAME_MAX } from '../elements/frame'
 import { labelBox } from '../elements/shape'
 import { STICKY_PAD, STICKY_TEXT_COLOR, stickyLayout } from '../elements/sticky'
 import { editedTextBox } from '../elements/text'
-import { isShape, isSticky, isText, type SketchElement } from '../model/types'
+import { isFrame, isShape, isSticky, isText, type SketchElement } from '../model/types'
+import { FRAME_LABEL_H_PX, frameLabelBox } from '../render/frame-labels'
 import { displayColor, type Theme } from '../render/shapes'
 import { FONT_FAMILIES, LINE_HEIGHT } from '../text/fonts'
 import { Viewport } from '../viewport'
@@ -11,7 +13,7 @@ import { Viewport } from '../viewport'
 const props = defineProps<{
   /** The element being edited (its current state). */
   element: SketchElement
-  kind: 'text' | 'label' | 'sticky'
+  kind: 'text' | 'label' | 'sticky' | 'frame'
   /** Viewport state; the overlay follows pans and zooms. */
   view: { x: number; y: number; zoom: number }
   theme: Theme
@@ -31,7 +33,7 @@ const CARET_PX = 2
 const textarea = shallowRef<HTMLTextAreaElement | null>(null)
 const initial = (): string => {
   const el = props.element
-  return isText(el) || isSticky(el) ? el.text : isShape(el) ? el.label : ''
+  return isText(el) || isSticky(el) ? el.text : isShape(el) ? el.label : isFrame(el) ? el.name : ''
 }
 const value = ref(initial())
 /** Between compositionstart and compositionend (IME: Telex / VNI, CJK…). */
@@ -79,7 +81,29 @@ const layout = computed(() => {
   return { at, w: w * zoom, h: h * zoom, origin, fontSize }
 })
 
+/** Frame name: one line of 12 px (screen) text over the name label, at least the frame's width. */
+const frameStyle = computed(() => {
+  const el = props.element
+  if (!isFrame(el)) return null
+  const zoom = props.view.zoom
+  const b = frameLabelBox(el, zoom)
+  const at = viewport.value.toScreen({ x: b.x, y: b.y })
+  return {
+    left: `${at.x}px`,
+    top: `${at.y}px`,
+    width: `${Math.max(el.w * zoom, 80)}px`,
+    height: `${FRAME_LABEL_H_PX}px`,
+    fontFamily: FONT_FAMILIES.normal,
+    fontSize: `${FRAME_LABEL_PX}px`,
+    lineHeight: String(LINE_HEIGHT),
+    textAlign: 'left' as const,
+    whiteSpace: 'pre',
+    color: FRAME_COLOR[props.theme],
+  }
+})
+
 const style = computed(() => {
+  if (props.kind === 'frame' && frameStyle.value) return frameStyle.value
   const el = props.element
   const { at, w, h, origin, fontSize } = layout.value
   const font = 'fontFamily' in el ? el : null
@@ -134,7 +158,8 @@ function onKeyDown(e: KeyboardEvent): void {
     emit('tab', textarea.value?.value ?? value.value)
     return
   }
-  if (e.key === 'Escape' || (e.key === 'Enter' && (e.ctrlKey || e.metaKey))) {
+  // a frame name is one line: Enter commits
+  if (e.key === 'Escape' || (e.key === 'Enter' && (e.ctrlKey || e.metaKey || props.kind === 'frame'))) {
     e.preventDefault()
     commit()
   }
@@ -160,6 +185,7 @@ defineExpose({ commit })
     class="me-sketch-text-editor"
     :style="style"
     :aria-label="label"
+    :maxlength="kind === 'frame' ? FRAME_NAME_MAX : undefined"
     rows="1"
     wrap="soft"
     spellcheck="false"

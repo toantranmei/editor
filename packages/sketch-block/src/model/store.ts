@@ -35,15 +35,19 @@ export class BoardStore {
     return this.createMany([init])[0]!
   }
 
-  /** Creates all elements in one transaction, stacked in order above the current top. */
-  createMany(inits: ElementInit[]): SketchElement[] {
+  /**
+   * Creates all elements in one transaction, stacked in order above the current top, or (`atBack`) below the
+   * current bottom (still in their relative order).
+   */
+  createMany(inits: ElementInit[], opts: { atBack?: boolean } = {}): SketchElement[] {
     const out: SketchElement[] = []
     if (!inits.length) return out
     this.doc.transact(() => {
       let top = this.top()
-      for (const init of inits) {
+      const backKeys = opts.atBack ? generateNKeysBetween(null, this.bottom(), inits.length) : null
+      for (const [i, init] of inits.entries()) {
         const { id: givenId, seed, ...rest } = init
-        const index = generateKeyBetween(top, null)
+        const index = backKeys ? backKeys[i]! : generateKeyBetween(top, null)
         const created: Record<string, unknown> = {
           ...rest,
           id: givenId ?? nanoid(10),
@@ -56,7 +60,7 @@ export class BoardStore {
         this.elements.set(created.id as string, m)
         // what a read returns: defaults filled in for props the init left out
         out.push(normalizeElement(created))
-        top = index
+        if (top === null || index > top) top = index
       }
       this.topIndex = top
     }, LOCAL_ORIGIN)
@@ -76,6 +80,16 @@ export class BoardStore {
       this.topDirty = false
     }
     return this.topIndex
+  }
+
+  /** Lowest valid index in the doc (null = empty); an O(n) scan. */
+  private bottom(): string | null {
+    let bottom: string | null = null
+    this.elements.forEach(m => {
+      const i = m.get('index')
+      if (typeof i === 'string' && (bottom === null || i < bottom) && isOrderKey(i)) bottom = i
+    })
+    return bottom
   }
 
   update(id: string, patch: ElementPatch): void {
@@ -102,8 +116,10 @@ export class BoardStore {
     m.set('version', ((m.get('version') as number) ?? 0) + 1)
   }
 
-  remove(ids: string[]): void {
+  /** Removes `ids`, applying `patches` to the remaining elements in the same transaction. */
+  remove(ids: string[], patches: Record<string, ElementPatch> = {}): void {
     this.doc.transact(() => {
+      for (const [id, patch] of Object.entries(patches)) this.applyPatch(id, patch)
       for (const id of ids) if (this.elements.has(id)) this.elements.delete(id)
     }, LOCAL_ORIGIN)
   }

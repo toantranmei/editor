@@ -3,7 +3,7 @@ import { type Component, computed } from 'vue'
 import type { SketchMessages } from '../messages'
 import type { ToolName } from '../tools/controller'
 import {
-  Circle, Diamond, Eraser, Hand, Highlighter, Lasso, Lock, LockOpen, Minus, MousePointer2, MoveUpRight, Pencil,
+  Circle, Diamond, Eraser, Frame, Hand, Highlighter, Lasso, Lock, LockOpen, Minus, MousePointer2, MoveUpRight, Pencil,
   Pipette, Square, StickyNote, Type, Wand2,
 } from './icons'
 
@@ -42,6 +42,7 @@ const GROUPS: Item[][] = [
     { name: 'highlighter', icon: Highlighter, badge: 'M' },
     { name: 'text', icon: Type, badge: 'T' },
     { name: 'sticky', icon: StickyNote, badge: 'S' },
+    { name: 'frame', icon: Frame, badge: 'F' },
   ],
   [
     { name: 'eraser', icon: Eraser, badge: 'E' },

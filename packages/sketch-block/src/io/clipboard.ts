@@ -22,6 +22,8 @@ const MAX_POINTS = 20_000
 const MAX_GROUP_IDS = 16
 /** Characters kept per group id. */
 const MAX_GROUP_ID_CHARS = 64
+/** A frame's name is cut to this length. */
+const MAX_FRAME_NAME_CHARS = 200
 /** An image's natural width / height is clamped to this (px). */
 const MAX_NATURAL = 1e5
 
@@ -176,6 +178,11 @@ function sanitizeElement(raw: unknown): ElementInit | null {
   }
   if (finite(raw.opacity)) out.opacity = Math.min(1, Math.max(0, raw.opacity))
   if (type === 'image' && !sanitizeImage(raw, out)) return null
+  if (type === 'frame') {
+    // frames are never rotated (M2)
+    out.angle = 0
+    out.name = typeof raw.name === 'string' ? raw.name.slice(0, MAX_FRAME_NAME_CHARS) : ''
+  }
   return normalizeElement(out) as unknown as ElementInit
 }
 

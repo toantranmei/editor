@@ -12,7 +12,7 @@ import { messages as allMessages } from '../messages'
 import { History } from '../model/history'
 import { Scene } from '../model/scene'
 import { BoardStore } from '../model/store'
-import { isImage, isShape, isSticky, type SketchElement } from '../model/types'
+import { isFrame, isImage, isShape, isSticky, type SketchElement } from '../model/types'
 import type { BoardConnection } from '../providers/types'
 import { BitmapCache, bindCacheInvalidation } from '../render/bitmap-cache'
 import { renderInteractive, resetAccentCache } from '../render/interactive'
@@ -104,7 +104,8 @@ function drawStatic(): void {
   let substitutes: Map<string, SketchElement> | undefined
   if (el && isShape(el)) substitutes = new Map([[el.id, { ...el, label: '' }]])
   else if (el && isSticky(el)) substitutes = new Map([[el.id, { ...el, text: '' }]])
-  else if (el) (skip ??= new Set()).add(el.id)
+  // a frame being renamed keeps its border (its name label is hidden by the interactive layer)
+  else if (el && !isFrame(el)) (skip ??= new Set()).add(el.id)
   // the image being cropped is drawn by the interactive layer's crop UI
   const cropping = controller.cropping.value
   if (cropping) (skip ??= new Set()).add(cropping)
@@ -730,7 +731,7 @@ defineExpose({
       :kind="editing.kind"
       :view="view"
       :theme="theme"
-      :label="t.tools.text"
+      :label="editing.kind === 'frame' ? t.tools.frame : t.tools.text"
       @commit="onEditorCommit"
       @tab="onEditorTab"
     />

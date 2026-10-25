@@ -10,19 +10,25 @@ import type {
   ElementInit, ElementPatch, ElementType, ImageElement, LinearType, ShapeType, SketchElement, StickyElement,
   TextElement, TextStyle,
 } from '../model/types'
+import {
+  cleanFrameName, frameDeletePatches, membershipPatches, withFrameChildren,
+} from '../elements/frame'
 import { linearScenePoints } from '../elements/linear'
 import { editedTextBox } from '../elements/text'
 import {
-  DEFAULT_STYLE, isImage, isImageSrc, isLinear, isShape, isSticky, isText, LINEAR_TYPES, SHAPE_TYPES, stickyInit,
+  DEFAULT_STYLE, isFrame, isImage, isImageSrc, isLinear, isShape, isSticky, isText, LINEAR_TYPES, SHAPE_TYPES,
+  stickyInit,
 } from '../model/types'
 import { fitWithin, type PreparedImage } from '../io/image-insert'
 import { stripControl } from '../io/xml'
 import { measureText } from '../text/measure'
+import { frameLabelAt } from '../render/frame-labels'
 import type { Overlay } from '../render/interactive'
 import type { Viewport } from '../viewport'
 import { CropTool } from './crop'
 import { EraserTool } from './eraser'
 import { EyedropperTool } from './eyedropper'
+import { FrameTool } from './frame'
 import { HandTool } from './hand'
 import { LASER_FADE_MS, type LaserPoint, LaserTool } from './laser'
 import { LassoTool } from './lasso'
@@ -35,7 +41,7 @@ import { TextTool } from './text'
 
 /** Tools with an implementation (besides `hand`); each shape type has a tool of the same name. */
 type PointerToolName =
-  | 'select' | ShapeType | 'pen' | 'highlighter' | LinearType | 'text' | 'sticky'
+  | 'select' | ShapeType | 'pen' | 'highlighter' | LinearType | 'text' | 'sticky' | 'frame'
   | 'eraser' | 'laser' | 'lasso' | 'eyedropper'
 
 export type ToolName = 'hand' | PointerToolName
@@ -48,6 +54,7 @@ export const TOOL_ELEMENT_TYPES: Readonly<Partial<Record<ToolName, ElementType>>
   highlighter: 'freedraw',
   text: 'text',
   sticky: 'sticky',
+  frame: 'frame',
 }
 
 /** Tools that create elements: crosshair cursor, clear the selection, unavailable when read-only. */
@@ -55,10 +62,13 @@ export const CREATOR_TOOLS: ReadonlySet<ToolName> = new Set(Object.keys(TOOL_ELE
 
 export type { CurrentStyle }
 
-/** The element whose text (a text element or sticky note) or label (a shape) is open in the editor overlay. */
+/**
+ * The element whose text (a text element or sticky note), label (a shape) or name (a frame) is open in the editor
+ * overlay.
+ */
 export interface EditingTarget {
   id: string
-  kind: 'text' | 'label' | 'sticky'
+  kind: 'text' | 'label' | 'sticky' | 'frame'
 }
 
 export interface PointerInput {
@@ -119,6 +129,8 @@ export interface ToolHost {
   editAt(p: Point): void
   /** Creates a sticky note with box `box` (last used sticky color, current font) and edits it. */
   createSticky(box: { x: number; y: number; w: number; h: number }): void
+  /** Creates a frame with box `box` named "Frame N", at the back, taking in the elements inside it. */
+  createFrame(box: { x: number; y: number; w: number; h: number }): void
 }
 
 /** A gesture handler; `p` is the pointer in scene coordinates. */
@@ -143,7 +155,7 @@ const TOOL_KEYS: Record<string, 'hand' | PointerToolName> = {
   v: 'select', 1: 'select', h: 'hand',
   r: 'rectangle', 2: 'rectangle', d: 'diamond', 3: 'diamond', o: 'ellipse', 4: 'ellipse',
   a: 'arrow', 5: 'arrow', l: 'line', 6: 'line',
-  p: 'pen', 7: 'pen', m: 'highlighter', t: 'text', 8: 'text', s: 'sticky',
+  p: 'pen', 7: 'pen', m: 'highlighter', t: 'text', 8: 'text', s: 'sticky', f: 'frame',
   e: 'eraser', 0: 'eraser', k: 'laser', i: 'eyedropper',
 }
 /** Non-creating tools that still show a crosshair. */
@@ -200,6 +212,7 @@ export class ToolController implements ToolHost {
   private readonly hand: HandTool
   private readonly crop: CropTool
   private readonly tools: Record<PointerToolName, Tool>
+  private readonly select: SelectTool
   private active: Tool | null = null
   private spaceHeld = false
   private readonly off: () => void
@@ -208,6 +221,7 @@ export class ToolController implements ToolHost {
     this.hand = new HandTool(this)
     this.crop = new CropTool(this)
     const select = new SelectTool(this)
+    this.select = select
     this.tools = {
       select,
       ...shapeTools(this),
@@ -217,6 +231,7 @@ export class ToolController implements ToolHost {
       arrow: new LinearTool(this, 'arrow'),
       text: new TextTool(this),
       sticky: new StickyTool(this),
+      frame: new FrameTool(this),
       eraser: new EraserTool(this),
       laser: new LaserTool(this),
       lasso: new LassoTool(this),
@@ -240,7 +255,16 @@ export class ToolController implements ToolHost {
       lasso: this.lasso,
       now: this.now(),
       crop,
+      editingFrameId: this.editing.value?.kind === 'frame' ? this.editing.value.id : null,
     }
+  }
+
+  /**
+   * Ids of every element the select tool's move in progress moves, frame children included (empty when none):
+   * for follow-ups that must also cover elements moved indirectly (bound arrows).
+   */
+  movedIds(): string[] {
+    return this.select.movedIds()
   }
 
   now(): number {
@@ -525,9 +549,10 @@ export class ToolController implements ToolHost {
     if (this.ctx.readonly()) return
     const ids = this.movableSelection().map(el => el.id)
     if (!ids.length) return
-    const { history, store } = this.ctx
+    const { history, store, scene } = this.ctx
     history.stopCapturing()
-    store.remove(ids)
+    // a deleted frame's children leave it, in the same transaction
+    store.remove(ids, frameDeletePatches(scene, ids))
     history.stopCapturing()
   }
 
@@ -622,13 +647,20 @@ export class ToolController implements ToolHost {
     this.pasteElements(this.ctx.scene.elements.filter(el => order.has(el.id)), null)
   }
 
-  /** Creates `inits` as one undo step and selects them (back to select from a drawing tool). */
-  private insert(inits: ElementInit[]): void {
-    const { history, store } = this.ctx
-    history.stopCapturing()
-    const created = store.createMany(inits)
-    history.stopCapturing()
-    if (CREATORS.has(this.tool.value)) this.setTool('select')
+  /**
+   * Creates `inits` as one undo step and selects them (back to select from a drawing tool). Frames go to the back;
+   * frame membership is computed for the new elements (and what new frames take in).
+   */
+  private insert(inits: ElementInit[], keepTool = false): void {
+    const { history, store, scene } = this.ctx
+    history.beginGesture()
+    const others = store.createMany(inits.filter(i => i.type !== 'frame'))
+    const frames = store.createMany(inits.filter(i => i.type === 'frame'), { atBack: true })
+    const created = [...others, ...frames]
+    const patches = membershipPatches(scene, created.map(el => el.id))
+    if (Object.keys(patches).length) store.updateMany(patches)
+    history.endGesture()
+    if (!keepTool && CREATORS.has(this.tool.value)) this.setTool('select')
     this.setSelection(created.map(el => el.id))
   }
 
@@ -695,6 +727,12 @@ export class ToolController implements ToolHost {
     }
     if (this.tool.value !== 'select' || this.downTool !== 'select') return
     const p = this.ctx.viewport.toScene(screen)
+    // a frame's name label (drawn above everything): rename it
+    const label = frameLabelAt(this.ctx.scene, p, this.ctx.viewport.zoom)
+    if (label) {
+      this.editElement(label)
+      return
+    }
     const hit = this.editableAt(p)
     if (!hit) this.createText(p)
     else if (isImage(hit)) this.startCrop(hit.id)
@@ -756,7 +794,8 @@ export class ToolController implements ToolHost {
   editAt(p: Point): void {
     if (this.ctx.readonly() || this.editing.value) return
     const hit = this.editableAt(p)
-    if (!hit || !this.editElement(hit)) this.createText(p)
+    // the text tool never renames a frame (its border is thin): text goes there instead
+    if (!hit || isFrame(hit) || !this.editElement(hit)) this.createText(p)
   }
 
   /** Opens the editor on an existing text element (`text`) or shape (`label`). */
@@ -794,6 +833,12 @@ export class ToolController implements ToolHost {
       // an empty sticky is kept (it is still a colored note), by design: also when it was just created and the
       // editor closed with Escape (which commits), unlike an empty text element, which is removed
       if (el.text !== value) store.update(el.id, { text: value })
+      history.endGesture()
+      this.setSelection([el.id])
+    } else if (el && target.kind === 'frame' && isFrame(el)) {
+      // single line, capped; a blank name keeps the old one
+      const name = cleanFrameName(value)
+      if (name.trim() && el.name !== name) store.update(el.id, { name })
       history.endGesture()
       this.setSelection([el.id])
     } else if (el && target.kind === 'label' && isShape(el)) {
@@ -834,6 +879,16 @@ export class ToolController implements ToolHost {
     if (this.ctx.readonly() || this.editing.value) return
     const { color, fontFamily, textAlign, opacity } = this.currentStyle.value
     this.beginSticky(stickyInit(box.x, box.y, { w: box.w, h: box.h, color, fontFamily, textAlign, opacity }))
+  }
+
+  createFrame(box: { x: number; y: number; w: number; h: number }): void {
+    if (this.ctx.readonly() || this.editing.value) return
+    const n = this.ctx.scene.elements.filter(isFrame).length + 1
+    this.insert([{
+      ...DEFAULT_STYLE, opacity: 1, type: 'frame', name: `Frame ${n}`,
+      x: box.x, y: box.y, w: box.w, h: box.h, angle: 0, locked: false,
+    }], true)
+    if (!this.toolLocked.value) this.setTool('select')
   }
 
   /** Creates the sticky inside a gesture that its text commit ends (one undo step) and opens the editor. */
@@ -929,13 +984,17 @@ export class ToolController implements ToolHost {
     this.off()
   }
 
+  /** Moves the selection (frames with their children) and recomputes frame membership: one undo step. */
   private nudge(dx: number, dy: number): void {
+    const { scene, store, history } = this.ctx
     const patches: Record<string, ElementPatch> = {}
-    for (const el of this.movableSelection()) patches[el.id] = { x: el.x + dx, y: el.y + dy }
+    for (const el of withFrameChildren(scene, this.movableSelection())) patches[el.id] = { x: el.x + dx, y: el.y + dy }
     if (!Object.keys(patches).length) return
-    this.ctx.history.stopCapturing()
-    this.ctx.store.updateMany(patches)
-    this.ctx.history.stopCapturing()
+    history.beginGesture()
+    store.updateMany(patches)
+    const membership = membershipPatches(scene, Object.keys(patches))
+    if (Object.keys(membership).length) store.updateMany(membership)
+    history.endGesture()
   }
 
   /** Selected, existing, unlocked elements. */
@@ -970,9 +1029,9 @@ export class ToolController implements ToolHost {
   }
 }
 
-/** How `el`'s text is edited: its text (text, sticky), its label (shape), or not at all (null). */
+/** How `el`'s text is edited: its text (text, sticky), its label (shape), its name (frame), or not at all (null). */
 function kindOfEdit(el: SketchElement): EditingTarget['kind'] | null {
-  return isText(el) ? 'text' : isSticky(el) ? 'sticky' : isShape(el) ? 'label' : null
+  return isText(el) ? 'text' : isSticky(el) ? 'sticky' : isShape(el) ? 'label' : isFrame(el) ? 'frame' : null
 }
 
 /** The entries of `next` that differ from `el`, or null when none do. */

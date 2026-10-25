@@ -1,6 +1,7 @@
 import type { Point } from '../geometry/math'
 import { type ElementPatch, type ElementType, LINEAR_TYPES, SHAPE_TYPES, type SketchElement } from '../model/types'
 import type { Theme } from '../render/shapes'
+import { frameKind } from './frame'
 import { freedrawKind } from './freedraw'
 import { imageKind } from './image'
 import { linearKind } from './linear'
@@ -47,6 +48,7 @@ function registerBuiltins(): void {
   if (!registry.has('text')) registry.set('text', textKind as ElementKind)
   if (!registry.has('sticky')) registry.set('sticky', stickyKind as ElementKind)
   if (!registry.has('image')) registry.set('image', imageKind as ElementKind)
+  if (!registry.has('frame')) registry.set('frame', frameKind as ElementKind)
   if (!registry.has('freedraw')) registry.set('freedraw', freedrawKind as ElementKind)
   for (const t of LINEAR_TYPES) {
     if (!registry.has(t)) registry.set(t, linearKind as ElementKind)
