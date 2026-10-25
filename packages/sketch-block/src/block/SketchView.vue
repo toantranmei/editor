@@ -113,7 +113,8 @@ async function open(): Promise<boolean> {
     imageResolver.value = prov.resolveImageSrc ? markRaw((src: string) => prov.resolveImageSrc!(src)) : null
     engine.value = markRaw(mod)
     connection.value = markRaw(conn)
-    session.value = markRaw(mod.createBoardSession(conn))
+    // read-only viewers never write repairs, from the very first pass on (before any board mounts)
+    session.value = markRaw(mod.createBoardSession(conn, { canWrite: editable.value }))
     // The board isn't stored here (another device, cleared storage): say so, keep the preview. Never for a
     // networked board: it lives on the server, not on this device (an empty one is still loading or was cleared).
     notOnDevice.value = !conn.existed && !!preview.value && !conn.networked
@@ -138,6 +139,12 @@ watch(connection, (conn) => {
   const status = conn?.status
   connStatus.value = status ? status.get() : null
   if (status) offStatus = status.on(s => (connStatus.value = s))
+})
+
+// The session's repair may write only while the editor is editable, for as long as the session exists (also while
+// no board is mounted: the board's own readonly watch only runs while it is mounted).
+watch([session, editable], ([sess, ed]) => {
+  if (sess) sess.canWrite.value = ed
 })
 
 function closeConnection() {

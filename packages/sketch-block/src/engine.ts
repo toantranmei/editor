@@ -47,13 +47,21 @@ export interface BoardSession {
   destroy(): void
 }
 
-export function createBoardSession(connection: BoardConnection): BoardSession {
+export interface BoardSessionOptions {
+  /**
+   * Initial `canWrite` (default true). A read-only viewer passes false so the first repair pass never writes; keep
+   * `session.canWrite` in sync with the editor's editable state afterwards.
+   */
+  canWrite?: boolean
+}
+
+export function createBoardSession(connection: BoardConnection, opts: BoardSessionOptions = {}): BoardSession {
   // toRaw: Vue proxies around Yjs types break Yjs identity checks (UndoManager scope, origins)
   const doc = toRaw(toRaw(connection).doc)
   const store = new BoardStore(doc)
   const scene = new Scene(store)
   const history = new History(store)
-  const canWrite = ref(true)
+  const canWrite = ref(opts.canWrite ?? true)
   const awareness = toRaw(toRaw(connection).awareness) ?? null
   let publisher: PresencePublisher | null = null
   // one repair observer per session (the inline and fullscreen boards share it)

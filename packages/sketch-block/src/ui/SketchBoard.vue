@@ -962,7 +962,7 @@ onBeforeUnmount(() => {
   reader?.destroy()
   if (session) {
     // borrowed: keep the state (identity, viewport) for the next mount; this board's pointer and laser are gone
-    publisher?.set({ cursor: null, laser: [] })
+    publisher?.set({ cursor: null, laser: [], selection: [] })
     publisher?.flush()
   } else {
     publisher?.destroy()

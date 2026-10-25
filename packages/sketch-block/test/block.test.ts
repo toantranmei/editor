@@ -548,6 +548,40 @@ describe('sketch block', () => {
     expect(undoDepth(editor.state)).toBe(0)
   })
 
+  it('a read-only viewer never repairs on open; becoming editable repairs', async () => {
+    const { REPAIR_ORIGIN } = await import('../src/collab/repair')
+    const base = memory()
+    // a stored board whose derived data is inconsistent: s1 moved without its bound arrow
+    const seedConn = await base.connect('bd_ro')
+    const seedStore = new BoardStore(seedConn.doc)
+    const s1 = seedStore.create(rect())
+    const s2 = seedStore.create({ ...rect(), x: 300 })
+    const arrow = seedStore.create({
+      ...DEFAULT_STYLE, type: 'arrow', label: '', x: 100, y: 25, w: 200, h: 0, angle: 0, locked: false,
+      points: [[0, 0], [200, 0]], routing: 'straight', startArrowhead: 'none', endArrowhead: 'arrow',
+      startBinding: { id: s1.id, ax: 1, ay: 0.5 }, endBinding: { id: s2.id, ax: 0, ay: 0.5 },
+    } as never)
+    seedStore.update(s1.id, { y: 400 })
+    seedConn.destroy()
+    const before = JSON.stringify(seedStore.get(arrow.id))
+
+    const origins: unknown[] = []
+    const { provider, connections } = recording(base)
+    const { editor, wrapper } = await setup({ provider, editable: false, attrs: { boardId: 'bd_ro', preview: null, height: null, version: 0 } })
+    const conn = () => connections[0]!
+    // the session exists from open() on, before (and without) a mounted board
+    await wrapper.find('.me-sketch-cover button').trigger('click')
+    await vi.waitFor(() => expect(connections).toHaveLength(1))
+    conn().doc.on('afterTransaction', (tr: { origin: unknown }) => origins.push(tr.origin))
+    await settle()
+    expect(origins).not.toContain(REPAIR_ORIGIN)
+    expect(JSON.stringify(new BoardStore(conn().doc).get(arrow.id))).toBe(before)
+    editor.setEditable(true)
+    await settle()
+    expect(origins).toContain(REPAIR_ORIGIN)
+    expect(JSON.stringify(new BoardStore(conn().doc).get(arrow.id))).not.toBe(before)
+  })
+
   it('an invalid board id is treated as missing: a fresh id on open, not an undo step', async () => {
     const { provider, connections } = recording()
     const connect = vi.spyOn(provider, 'connect')

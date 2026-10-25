@@ -418,8 +418,17 @@ describe('SketchBoard presence', () => {
     awareness.on('change', () => {
       if (awareness.getLocalState() === null) cleared()
     })
+    const id = session.store.create(init()).id
+    await nextTick()
+    ;(inline.vm as unknown as { select(ids: string[]): void }).select([id])
+    await nextTick()
+    vi.advanceTimersByTime(PRESENCE_THROTTLE_MS)
+    expect((awareness.getLocalState() as Record<string, any>).selection).toEqual([id])
     inline.unmount()
     wrappers.splice(wrappers.indexOf(inline), 1)
+    // the unmounted board's selection, cursor and laser are gone (peers drop its outlines)
+    expect((awareness.getLocalState() as Record<string, any>).selection).toEqual([])
+    expect((awareness.getLocalState() as Record<string, any>).cursor).toBeNull()
     const full = mountOurs()
     await nextTick()
     vi.advanceTimersByTime(PRESENCE_THROTTLE_MS)
