@@ -66,9 +66,12 @@ const HEX_COLOR = /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i
 // eslint-disable-next-line no-control-regex
 const UNSAFE_CHARS = /[\u0000-\u001F\u007F-\u009F‎‏‪-‮⁦-⁩]/g
 
+/** Zero-width and other invisible format characters (a name made only of these would render blank). */
+const INVISIBLE_CHARS = /[\u200B-\u200D\u2060\uFEFF]/g
+
 export function sanitizeName(raw: unknown): string {
   if (typeof raw !== 'string') return ''
-  return [...raw.slice(0, 400).replace(UNSAFE_CHARS, '').trim()].slice(0, MAX_NAME_LENGTH).join('').trim()
+  return [...raw.slice(0, 400).replace(UNSAFE_CHARS, '').replace(INVISIBLE_CHARS, '').trim()].slice(0, MAX_NAME_LENGTH).join('').trim()
 }
 
 export function sanitizeColor(raw: unknown): string | null {
