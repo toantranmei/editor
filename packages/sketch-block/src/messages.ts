@@ -84,6 +84,11 @@ export interface StyleMessages {
   layers: string
   sendToBack: string
   bringToFront: string
+  arrange: string
+  group: string
+  ungroup: string
+  lock: string
+  unlock: string
 }
 
 export const messages: Record<'vi' | 'en', SketchMessages> = {
@@ -200,6 +205,11 @@ export const messages: Record<'vi' | 'en', SketchMessages> = {
       layers: 'Lớp',
       sendToBack: 'Đưa xuống dưới cùng',
       bringToFront: 'Đưa lên trên cùng',
+      arrange: 'Sắp xếp',
+      group: 'Nhóm',
+      ungroup: 'Bỏ nhóm',
+      lock: 'Khóa',
+      unlock: 'Mở khóa',
     },
   },
   en: {
@@ -315,6 +325,11 @@ export const messages: Record<'vi' | 'en', SketchMessages> = {
       layers: 'Layers',
       sendToBack: 'Send to back',
       bringToFront: 'Bring to front',
+      arrange: 'Arrange',
+      group: 'Group',
+      ungroup: 'Ungroup',
+      lock: 'Lock',
+      unlock: 'Unlock',
     },
   },
 }

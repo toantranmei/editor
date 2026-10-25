@@ -745,6 +745,9 @@ defineExpose({
       :hidden="zen || viewMode"
       @apply="applyStyle"
       @layer="reorder"
+      @group="controller.group()"
+      @ungroup="controller.ungroup()"
+      @lock="controller.toggleLock()"
     />
     <Toolbar
       v-if="!zen"

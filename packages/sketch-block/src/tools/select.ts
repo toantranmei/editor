@@ -139,17 +139,22 @@ export class SelectTool implements Tool {
       this.g = { kind: 'marquee', start: p, base }
       return
     }
+    // a group is picked whole (its outermost group)
+    const picked = this.host.expandGroups([hit.id])
     if (e.shift) {
       const next = new Set(sel)
-      if (next.has(hit.id)) next.delete(hit.id)
-      else next.add(hit.id)
+      const remove = sel.has(hit.id)
+      for (const id of picked) {
+        if (remove) next.delete(id)
+        else next.add(id)
+      }
       this.host.setSelection(next)
-      if (!next.has(hit.id)) {
+      if (remove) {
         this.g = { kind: 'none' }
         return
       }
     } else if (!sel.has(hit.id)) {
-      this.host.setSelection([hit.id])
+      this.host.setSelection(picked)
     }
     if (ro) {
       this.g = { kind: 'none' }
@@ -210,14 +215,15 @@ export class SelectTool implements Tool {
           maxX: Math.max(g.start.x, p.x), maxY: Math.max(g.start.y, p.y),
         }
         this.host.marquee = box
-        const next = new Set(g.base)
+        const inside: string[] = []
         // containment uses the unpadded rotated box (rough-ink padding would make it stricter)
         for (const el of this.host.ctx.scene.queryBox(box)) {
           if (elementCorners(el).every(c => c.x >= box.minX && c.x <= box.maxX && c.y >= box.minY && c.y <= box.maxY)) {
-            next.add(el.id)
+            inside.push(el.id)
           }
         }
-        this.host.setSelection(next)
+        // groups are selected whole
+        this.host.setSelection(new Set([...g.base, ...this.host.expandGroups(inside)]))
         this.host.ctx.invalidate()
       }
     }

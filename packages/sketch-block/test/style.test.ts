@@ -339,7 +339,7 @@ describe('StylePanel', () => {
     id: Math.random().toString(36), x: 0, y: 0, w: 10, h: 10, angle: 0, index: 'a0', seed: 1, version: 1,
     locked: false, ...DEFAULT_STYLE, label: '', text: '', autoSize: true, points: [[0, 0], [10, 0]],
     pressures: [], highlighter: false, routing: 'straight', startArrowhead: 'none', endArrowhead: 'arrow',
-    ...patch,
+    groupIds: [], frameId: null, ...patch,
   } as unknown as SketchElement)
   const panel = (props: Record<string, unknown>) => mount(StylePanel, {
     props: { elements: [], tool: 'select', currentStyle: style, messages: messages.en, theme: 'light', ...props },
@@ -355,9 +355,9 @@ describe('StylePanel', () => {
 
   it('shows sections by relevance', () => {
     expect(sections(panel({ elements: [el({ type: 'rectangle' })] }))).toEqual([
-      'stroke', 'background', 'fillStyle', 'strokeWidth', 'strokeStyle', 'sloppiness', 'edges', 'font', 'opacity', 'layers',
+      'stroke', 'background', 'fillStyle', 'strokeWidth', 'strokeStyle', 'sloppiness', 'edges', 'font', 'opacity', 'layers', 'arrange',
     ])
-    expect(sections(panel({ elements: [el({ type: 'text' })] }))).toEqual(['stroke', 'font', 'opacity', 'layers'])
+    expect(sections(panel({ elements: [el({ type: 'text' })] }))).toEqual(['stroke', 'font', 'opacity', 'layers', 'arrange'])
     expect(sections(panel({ tool: 'pen' }))).toEqual(['stroke', 'strokeWidth', 'opacity'])
     expect(sections(panel({ tool: 'ellipse' }))).not.toContain('edges')
   })
@@ -392,5 +392,23 @@ describe('StylePanel', () => {
     await w.find('[data-section="layers"] [data-layer="back"]').trigger('click')
     expect(w.emitted('apply')).toEqual([[{ stroke: '#2f9e44' }], [{ endArrowhead: 'triangle' }]])
     expect(w.emitted('layer')).toEqual([['back']])
+  })
+
+  it('arrange section: group needs 2+, ungroup needs a group, lock toggles', async () => {
+    const one = panel({ elements: [el({ type: 'rectangle' })] })
+    expect(one.find('[data-arrange="lock"]').exists()).toBe(true)
+    expect(one.find('[data-arrange="group"]').exists()).toBe(false)
+    expect(one.find('[data-arrange="ungroup"]').exists()).toBe(false)
+    const two = panel({ elements: [el({ type: 'rectangle' }), el({ type: 'ellipse', groupIds: ['g'] })] })
+    await two.find('[data-arrange="group"]').trigger('click')
+    await two.find('[data-arrange="ungroup"]').trigger('click')
+    await two.find('[data-arrange="lock"]').trigger('click')
+    expect(two.emitted('group')).toHaveLength(1)
+    expect(two.emitted('ungroup')).toHaveLength(1)
+    expect(two.emitted('lock')).toHaveLength(1)
+    expect(two.find('[data-arrange="lock"]').attributes('aria-pressed')).toBe('false')
+    const locked = panel({ elements: [el({ type: 'rectangle', locked: true })] })
+    expect(locked.find('[data-arrange="lock"]').attributes('aria-pressed')).toBe('true')
+    expect(locked.find('[data-arrange="lock"]').attributes('aria-label')).toBe(messages.en.style.unlock)
   })
 })

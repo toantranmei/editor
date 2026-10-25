@@ -15,6 +15,7 @@ import type {
 import {
   cleanFrameName, membershipPatches, withFrameChildren,
 } from '../elements/frame'
+import { expandToGroups, outermostGroup } from '../elements/group'
 import { boxFromPoints, linearScenePoints } from '../elements/linear'
 import { anchorScenePoint, BIND_GAP, deletePatches, outlineAnchor, withFollowers } from '../geometry/binding'
 import { editedTextBox } from '../elements/text'
@@ -147,6 +148,8 @@ export interface ToolHost {
   withFollowers(patches: Record<string, ElementPatch>): Record<string, ElementPatch>
   /** Creates a frame with box `box` named "Frame N", at the back, taking in the elements inside it. */
   createFrame(box: { x: number; y: number; w: number; h: number }): void
+  /** `ids` plus every member of each one's outermost group (groups are selected whole). */
+  expandGroups(ids: Iterable<string>): Set<string>
 }
 
 /** A gesture handler; `p` is the pointer in scene coordinates. */
@@ -518,6 +521,19 @@ export class ToolController implements ToolHost {
         this.selectAll()
         return true
       }
+      // group (mod+g), ungroup (mod+shift+g), lock toggle (mod+shift+l): claimed even when they do not apply,
+      // so the browser's find-next / address-bar shortcuts never fire on the board
+      if (k === 'g' && !e.alt) {
+        if (ro) return false
+        if (e.shift) this.ungroup()
+        else this.group()
+        return true
+      }
+      if (k === 'l' && e.shift && !e.alt) {
+        if (ro) return false
+        this.toggleLock()
+        return true
+      }
       if (k === 'd' && !e.alt) {
         // claimed even with nothing selected, so the browser's bookmark shortcut never fires on the board
         if (ro) return false
@@ -776,6 +792,62 @@ export class ToolController implements ToolHost {
     history.stopCapturing()
     store.reorderMany(els.map(el => el.id), to)
     history.stopCapturing()
+  }
+
+  // ---------- groups and lock ----------
+
+  expandGroups(ids: Iterable<string>): Set<string> {
+    const { scene } = this.ctx
+    return expandToGroups(scene.elements, id => scene.get(id), ids)
+  }
+
+  /**
+   * Groups the selected, unlocked elements (at least 2): appends one new group id to each one's `groupIds` (it
+   * becomes their outermost group). Nothing when they already share one outermost group. One undo step.
+   */
+  group(): void {
+    if (!this.canArrange()) return
+    const els = this.movableSelection()
+    if (els.length < 2) return
+    const outer = outermostGroup(els[0]!)
+    if (outer && els.every(el => outermostGroup(el) === outer)) return
+    const id = nanoid(10)
+    const patches: Record<string, ElementPatch> = {}
+    // arrays are written whole
+    for (const el of els) patches[el.id] = { groupIds: [...el.groupIds, id] }
+    this.ctx.history.gesture(() => this.ctx.store.updateMany(patches))
+  }
+
+  /** Removes the outermost group from the selected, unlocked elements (one level of nesting). One undo step. */
+  ungroup(): void {
+    if (!this.canArrange()) return
+    const patches: Record<string, ElementPatch> = {}
+    for (const el of this.movableSelection()) {
+      if (el.groupIds.length) patches[el.id] = { groupIds: el.groupIds.slice(0, -1) }
+    }
+    if (!Object.keys(patches).length) return
+    this.ctx.history.gesture(() => this.ctx.store.updateMany(patches))
+  }
+
+  /**
+   * Locks every selected element, or unlocks them all when all are locked. The one writer that touches locked
+   * elements (only their `locked` prop). One undo step.
+   */
+  toggleLock(): void {
+    if (!this.canArrange()) return
+    const els = this.selectedElements()
+    if (!els.length) return
+    const locked = !els.every(el => el.locked)
+    const patches: Record<string, ElementPatch> = {}
+    for (const el of els) if (el.locked !== locked) patches[el.id] = { locked }
+    if (!Object.keys(patches).length) return
+    this.ctx.history.gesture(() => this.ctx.store.updateMany(patches))
+    this.ctx.invalidate()
+  }
+
+  /** Commands on the selection may write: not read-only, no gesture / edit / crop open. */
+  private canArrange(): boolean {
+    return !this.ctx.readonly() && !this.isGestureActive()
   }
 
   // ---------- text editing ----------

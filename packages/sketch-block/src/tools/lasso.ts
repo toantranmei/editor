@@ -4,7 +4,7 @@ import type { PointerInput, Tool, ToolHost } from './controller'
 /**
  * Lasso selection: collects a polygon of scene points while dragging; pointerUp selects the unlocked elements
  * whose 4 rotated box corners all lie inside it (even-odd). Shift adds to the selection. Then back to select
- * (unless the tool is locked).
+ * (unless the tool is locked). Groups are selected whole.
  */
 export class LassoTool implements Tool {
   private base: Set<string> | null = null
@@ -35,13 +35,14 @@ export class LassoTool implements Tool {
     this.move({ ...e, coalesced: undefined }, p)
     const poly = this.host.lasso!
     this.cancel()
-    const next = new Set(base)
+    const inside: string[] = []
     if (poly.length >= 3) {
       for (const el of this.host.ctx.scene.queryBox(pointsBox(poly))) {
-        if (!el.locked && elementCorners(el).every(c => pointInPolygon(c, poly))) next.add(el.id)
+        if (!el.locked && elementCorners(el).every(c => pointInPolygon(c, poly))) inside.push(el.id)
       }
     }
-    this.host.setSelection(next)
+    // groups are selected whole
+    this.host.setSelection(new Set([...base, ...this.host.expandGroups(inside)]))
     if (!this.host.toolLocked.value) this.host.setTool('select')
   }
 

@@ -6,7 +6,9 @@ import { type ElementType, type SketchElement, STICKY_COLORS } from '../model/ty
 import { displayColor, type Theme } from '../render/shapes'
 import { FONT_FAMILIES } from '../text/fonts'
 import { TOOL_ELEMENT_TYPES, type ToolName } from '../tools/controller'
-import { BringToFront, Palette, SendToBack, TextAlignCenter, TextAlignEnd, TextAlignStart } from './icons'
+import {
+  BringToFront, Group, Lock, LockOpen, Palette, SendToBack, TextAlignCenter, TextAlignEnd, TextAlignStart, Ungroup,
+} from './icons'
 import { BG_COLORS, STROKE_COLORS } from './palette'
 
 const props = withDefaults(defineProps<{
@@ -24,6 +26,9 @@ const props = withDefaults(defineProps<{
 const emit = defineEmits<{
   apply: [patch: Partial<CurrentStyle>]
   layer: [to: 'front' | 'back']
+  group: []
+  ungroup: []
+  lock: []
 }>()
 
 /** Element type each drawing tool creates. */
@@ -186,6 +191,11 @@ const opacityPct = computed(() => {
 function onOpacity(e: Event): void {
   apply('opacity', Number((e.target as HTMLInputElement).value) / 100)
 }
+
+// ---------- arrange ----------
+const canGroup = computed(() => props.elements.length >= 2)
+const canUngroup = computed(() => props.elements.some(el => el.groupIds.length > 0))
+const allLocked = computed(() => props.elements.length > 0 && props.elements.every(el => el.locked))
 </script>
 
 <template>
@@ -428,6 +438,40 @@ function onOpacity(e: Event): void {
             @click="emit('layer', 'front')"
           >
             <BringToFront />
+          </button>
+        </div>
+      </section>
+
+      <section v-if="elements.length" class="me-sketch-style-section" data-section="arrange">
+        <h3 class="me-sketch-style-label">
+          {{ m.arrange }}
+        </h3>
+        <div class="me-sketch-style-row">
+          <button
+            v-if="canGroup"
+            type="button" class="me-tool-btn me-sketch-style-opt" data-arrange="group"
+            :title="m.group" :aria-label="m.group"
+            @click="emit('group')"
+          >
+            <Group />
+          </button>
+          <button
+            v-if="canUngroup"
+            type="button" class="me-tool-btn me-sketch-style-opt" data-arrange="ungroup"
+            :title="m.ungroup" :aria-label="m.ungroup"
+            @click="emit('ungroup')"
+          >
+            <Ungroup />
+          </button>
+          <button
+            type="button" class="me-tool-btn me-sketch-style-opt" data-arrange="lock"
+            :class="{ 'is-active': allLocked }"
+            :title="allLocked ? m.unlock : m.lock" :aria-label="allLocked ? m.unlock : m.lock"
+            :aria-pressed="allLocked"
+            @click="emit('lock')"
+          >
+            <Lock v-if="allLocked" />
+            <LockOpen v-else />
           </button>
         </div>
       </section>
