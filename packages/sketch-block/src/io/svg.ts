@@ -1,3 +1,4 @@
+import { clipFrame } from '../elements/frame'
 import { drawImagePlaceholder } from '../elements/image'
 import { kindOf } from '../elements/kind'
 import { boxCenter, elementBounds } from '../geometry/bounds'
@@ -168,7 +169,7 @@ async function rasterizeSceneInBrowser(
     base()
     ctx.save()
     // a frame's children are clipped to its box, as on the board
-    const frame = el.frameId ? frames.get(el.frameId) : undefined
+    const frame = el.frameId ? clipFrame(el, frames.get(el.frameId)) : null
     if (frame) {
       ctx.beginPath()
       ctx.rect(frame.x, frame.y, frame.w, frame.h)

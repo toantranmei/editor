@@ -1,8 +1,9 @@
+import { clipFrame } from '../elements/frame'
 import { blendsMultiply } from '../elements/freedraw'
 import { kindOf } from '../elements/kind'
 import type { Box } from '../geometry'
 import type { Scene } from '../model/scene'
-import { isFrame, type SketchElement } from '../model/types'
+import type { SketchElement } from '../model/types'
 import type { Viewport } from '../viewport'
 import { type BitmapCache, bitmapPad, bitmapScale, buildBitmap, cacheKey } from './bitmap-cache'
 import type { Theme } from './shapes'
@@ -97,9 +98,8 @@ export function renderStatic(
   for (const found of scene.queryBox(box)) {
     if (skipIds?.has(found.id)) continue
     const el = substitutes?.get(found.id) ?? found
-    // a frame's children are clipped to its box (z-order stays global)
-    const frame = el.frameId ? scene.get(el.frameId) : undefined
-    const clip = frame && isFrame(frame) ? frame : null
+    // a frame's children are clipped to its box (z-order stays global); not when it lies outside (stale frameId)
+    const clip = el.frameId ? clipFrame(el, scene.get(el.frameId)) : null
     if (clip) {
       ctx.save()
       ctx.beginPath()

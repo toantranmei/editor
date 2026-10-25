@@ -1,4 +1,4 @@
-import { elementCorners } from '../geometry/bounds'
+import { cornersBox, elementCorners } from '../geometry/bounds'
 import type { Box } from '../geometry/math'
 import { escXml } from '../io/xml'
 import type { Scene } from '../model/scene'
@@ -114,7 +114,8 @@ export function childrenOf(scene: Scene, frameId: string): SketchElement[] {
 
 /**
  * `els` plus the children of every frame among them (deduplicated, first occurrence kept): what moving `els`
- * actually moves. Locked children stay put.
+ * actually moves. Locked children are carried too: lock blocks direct manipulation only, and a frame move is the
+ * one writer allowed to move a locked element (its position only; it stays locked and keeps its frameId).
  */
 export function withFrameChildren(scene: Scene, els: readonly SketchElement[]): SketchElement[] {
   const out = new Map<string, SketchElement>()
@@ -124,7 +125,7 @@ export function withFrameChildren(scene: Scene, els: readonly SketchElement[]): 
   for (const el of els) {
     if (!isFrame(el)) continue
     for (const child of index.get(el.id) ?? []) {
-      if (!child.locked && !out.has(child.id)) out.set(child.id, child)
+      if (!out.has(child.id)) out.set(child.id, child)
     }
   }
   return [...out.values()]
@@ -142,7 +143,7 @@ export function directLines(els: readonly SketchElement[]): Set<string> {
 /**
  * Unlocked ids whose membership may have changed after `ids` moved / resized / appeared: the elements themselves,
  * and for every frame among them its current children and every element now inside its box. Locked elements are
- * never included: nothing writes to them (they stay put with a frame, and keep their frameId).
+ * never included: their frameId is never rewritten (they move with their frame, so they stay inside it).
  */
 export function affectedByChange(scene: Scene, ids: Iterable<string>): Set<string> {
   const out = new Set<string>()
@@ -171,6 +172,17 @@ export function membershipPatches(scene: Scene, ids: Iterable<string>): Record<s
     if (next !== el.frameId) out[id] = { frameId: next }
   }
   return out
+}
+
+/**
+ * The frame to clip `el` to: its frame, unless `el`'s box does not touch the frame's box at all (a stale frameId,
+ * e.g. from a remote edit — clipping would hide the element entirely). Null when there is none.
+ */
+export function clipFrame(el: SketchElement, frame: SketchElement | undefined): FrameElement | null {
+  if (!frame || !isFrame(frame)) return null
+  const b = cornersBox(el)
+  const f = frameBox(frame)
+  return b.maxX < f.minX || b.minX > f.maxX || b.maxY < f.minY || b.minY > f.maxY ? null : frame
 }
 
 /** Patches clearing `frameId` on the children of the frames among `ids` (those not deleted themselves). */

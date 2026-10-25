@@ -925,7 +925,7 @@ export class ToolController implements ToolHost {
   }
 
   /**
-   * Writes align / distribute moves: a moved frame takes its unlocked children along by the same offset, except
+   * Writes align / distribute moves: a moved frame takes its children (locked ones too) along by the same offset, except
    * children that were arranged themselves (`arranged`: their own move, even a zero one, wins); bound lines follow
    * (never letting go: a carried line is re-routed to its targets), and frame membership is recomputed, in one
    * undo step.

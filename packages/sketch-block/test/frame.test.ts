@@ -313,6 +313,18 @@ describe('frame rendering', () => {
     expect(names.filter(n => n === 'clip')).toHaveLength(1)
   })
 
+  it('skips the clip when a child lies outside its frame (stale frameId from a remote edit)', () => {
+    stubCanvas()
+    const { store, scene } = setup()
+    const f = store.create(frameInit())
+    store.create(rectInit({ x: 700, y: 700, frameId: f.id }))
+    const ctx = document.createElement('canvas').getContext('2d') as unknown as FakeCtx
+    renderStatic(ctx, scene, state(), new BitmapCache())
+    const names = ctx.calls.map(c => c.name)
+    expect(names.filter(n => n === 'drawImage')).toHaveLength(2)
+    expect(names).not.toContain('clip')
+  })
+
   it('draws the frame name in 12 px screen text above the top-left, at any zoom', () => {
     stubCanvas()
     const { store, scene } = setup()
@@ -478,12 +490,30 @@ describe('membership of drawn elements', () => {
     expect(store.get(t.id)!.frameId).toBe(f.id)
   })
 
-  it('a locked child keeps its frameId and position when the frame moves', () => {
+  it('a locked child moves with its frame (lock blocks direct manipulation only) and keeps its frameId', () => {
     const { store, c, f } = withFrame()
     const r = store.create(rectInit({ x: 200, y: 200, frameId: f.id, locked: true }))
-    const v = store.get(r.id)!.version
     drag(c, [100, 250], [600, 250])
     expect(store.get(f.id)!.x).toBe(600)
-    expect(store.get(r.id)).toMatchObject({ x: 200, y: 200, frameId: f.id, version: v })
+    expect(store.get(r.id)).toMatchObject({ x: 700, y: 200, frameId: f.id, locked: true })
+  })
+
+  it('a locked child moved with its frame is still drawn (inside the frame clip)', () => {
+    stubCanvas()
+    const { store, scene, c, f } = withFrame()
+    store.create(rectInit({ x: 200, y: 200, frameId: f.id, locked: true }))
+    drag(c, [100, 250], [600, 250])
+    const ctx = document.createElement('canvas').getContext('2d') as unknown as FakeCtx
+    const vp = Object.assign(new Viewport(), { x: 0, y: 0, zoom: 1 })
+    renderStatic(ctx, scene, { viewport: vp, widthCss: 2000, heightCss: 1000, dpr: 1, theme: 'light', grid: false }, new BitmapCache())
+    const names = ctx.calls.map(call => call.name)
+    // frame + child drawn; the child's clip rect is the frame's new box
+    expect(names.filter(n => n === 'drawImage')).toHaveLength(2)
+    const clip = names.indexOf('clip')
+    expect(ctx.calls[names.lastIndexOf('rect', clip)]!.args).toEqual([600, 100, 400, 300])
+    // the child is drawn at its new place, inside the clip (not clipped away)
+    const [cx, cy] = ctx.calls[names.indexOf('translate', clip)]!.args as number[]
+    expect(cx).toBe(725)
+    expect(cy).toBe(225)
   })
 })
