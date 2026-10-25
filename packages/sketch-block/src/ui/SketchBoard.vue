@@ -393,6 +393,15 @@ function toInput(e: PointerEvent, rect: DOMRect): PointerInput {
 
 const canvasRect = (): DOMRect => interactiveCanvas.value!.getBoundingClientRect()
 
+/**
+ * The block's node view wrapper is draggable (to move the block in the document): a drag on the live board would
+ * start a native drag of the whole block after a few px, and the browser then cancels the board's pointer gesture.
+ * While a board gesture is active, no native drag may start.
+ */
+function onDocDragStart(e: DragEvent): void {
+  if (activePointer !== null) e.preventDefault()
+}
+
 function onPointerDown(e: PointerEvent): void {
   root.value?.focus({ preventScroll: true })
   if (activePointer !== null) return
@@ -657,6 +666,7 @@ onMounted(() => {
   document.addEventListener('copy', onDocCopy)
   document.addEventListener('cut', onCut)
   document.addEventListener('paste', onPaste)
+  document.addEventListener('dragstart', onDocDragStart, true)
   measure()
   // the first update fixes cacheZoom immediately; skip it if the initial fit already did so
   if (!settlerStarted) updateSettler()
@@ -677,6 +687,7 @@ onBeforeUnmount(() => {
   document.removeEventListener('copy', onDocCopy)
   document.removeEventListener('cut', onCut)
   document.removeEventListener('paste', onPaste)
+  document.removeEventListener('dragstart', onDocDragStart, true)
   resizeObserver?.disconnect()
   resizeObserver = null
   dprQuery?.removeEventListener('change', onDprChange)

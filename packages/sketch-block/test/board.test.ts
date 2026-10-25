@@ -185,6 +185,24 @@ describe('SketchBoard', () => {
     expect(popover().exists()).toBe(false)
   })
 
+  it('a gesture on the board blocks native drag-and-drop of a draggable ancestor (the block node view)', async () => {
+    const { pointer, store } = await setup()
+    const dragstart = () => {
+      const e = new Event('dragstart', { bubbles: true, cancelable: true })
+      document.body.dispatchEvent(e)
+      return e.defaultPrevented
+    }
+    // no board gesture: other drags on the page are left alone
+    expect(dragstart()).toBe(false)
+    pointer('pointerdown', 100, 100)
+    pointer('pointermove', 110, 110, { buttons: 1 })
+    // the browser starts dragging the draggable node view wrapper: refused, the gesture goes on
+    expect(dragstart()).toBe(true)
+    pointer('pointerup', 110, 110)
+    expect(dragstart()).toBe(false)
+    expect(store.all()).toHaveLength(0)
+  })
+
   it('a last shape with its own button shows the generic shapes icon', async () => {
     const { wrapper } = await setup()
     const shapesBtn = () => wrapper.find('[data-tool="shapes"]')
