@@ -115,10 +115,14 @@ export class BoardStore {
     this.doc.transact(() => this.applyPatch(id, patch), LOCAL_ORIGIN)
   }
 
-  updateMany(patches: Record<string, ElementPatch>): void {
+  /**
+   * Applies `patches` in one transaction. `origin` is LOCAL_ORIGIN (an undoable local edit) unless a caller writes
+   * derived data that must stay out of the undo history (the repair observer).
+   */
+  updateMany(patches: Record<string, ElementPatch>, origin: unknown = LOCAL_ORIGIN): void {
     this.doc.transact(() => {
       for (const [id, patch] of Object.entries(patches)) this.applyPatch(id, patch)
-    }, LOCAL_ORIGIN)
+    }, origin)
   }
 
   /**
@@ -149,6 +153,11 @@ export class BoardStore {
       for (const [id, patch] of Object.entries(patches)) this.applyPatch(id, patch)
       for (const id of ids) if (this.elements.has(id)) this.elements.delete(id)
     }, LOCAL_ORIGIN)
+  }
+
+  /** Whether the doc holds an element `id`, renderable or not (e.g. a type from a newer client). */
+  has(id: string): boolean {
+    return this.elements.has(id)
   }
 
   /** The element, or undefined when missing or not renderable. */
@@ -199,8 +208,9 @@ export class BoardStore {
     }, LOCAL_ORIGIN)
   }
 
-  onChange(cb: (changedIds: Set<string>) => void): () => void {
-    const handler = (events: Y.YEvent<any>[]) => {
+  /** Calls `cb` after every transaction that changed elements, with their ids and the transaction's origin. */
+  onChange(cb: (changedIds: Set<string>, origin: unknown) => void): () => void {
+    const handler = (events: Y.YEvent<any>[], tr: Y.Transaction) => {
       const ids = new Set<string>()
       for (const ev of events) {
         if (ev.path.length > 0) {
@@ -209,7 +219,7 @@ export class BoardStore {
           for (const k of (ev as Y.YMapEvent<unknown>).keysChanged) ids.add(k)
         }
       }
-      if (ids.size) cb(ids)
+      if (ids.size) cb(ids, tr.origin)
     }
     this.elements.observeDeep(handler)
     return () => this.elements.unobserveDeep(handler)

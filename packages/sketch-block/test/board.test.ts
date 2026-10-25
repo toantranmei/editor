@@ -487,6 +487,33 @@ describe('SketchBoard', () => {
     expect(wrapper.emitted('change')).toBeUndefined()
   })
 
+  it('repairs derived data after remote edits while mounted (not when read-only, not after unmount)', async () => {
+    const { wrapper, connection } = await setup()
+    const store = new BoardStore(connection.doc)
+    const f = store.create({ ...DEFAULT_STYLE, type: 'frame', name: 'F', x: 0, y: 0, w: 400, h: 300, angle: 0, locked: false } as never)
+    const r = store.create(init({ x: 50, y: 50, frameId: f.id }))
+    const remoteDelete = (id: string) => connection.doc.transact(() => connection.doc.getMap('elements').delete(id), 'remote')
+    remoteDelete(f.id)
+    await flushPromises()
+    expect(store.get(r.id)!.frameId).toBeNull()
+    // read-only: other peers repair
+    const f2 = store.create({ ...DEFAULT_STYLE, type: 'frame', name: 'G', x: 0, y: 0, w: 400, h: 300, angle: 0, locked: false } as never)
+    store.update(r.id, { frameId: f2.id })
+    await wrapper.setProps({ readonly: true })
+    remoteDelete(f2.id)
+    await flushPromises()
+    expect(store.get(r.id)!.frameId).toBe(f2.id)
+    await wrapper.setProps({ readonly: false })
+    // unmounted: uninstalled
+    const f3 = store.create({ ...DEFAULT_STYLE, type: 'frame', name: 'H', x: 0, y: 0, w: 400, h: 300, angle: 0, locked: false } as never)
+    store.update(r.id, { frameId: f3.id })
+    wrapper.unmount()
+    wrappers.splice(wrappers.indexOf(wrapper), 1)
+    remoteDelete(f3.id)
+    await flushPromises()
+    expect(store.get(r.id)!.frameId).toBe(f3.id)
+  })
+
   it('theme change clears the bitmap cache and redraws', async () => {
     const { wrapper } = await setup({}, s => s.create(init()))
     frames.flush()

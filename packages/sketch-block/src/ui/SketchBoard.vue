@@ -6,6 +6,7 @@ import {
   MAX_LASER_POINTS, MAX_SELECTION_IDS, PresencePublisher, PresenceReader, RemoteSelectionBoxes, resolveUser,
   type UserOption,
 } from '../collab/presence'
+import { installRepair } from '../collab/repair'
 import type { BoardSession } from '../engine'
 import { shapeKeyOf } from '../elements/kind'
 import type { Point } from '../geometry/math'
@@ -74,6 +75,9 @@ const store = session ? toRaw(session.store) : new BoardStore(toRaw(toRaw(props.
 const doc = store.doc
 const scene = new Scene(store)
 const history = session ? toRaw(session.history) : new History(store)
+// derived data (bound-line geometry, frameId) converges after remote edits, provider loads and undo / redo;
+// a read-only board leaves it to the peers that can write
+const uninstallRepair = installRepair(store, scene, { canWrite: () => !props.readonly })
 // a shared history may hold an open capture from the previous mount: start a fresh undo step
 history.stopCapturing()
 const viewport = new Viewport()
@@ -857,6 +861,7 @@ onBeforeUnmount(() => {
   settler.destroy()
   scheduler.destroy()
   controller.destroy()
+  uninstallRepair()
   // a shared session's history outlives this mount
   if (!session) history.destroy()
   scene.destroy()

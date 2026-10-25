@@ -8,6 +8,7 @@ import type { BoardConnection } from './providers/types'
 export { default as SketchBoard } from './ui/SketchBoard.vue'
 export { makePreview } from './io/svg'
 export { loadFonts, onFontsLoaded } from './text/fonts'
+export { installRepair, REPAIR_ORIGIN } from './collab/repair'
 
 /**
  * State that outlives one board mount: the inline board and the fullscreen board share it, so the undo stack and
