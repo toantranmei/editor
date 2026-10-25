@@ -196,6 +196,71 @@ describe('snapping in tools', () => {
     expect(el.points[el.points.length - 1]).toEqual([100, 60])
   })
 
+  it('binding wins over grid snap for an arrow endpoint', () => {
+    const { c, store } = setup()
+    c.grid.value = true
+    const r = rect(store, 100, 0, 100, 100)
+    c.setTool('arrow')
+    c.pointerDown(ptr(3, 47))
+    c.pointerMove(ptr(95, 47))
+    c.pointerUp(ptr(95, 47))
+    const el = store.all().find(e => e.type === 'arrow') as LinearElement
+    expect(el.endBinding?.id).toBe(r.id)
+    const last = el.points[el.points.length - 1]!
+    // the tip sits on the anchor (BIND_GAP 4 outside the left edge, at the release height), not on the grid (y 40)
+    expect(el.x + last[0]).toBeCloseTo(96, 0)
+    expect(el.y + last[1]).toBeCloseTo(47, 0)
+    // the free start point still snaps
+    expect([el.x + el.points[0]![0], el.y + el.points[0]![1]]).toEqual([0, 40])
+  })
+
+  it('binding wins over grid snap for the first arrow point', () => {
+    const { c, store } = setup()
+    c.grid.value = true
+    const r = rect(store, 100, 0, 100, 100)
+    c.setTool('arrow')
+    c.pointerDown(ptr(95, 47))
+    c.pointerMove(ptr(3, 47))
+    c.pointerUp(ptr(3, 47))
+    const el = store.all().find(e => e.type === 'arrow') as LinearElement
+    expect(el.startBinding?.id).toBe(r.id)
+    expect(el.x + el.points[0]![0]).toBeCloseTo(96, 0)
+    expect(el.y + el.points[0]![1]).toBeCloseTo(47, 0)
+  })
+
+  it('multi-point line finishes on the last point with the grid on', () => {
+    const { c, store } = setup()
+    c.grid.value = true
+    c.setTool('line')
+    const click = (x: number, y: number) => {
+      c.pointerDown(ptr(x, y))
+      c.pointerUp(ptr(x, y))
+    }
+    click(3, 3)
+    click(98, 51)
+    click(98, 51)
+    const els = store.all()
+    expect(els).toHaveLength(1)
+    const el = els[0] as LinearElement
+    expect(el.points).toHaveLength(2)
+    expect([el.x + el.points[1]![0], el.y + el.points[1]![1]]).toEqual([100, 60])
+  })
+
+  it('a jittery click (≤ 3 screen px) does not grid-snap the move', () => {
+    const { c, store } = setup()
+    c.grid.value = true
+    const a = rect(store, 10, 10)
+    c.pointerDown(ptr(20, 20))
+    c.pointerMove(ptr(22, 21))
+    c.pointerUp(ptr(22, 21))
+    expect([store.get(a.id)!.x, store.get(a.id)!.y]).toEqual([12, 11])
+    // a real drag snaps
+    c.pointerDown(ptr(20, 20))
+    c.pointerMove(ptr(30, 30))
+    c.pointerUp(ptr(30, 30))
+    expect([store.get(a.id)!.x, store.get(a.id)!.y]).toEqual([20, 20])
+  })
+
   it('guides cleared on up', () => {
     const { c, store } = setup()
     rect(store, 100, 0, 100, 50)

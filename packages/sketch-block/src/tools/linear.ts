@@ -28,6 +28,8 @@ export class LinearTool implements Tool {
   private multi = false
   private pressed = false
   private downAt: Point = { x: 0, y: 0 }
+  /** Raw press point behind the last placed point (finish detection ignores snapping). */
+  private lastRaw: Point = { x: 0, y: 0 }
   private seed = 0
 
   constructor(private readonly host: ToolHost, private readonly type: LinearType) {}
@@ -44,6 +46,7 @@ export class LinearTool implements Tool {
     if (this.pts) return
     const at = this.gridSnap(e, p)
     this.pts = [[at.x, at.y]]
+    this.lastRaw = p
     this.seed = Math.floor(Math.random() * 2 ** 31)
   }
 
@@ -75,12 +78,13 @@ export class LinearTool implements Tool {
       this.hover(e, p)
       return
     }
-    const last = this.pts[this.pts.length - 1]!
-    if (Math.hypot(p.x - last[0], p.y - last[1]) <= FINISH_PX / zoom) {
+    // raw press against raw press: the placed points may be snapped
+    if (Math.hypot(p.x - this.lastRaw.x, p.y - this.lastRaw.y) <= FINISH_PX / zoom) {
       this.finish()
       return
     }
     this.pts.push([end.x, end.y])
+    this.lastRaw = p
     this.hover(e, p)
   }
 
@@ -158,9 +162,15 @@ export class LinearTool implements Tool {
     return e.shift && last ? snapSegment({ x: last[0], y: last[1] }, p) : this.gridSnap(e, p)
   }
 
-  /** `p` on the grid when it is on and Alt is not held (points never object-snap). */
+  /**
+   * `p` on the grid when it is on and Alt is not held (points never object-snap). Binding wins: an arrow point that
+   * would bind at the raw `p` stays raw (the binding then places it on its anchor).
+   */
   private gridSnap(e: PointerInput, p: Point): Point {
-    return this.host.grid.value && !e.alt ? snapPoint(p, GRID_SIZE) : p
+    if (!this.host.grid.value || e.alt) return p
+    const { scene, viewport } = this.host.ctx
+    if (this.type === 'arrow' && findBindTarget(scene, p, viewport.zoom, new Set())) return p
+    return snapPoint(p, GRID_SIZE)
   }
 
   /**

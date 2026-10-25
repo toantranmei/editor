@@ -14,6 +14,8 @@ import type { PointerInput, Tool, ToolHost } from './controller'
 /** Hit tolerances in screen px (divided by zoom → scene units). */
 const HIT_PX = 6
 const HANDLE_HIT_PX = 8
+/** A move snaps only once the pointer has travelled farther than this from the press, screen px. */
+const DRAG_PX = 3
 
 const HANDLE_CURSOR: Record<Handle, string> = {
   nw: 'nwse-resize', se: 'nwse-resize', ne: 'nesw-resize', sw: 'nesw-resize',
@@ -21,7 +23,7 @@ const HANDLE_CURSOR: Record<Handle, string> = {
 }
 
 type Gesture =
-  | { kind: 'move'; start: Point; origins: SketchElement[]; box: Box | null; snap: Snapper }
+  | { kind: 'move'; start: Point; origins: SketchElement[]; box: Box | null; snap: Snapper; dragging: boolean }
   | { kind: 'resize'; handle: Exclude<Handle, 'rotate'>; el: SketchElement; snap: Snapper }
   | { kind: 'rotate'; el: SketchElement }
   | { kind: 'point'; el: LinearElement; index: number }
@@ -175,7 +177,7 @@ export class SelectTool implements Tool {
         : b
     }
     const snap = this.host.snapper(origins.map(el => el.id))
-    this.g = { kind: 'move', start: p, origins, box, snap }
+    this.g = { kind: 'move', start: p, origins, box, snap, dragging: false }
     this.host.cursor.value = 'move'
   }
 
@@ -187,8 +189,10 @@ export class SelectTool implements Tool {
         if (!g.origins.length) return
         let dx = p.x - g.start.x
         let dy = p.y - g.start.y
+        // no snapping until a real drag (a jittery click must not jump to the grid)
+        if (!g.dragging && Math.hypot(dx, dy) * this.host.ctx.viewport.zoom > DRAG_PX) g.dragging = true
         // Alt (held at this moment) skips snapping
-        if (g.box && !e.alt && !g.snap.idle) {
+        if (g.dragging && g.box && !e.alt && !g.snap.idle) {
           const s = g.snap.move({ minX: g.box.minX + dx, minY: g.box.minY + dy, maxX: g.box.maxX + dx, maxY: g.box.maxY + dy })
           dx += s.dx
           dy += s.dy
@@ -234,8 +238,8 @@ export class SelectTool implements Tool {
           // snap the segment from the neighbouring point
           const scene = linearScenePoints(g.el)
           target = snapSegment(scene[g.index === 0 ? 1 : g.index - 1]!, p)
-        } else if (!e.alt && this.host.grid.value) {
-          // points snap to the grid only (no object snap)
+        } else if (!e.alt && this.host.grid.value && !this.bindsAt(g.el, g.index, p)) {
+          // points snap to the grid only (no object snap); an end that binds at the raw point keeps it
           target = snapPoint(p, GRID_SIZE)
         }
         this.writer.set({ [g.el.id]: this.pointPatch(g.el, g.index, target) })
@@ -362,6 +366,15 @@ export class SelectTool implements Tool {
     if (!b) return { ...patch, [key]: null }
     const next = { ...el, ...patch, [key]: b } as LinearElement
     return { ...patch, [key]: b, ...boundPatch(next, id => scene.get(id)) }
+  }
+
+  /** Point `index` of `el` dropped at `p` would bind (same rule as `pointPatch`). */
+  private bindsAt(el: LinearElement, index: number, p: Point): boolean {
+    const last = el.points.length - 1
+    if (last < 1 || (index !== 0 && index !== last)) return false
+    if (el.type !== 'arrow' && !el[index === 0 ? 'startBinding' : 'endBinding']) return false
+    const { scene, viewport } = this.host.ctx
+    return bindingAt(scene, el, p, viewport.zoom, index === 0 ? el.endBinding : el.startBinding) !== null
   }
 
   private setBindTarget(id: string | null): void {
