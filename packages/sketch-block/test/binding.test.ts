@@ -421,6 +421,28 @@ describe('binding geometry', () => {
     expect(findBindTarget(scene, { x: -500, y: 0 }, 1, new Set())).toBeNull()
   })
 
+  it('followBindings uses a bound-line index that is rebuilt when the scene changes', () => {
+    const { store, scene, els } = sceneWith({ x: 0, y: 0 }, { x: 300, y: 0 })
+    const [a, b] = els as [SketchElement, SketchElement]
+    const arrowTo = (id: string) => store.create({
+      ...DEFAULT_STYLE, type: 'arrow', label: '', x: 104, y: 50, w: 192, h: 0, angle: 0, locked: false,
+      points: [[0, 0], [192, 0]], routing: 'straight', startArrowhead: 'none', endArrowhead: 'arrow',
+      startBinding: { id, ax: 1, ay: 0.5 }, endBinding: null,
+    } as ElementInit)
+    const first = arrowTo(a.id)
+    expect(Object.keys(followBindings(store, scene, [a.id]))).toEqual([first.id])
+    expect(followBindings(store, scene, [b.id])).toEqual({})
+    // added after the index was built: picked up
+    const second = arrowTo(b.id)
+    expect(Object.keys(followBindings(store, scene, [b.id]))).toEqual([second.id])
+    // rebound elsewhere: the old target no longer drives it
+    store.update(first.id, { startBinding: { id: b.id, ax: 0, ay: 0.5 } })
+    expect(followBindings(store, scene, [a.id])).toEqual({})
+    expect(Object.keys(followBindings(store, scene, [b.id])).sort()).toEqual([first.id, second.id].sort())
+    // no scan of the whole scene: unrelated ids cost nothing
+    expect(followBindings(store, scene, ['nope'])).toEqual({})
+  })
+
   it('followBindings never yields NaN for degenerate targets', () => {
     const { store, scene, els } = sceneWith({ x: 0, y: 0, w: 0, h: 0 })
     const b: Binding = { id: els[0]!.id, ax: 0.5, ay: 0.5 }
@@ -496,5 +518,73 @@ describe('bind target highlight', () => {
     expect(n(on, 'closePath')).toBe(n(off, 'closePath') + 1)
     expect(n(on, 'lineTo')).toBe(n(off, 'lineTo') + 3)
     expect(on.calls.some(c => c.name === 'set:lineWidth' && c.args[0] === 1)).toBe(true)
+  })
+})
+
+describe('nested gestures while cropping (Task 6 fix)', () => {
+  const image = (store: BoardStore) => store.create({
+    ...DEFAULT_STYLE, type: 'image', src: 'https://cdn.example/a.png', naturalW: 400, naturalH: 200, crop: null,
+    x: 0, y: 0, w: 200, h: 100, angle: 0, locked: false,
+  } as ElementInit)
+
+  it('an edit committed inside the crop gesture survives cancel and stays undoable', () => {
+    const { c, store, history } = setup()
+    const img = image(store)
+    const r = rect(store, 300, 0)
+    history.stopCapturing()
+    expect(c.startCrop(img.id)).toBe(true)
+    // a writer nesting into the open crop gesture (bypassing the controller guards)
+    history.beginGesture()
+    store.update(r.id, { opacity: 0.5 })
+    history.endGesture()
+    c.cancelCrop()
+    expect(store.get(r.id)!.opacity).toBe(0.5)
+    history.undo()
+    expect(store.get(r.id)!.opacity).toBe(1)
+    expect(store.get(img.id)).toBeDefined()
+  })
+
+  it('applyStyle, pasteStyle and reorder are no-ops while cropping or editing', () => {
+    const { c, store } = setup()
+    const img = image(store)
+    const r = rect(store, 300, 0)
+    c.setSelection([r.id])
+    c.copyStyle()
+    expect(c.startCrop(img.id)).toBe(true)
+    expect([...c.selectedIds.value]).toEqual([img.id])
+    c.applyStyle({ opacity: 0.5 })
+    c.pasteStyle()
+    c.reorderSelection('front')
+    expect(store.get(img.id)!.opacity).toBe(1)
+    expect(store.all().map(e => e.id)).toEqual([img.id, r.id])
+    // the current style still takes the change (only the writes are blocked)
+    expect(c.currentStyle.value.opacity).toBe(0.5)
+    c.cancelCrop()
+    c.startEditing(r.id, 'label')
+    expect(c.editing.value).not.toBeNull()
+    c.applyStyle({ opacity: 0.25 })
+    expect(store.get(r.id)!.opacity).toBe(1)
+    c.cancelEditing()
+  })
+
+  it('setTool with no gesture active and destroy heal a leaked gesture depth', () => {
+    // with a leaked level, a later gesture only nests: its end would not close the step
+    const check = (h: History, store: BoardStore, id: string, x: number) => {
+      h.beginGesture()
+      store.update(id, { x })
+      h.endGesture()
+      store.update(id, { x: x + 1 })
+      h.undo()
+      expect(store.get(id)!.x).toBe(x)
+    }
+    const { c, store, history } = setup()
+    const a = rect(store, 0, 0)
+    history.stopCapturing()
+    history.beginGesture() // leaked: its end never runs
+    c.setTool('select')
+    check(history, store, a.id, 10)
+    history.beginGesture()
+    c.destroy()
+    check(history, store, a.id, 20)
   })
 })

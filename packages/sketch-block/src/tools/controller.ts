@@ -322,6 +322,8 @@ export class ToolController implements ToolHost {
     this.hoverId = null
     this.resetCursor()
     this.ctx.invalidate()
+    // nothing should hold a gesture open now: heal any leaked nesting depth
+    if (!this.isGestureActive()) this.ctx.history.resetGestures()
     this.afterGesture()
   }
 
@@ -697,12 +699,13 @@ export class ToolController implements ToolHost {
    */
   private insert(inits: ElementInit[], keepTool = false): void {
     const { history, store } = this.ctx
-    history.beginGesture()
-    const others = store.createMany(inits.filter(i => i.type !== 'frame'))
-    const frames = store.createMany(inits.filter(i => i.type === 'frame'), { atBack: true })
-    const created = [...others, ...frames]
-    this.created(created.map(el => el.id))
-    history.endGesture()
+    const created = history.gesture(() => {
+      const others = store.createMany(inits.filter(i => i.type !== 'frame'))
+      const frames = store.createMany(inits.filter(i => i.type === 'frame'), { atBack: true })
+      const created = [...others, ...frames]
+      this.created(created.map(el => el.id))
+      return created
+    })
     if (!keepTool && CREATORS.has(this.tool.value)) this.setTool('select')
     this.setSelection(created.map(el => el.id))
   }
@@ -715,7 +718,8 @@ export class ToolController implements ToolHost {
     const next = { ...this.currentStyle.value }
     for (const [k, v] of Object.entries(patch)) if (v !== undefined) (next as Record<string, unknown>)[k] = v
     this.currentStyle.value = next
-    if (this.ctx.readonly()) return
+    // no writes while a crop / text edit holds its gesture open (they would ride on, and vanish with, its undo step)
+    if (this.ctx.readonly() || this.editing.value || this.cropping.value) return
     const patches: Record<string, ElementPatch> = {}
     for (const el of this.movableSelection()) {
       const p: ElementPatch | null = stylePatchFor(el, patch)
@@ -726,11 +730,11 @@ export class ToolController implements ToolHost {
     if (!Object.keys(patches).length) return
     // a refitted text's bound lines follow it
     const all = this.withFollowers(patches)
-    this.ctx.history.beginGesture()
-    this.ctx.store.updateMany(all)
-    // a refitted text (or a line following it) may have grown out of (or into) a frame
-    this.created(Object.keys(all).filter(id => 'w' in all[id]! || 'h' in all[id]!))
-    this.ctx.history.endGesture()
+    this.ctx.history.gesture(() => {
+      this.ctx.store.updateMany(all)
+      // a refitted text (or a line following it) may have grown out of (or into) a frame
+      this.created(Object.keys(all).filter(id => 'w' in all[id]! || 'h' in all[id]!))
+    })
   }
 
   /** Takes the style of the first selected element; false when nothing is selected. */
@@ -744,12 +748,13 @@ export class ToolController implements ToolHost {
 
   /** Applies the copied style to the selection (and the current style). */
   pasteStyle(): void {
+    if (this.editing.value || this.cropping.value) return
     if (this.copiedStyle) this.applyStyle(this.copiedStyle)
   }
 
   /** Moves the selected, unlocked elements to the front / back, keeping their relative order (one undo step). */
   reorderSelection(to: 'front' | 'back'): void {
-    if (this.ctx.readonly()) return
+    if (this.ctx.readonly() || this.editing.value || this.cropping.value) return
     const els = this.movableSelection()
     if (!els.length) return
     const { history, store } = this.ctx
@@ -814,11 +819,14 @@ export class ToolController implements ToolHost {
     const patch = cur && isImage(cur) && !this.ctx.readonly() ? this.crop.patch(cur) : null
     this.endCrop()
     if (patch) {
-      // the box changes: lines bound to the image follow, in the same write
-      const all = this.withFollowers({ [id]: patch })
-      store.updateMany(all)
-      this.created(Object.keys(all))
-      history.endGesture()
+      try {
+        // the box changes: lines bound to the image follow, in the same write
+        const all = this.withFollowers({ [id]: patch })
+        store.updateMany(all)
+        this.created(Object.keys(all))
+      } finally {
+        history.endGesture()
+      }
     } else {
       history.discardGesture()
     }
@@ -1045,6 +1053,7 @@ export class ToolController implements ToolHost {
     this.active?.cancel?.()
     if (pending !== this.active) pending?.cancel?.()
     this.active = null
+    this.ctx.history.resetGestures()
     this.off()
   }
 
@@ -1058,10 +1067,10 @@ export class ToolController implements ToolHost {
     for (const el of withFrameChildren(scene, this.movableSelection())) patches[el.id] = { x: el.x + dx, y: el.y + dy }
     if (!Object.keys(patches).length) return
     const all = this.withFollowers(patches)
-    history.beginGesture()
-    store.updateMany(all)
-    this.created(Object.keys(all))
-    history.endGesture()
+    history.gesture(() => {
+      store.updateMany(all)
+      this.created(Object.keys(all))
+    })
   }
 
   /** Selected, existing, unlocked elements. */

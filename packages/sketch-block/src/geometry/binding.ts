@@ -155,6 +155,36 @@ export function boundPatch(el: LinearElement, get: (id: string) => SketchElement
   return { ...patch, ...boxFromPoints(next.map(p => [p.x, p.y])), angle: 0 }
 }
 
+/** Bound lines of a scene: target id → ids of the lines bound to it, plus every bound line's id. */
+interface BoundLineIndex {
+  byTarget: Map<string, string[]>
+  lines: Set<string>
+}
+
+/**
+ * Index per scene, valid while `scene.elements` is the same array (the scene replaces it on every change), so
+ * following costs O(bound lines involved) per drag frame instead of a scan of the whole scene.
+ */
+const indexCache = new WeakMap<Scene, { elements: readonly SketchElement[]; index: BoundLineIndex }>()
+
+function boundLineIndex(scene: Scene): BoundLineIndex {
+  const hit = indexCache.get(scene)
+  if (hit && hit.elements === scene.elements) return hit.index
+  const index: BoundLineIndex = { byTarget: new Map(), lines: new Set() }
+  for (const el of scene.elements) {
+    if (!isLinear(el) || (!el.startBinding && !el.endBinding)) continue
+    index.lines.add(el.id)
+    for (const b of [el.startBinding, el.endBinding]) {
+      if (!b) continue
+      const list = index.byTarget.get(b.id)
+      if (!list) index.byTarget.set(b.id, [el.id])
+      else if (!list.includes(el.id)) list.push(el.id)
+    }
+  }
+  indexCache.set(scene, { elements: scene.elements, index })
+  return index
+}
+
 const changesGeometry = (patch: ElementPatch | undefined): boolean =>
   !!patch && GEOMETRY_KEYS.some(k => patch[k] !== undefined)
 
@@ -179,14 +209,21 @@ export function followBindings(
     const p = pending[id]
     return base && p ? { ...base, ...p } as SketchElement : base
   }
-  for (const line of scene.elements) {
+  // candidates: lines bound to a changed element, plus changed lines that are bound themselves
+  const index = boundLineIndex(scene)
+  const candidates = new Set<string>()
+  for (const id of changed) {
+    for (const lineId of index.byTarget.get(id) ?? []) candidates.add(lineId)
+    if (index.lines.has(id)) candidates.add(id)
+  }
+  for (const lineId of candidates) {
+    const line = scene.get(lineId)
     // locked elements are never written (as elsewhere): a locked line keeps its points
-    if (!isLinear(line) || line.locked) continue
+    if (!line || !isLinear(line) || line.locked) continue
     const s = line.startBinding
     const e = line.endBinding
     if (!s && !e) continue
     const self = changed.has(line.id)
-    if (!self && !(s && changed.has(s.id)) && !(e && changed.has(e.id))) continue
     const cur = get(line.id) as LinearElement
     const loose: ElementPatch = {}
     if (self) {
@@ -219,9 +256,12 @@ export function withFollowers(
 export function bindingDeletePatches(scene: Scene, ids: readonly string[]): Record<string, ElementPatch> {
   const gone = new Set(ids)
   const out: Record<string, ElementPatch> = {}
-  for (const el of scene.elements) {
+  const index = boundLineIndex(scene)
+  const lines = new Set(ids.flatMap(id => index.byTarget.get(id) ?? []))
+  for (const lineId of lines) {
+    const el = scene.get(lineId)
     // locked elements are never written: a dangling binding is treated as unbound when followed
-    if (!isLinear(el) || el.locked || gone.has(el.id)) continue
+    if (!el || !isLinear(el) || el.locked || gone.has(el.id)) continue
     const patch: ElementPatch = {}
     if (el.startBinding && gone.has(el.startBinding.id)) patch.startBinding = null
     if (el.endBinding && gone.has(el.endBinding.id)) patch.endBinding = null
