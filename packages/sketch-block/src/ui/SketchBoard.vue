@@ -31,7 +31,7 @@ import { loadFonts } from '../text/fonts'
 import { clearTextCache } from '../text/measure'
 import { type CurrentStyle, type PointerInput, ToolController, type ToolName } from '../tools/controller'
 import { LASER_FADE_MS } from '../tools/laser'
-import { searchElements } from '../tools/search'
+import { sameIds, searchElements } from '../tools/search'
 import { Viewport } from '../viewport'
 import Avatars, { type AvatarPeer } from './Avatars.vue'
 import SearchBox from './SearchBox.vue'
@@ -361,10 +361,12 @@ function applyStyle(patch: Partial<CurrentStyle>): void {
   controller.applyStyle(patch)
 }
 
-/** The style panel's link field (single selection; already validated there, re-checked by the controller). */
-function setLink(value: string): void {
-  const el = selectedEls.value.length === 1 ? selectedEls.value[0]! : null
-  if (el) controller.setLink(el.id, value)
+/**
+ * The style panel's link field: `id` is the element being edited when the edit began (the selection may have moved
+ * on since); the value was validated there and is re-checked by the controller.
+ */
+function setLink(id: string, value: string): void {
+  controller.setLink(id, value)
 }
 
 function reorder(to: 'front' | 'back'): void {
@@ -378,16 +380,20 @@ const searchQuery = ref('')
 /** Position of the match stepped to last in `searchMatches` (-1 = none since the query changed). */
 const searchIndex = ref(-1)
 const searchBox = shallowRef<InstanceType<typeof SearchBox> | null>(null)
-const searchMatches = computed<string[]>(() => {
+/** The previous result while the ids are the same: the computed then does not trigger (no redraw per drag frame). */
+const searchMatches = computed<string[]>(prev => {
   void sceneVersion.value
-  return searchOpen.value ? searchElements(scene.elements, searchQuery.value) : []
+  const next = searchOpen.value ? searchElements(scene.elements, searchQuery.value) : []
+  return prev && sameIds(prev, next) ? prev : next
 })
 
 watch(searchQuery, () => {
   searchIndex.value = -1
 })
-watch(searchMatches, m => {
-  if (searchIndex.value >= m.length) searchIndex.value = m.length - 1
+watch(searchMatches, (m, old) => {
+  // the active match stays active (by id) when the list changes around it; gone → none
+  const active = old?.[searchIndex.value]
+  searchIndex.value = active ? m.indexOf(active) : -1
   scheduler.invalidateInteractive()
 })
 watch(searchIndex, () => scheduler.invalidateInteractive())
@@ -721,7 +727,7 @@ function onKeyDown(e: KeyboardEvent): void {
   }
   const input = { key: e.key, code: e.code, mod: e.ctrlKey || e.metaKey, shift: e.shiftKey, alt: e.altKey }
   // mod+F: the board's search (never the browser's find); before the controller's mod / alt guards
-  if (input.mod && !e.altKey && !e.shiftKey && (e.code === 'KeyF' || e.key.toLowerCase() === 'f')) {
+  if (input.mod && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'f') {
     e.preventDefault()
     openSearch()
     return

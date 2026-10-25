@@ -125,6 +125,11 @@ export class SelectTool implements Tool {
   private downAt: Point = { x: 0, y: 0 }
   private dirty = false
   private writing = false
+  /**
+   * Link to follow on pointerup (pressed on a badge, or mod+pressed on a linked element), with the press position
+   * (screen px). Opened on up, not down: only pointerup grants the user activation popup blockers require.
+   */
+  private pendingLink: { id: string; at: Point } | null = null
   private readonly writer: FrameWriter
 
   constructor(private readonly host: ToolHost) {
@@ -136,11 +141,12 @@ export class SelectTool implements Tool {
     const ro = ctx.readonly()
     this.downAt = p
     this.dirty = false
-    // a link badge (screen size, outside the element) follows its link, also when read-only
+    this.pendingLink = null
+    // a link badge (screen size, outside the element) follows its link on release, also when read-only
     const badge = this.badgeAt(e)
     if (badge) {
       this.g = { kind: 'none' }
-      this.host.followLink(badge.id)
+      this.pendingLink = { id: badge.id, at: e.screen }
       return
     }
     // point handles win over the resize handles they may overlap
@@ -160,9 +166,10 @@ export class SelectTool implements Tool {
     }
 
     const hit = this.hitAt(p)
-    // mod+click follows the element's link (instead of selecting it)
-    if (hit?.link && e.mod && this.host.followLink(hit.id)) {
+    // mod+click follows the element's link on release (instead of selecting it)
+    if (hit?.link && e.mod) {
       this.g = { kind: 'none' }
+      this.pendingLink = { id: hit.id, at: e.screen }
       return
     }
     const sel = this.host.selectedIds.value
@@ -299,6 +306,10 @@ export class SelectTool implements Tool {
   }
 
   up(e: PointerInput, p: Point): void {
+    const link = this.pendingLink
+    this.pendingLink = null
+    // a press that turned into a drag does not follow the link
+    if (link && Math.hypot(e.screen.x - link.at.x, e.screen.y - link.at.y) <= DRAG_PX) this.host.followLink(link.id)
     const g = this.g
     if (g.kind === 'move' || g.kind === 'resize' || g.kind === 'rotate' || g.kind === 'point') {
       // a plain click must not write (no version bump, no empty undo step)
@@ -339,6 +350,7 @@ export class SelectTool implements Tool {
 
   /** Aborts the gesture; a move/resize/rotate that already wrote is reverted to its origins (no undo step). */
   cancel(): void {
+    this.pendingLink = null
     this.writer.drop()
     this.setBindTarget(null)
     if (this.writing) {

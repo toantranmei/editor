@@ -20,16 +20,37 @@ export function searchableText(el: SketchElement): string {
   return typeof v === 'string' ? v : ''
 }
 
+/**
+ * Normalized searchable text per element snapshot. The scene keeps unchanged elements' identity, so a re-search
+ * after an edit (or every frame of a drag) only normalizes the elements that changed.
+ */
+const normalizedCache = new WeakMap<SketchElement, string>()
+
+function normalizedText(el: SketchElement): string {
+  let text = normalizedCache.get(el)
+  if (text === undefined) {
+    const raw = searchableText(el)
+    text = raw ? normalizeSearch(raw) : ''
+    normalizedCache.set(el, text)
+  }
+  return text
+}
+
 /** Ids of the elements whose text contains `query` (diacritics- and case-insensitive), in z-order. */
 export function searchElements(elements: readonly SketchElement[], query: string): string[] {
   const q = normalizeSearch(query).trim()
   if (!q) return []
   const out: string[] = []
   for (const el of elements) {
-    const text = searchableText(el)
-    if (text && normalizeSearch(text).includes(q)) out.push(el.id)
+    const text = normalizedText(el)
+    if (text && text.includes(q)) out.push(el.id)
   }
   return out
+}
+
+/** Whether two id lists are the same, in the same order. */
+export function sameIds(a: readonly string[], b: readonly string[]): boolean {
+  return a.length === b.length && a.every((id, i) => id === b[i])
 }
 
 /**

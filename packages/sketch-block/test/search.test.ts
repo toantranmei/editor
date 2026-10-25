@@ -46,6 +46,27 @@ describe('searchElements', () => {
     expect(searchElements(scene.elements, '   ')).toEqual([])
   })
 
+  it('normalizes each element snapshot once', () => {
+    const store = new BoardStore(new Y.Doc())
+    store.create(rect({ label: 'Một' }))
+    const b = store.create(rect({ label: 'Hai' }))
+    const scene = new Scene(store)
+    const spy = vi.spyOn(String.prototype, 'normalize')
+    expect(searchElements(scene.elements, 'mot')).toHaveLength(1)
+    // the query and both labels
+    expect(spy).toHaveBeenCalledTimes(3)
+    spy.mockClear()
+    searchElements(scene.elements, 'hai')
+    // only the query
+    expect(spy).toHaveBeenCalledTimes(1)
+    spy.mockClear()
+    store.update(b.id, { x: 50 })
+    searchElements(scene.elements, 'hai')
+    // the query and the changed element
+    expect(spy).toHaveBeenCalledTimes(2)
+    spy.mockRestore()
+  })
+
   it('focusElement centers the element, keeping the zoom unless it does not fit', () => {
     const vp = new Viewport()
     vp.zoom = 2
@@ -175,6 +196,44 @@ describe('SketchBoard search', () => {
     await input().trigger('keydown', { key: 'Enter', shiftKey: true })
     expect(selectedIds()).toEqual([ids[1]])
     expect(wrapper.find('.me-sketch-search-status').text()).toBe('2/2')
+  })
+
+  it('IME composition keeps Enter / Escape', async () => {
+    const { wrapper, open, type, input, box } = await setup(store => {
+      store.create(rect({ label: 'hello' }))
+    })
+    await open()
+    await type('hello')
+    await input().trigger('keydown', { key: 'Enter', isComposing: true })
+    await input().trigger('keydown', { key: 'Enter', keyCode: 229 })
+    expect(wrapper.findComponent({ name: 'StylePanel' }).props('elements')).toHaveLength(0)
+    await input().trigger('keydown', { key: 'Escape', isComposing: true })
+    expect(box().exists()).toBe(true)
+    await input().trigger('keydown', { key: 'Enter' })
+    expect(wrapper.findComponent({ name: 'StylePanel' }).props('elements')).toHaveLength(1)
+  })
+
+  it('keeps the active match by id when the matches change', async () => {
+    const ids: string[] = []
+    const { wrapper, open, type, input } = await setup(store => {
+      ids.push(store.create(rect({ x: 0, label: 'cat 1' })).id)
+      ids.push(store.create(rect({ x: 300, label: 'cat 2' })).id)
+    })
+    const status = () => wrapper.find('.me-sketch-search-status').text()
+    await open()
+    await type('cat')
+    await input().trigger('keydown', { key: 'Enter' })
+    await input().trigger('keydown', { key: 'Enter' })
+    expect(status()).toBe('2/2')
+    // a new match behind it in z-order (listed first): the active one keeps its id
+    const store = new BoardStore((wrapper.props('connection') as { doc: Y.Doc }).doc)
+    store.createMany([rect({ x: 600, label: 'cat 0' })], { atBack: true })
+    await nextTick()
+    expect(status()).toBe('3/3')
+    // an unrelated edit leaves the position alone
+    store.update(ids[0]!, { x: 10 })
+    await nextTick()
+    expect(status()).toBe('3/3')
   })
 
   it('escape closes', async () => {

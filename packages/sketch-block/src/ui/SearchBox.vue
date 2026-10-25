@@ -35,6 +35,8 @@ function focus(): void {
 /** The board never sees the box's keys (letters would switch tools); Enter / Escape / mod+F act here. */
 function onKeyDown(e: KeyboardEvent): void {
   e.stopPropagation()
+  // Enter / Escape during IME composition belong to the IME (they pick / cancel the candidate)
+  if (e.isComposing || e.keyCode === 229) return
   if (e.key === 'Enter') {
     e.preventDefault()
     if (e.shiftKey) emit('prev')
@@ -42,7 +44,7 @@ function onKeyDown(e: KeyboardEvent): void {
   } else if (e.key === 'Escape') {
     e.preventDefault()
     emit('close')
-  } else if ((e.ctrlKey || e.metaKey) && !e.altKey && (e.key.toLowerCase() === 'f' || e.code === 'KeyF')) {
+  } else if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === 'f') {
     e.preventDefault()
     focus()
   }

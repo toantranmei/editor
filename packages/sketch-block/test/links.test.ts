@@ -150,6 +150,39 @@ describe('links on the board', () => {
     expect([...c.selectedIds.value]).toEqual([target.id])
   })
 
+  it('links open on pointerup, not pointerdown, and not after a drag', () => {
+    const open = vi.spyOn(window, 'open').mockReturnValue(null)
+    const { store, viewport, c } = setup()
+    const el = store.create(rectInit({ x: 100, y: 100 }))
+    const target = store.create(rectInit({ x: 5000, y: 3000 }))
+    c.setLink(el.id, 'https://example.com/y')
+    c.setSelection([el.id])
+    const badge = linkBadgeCenter(store.get(el.id)!, viewport)
+    // badge: nothing on down, opens on up
+    c.pointerDown(ptr(badge.x, badge.y))
+    expect(open).not.toHaveBeenCalled()
+    c.pointerUp(ptr(badge.x, badge.y))
+    expect(open).toHaveBeenCalledTimes(1)
+    // mod+click: same
+    c.pointerDown(ptr(150, 125, { mod: true }))
+    expect(open).toHaveBeenCalledTimes(1)
+    c.pointerUp(ptr(150, 125, { mod: true }))
+    expect(open).toHaveBeenCalledTimes(2)
+    // a press that drags away does not open (nor move the element)
+    c.pointerDown(ptr(150, 125, { mod: true }))
+    c.pointerMove(ptr(190, 160, { mod: true }))
+    c.pointerUp(ptr(190, 160, { mod: true }))
+    expect(open).toHaveBeenCalledTimes(2)
+    expect(store.get(el.id)!.x).toBe(100)
+    // internal links also act on up
+    c.setLink(el.id, `#el:${target.id}`)
+    c.setSelection([])
+    c.pointerDown(ptr(150, 125, { mod: true }))
+    expect([...c.selectedIds.value]).toEqual([])
+    c.pointerUp(ptr(150, 125, { mod: true }))
+    expect([...c.selectedIds.value]).toEqual([target.id])
+  })
+
   it('external opens with noopener', () => {
     const open = vi.spyOn(window, 'open').mockReturnValue(null)
     expect(openLink('https://example.com/x', { focus: () => false })).toBe(true)
@@ -250,15 +283,43 @@ describe('StylePanel link input', () => {
     expect(w.find('.me-sketch-link-hint').text()).toBe(messages.en.style.linkInvalid)
     await input.setValue('https://example.org/x')
     await input.trigger('blur')
-    expect(w.emitted('link')).toEqual([['https://example.org/x']])
+    expect(w.emitted('link')).toEqual([['e1', 'https://example.org/x']])
     await nextTick()
     expect(w.find('.me-sketch-link-hint').exists()).toBe(false)
     await input.setValue('')
     await input.trigger('keydown', { key: 'Enter' })
-    expect(w.emitted('link')!.at(-1)).toEqual([''])
+    expect(w.emitted('link')!.at(-1)).toEqual(['e1', ''])
     for (const loc of ['vi', 'en'] as const) {
       for (const k of ['link', 'linkPlaceholder', 'linkInvalid'] as const) expect(messages[loc].style[k]).toBeTruthy()
     }
+    w.unmount()
+  })
+
+  it('commits the draft to the element it was typed for when the selection changes before blur', async () => {
+    const w = panel([el({ link: 'https://one.example/' })])
+    const input = () => w.find<HTMLInputElement>('[data-section="link"] input')
+    await input().trigger('focus')
+    await input().setValue('https://typed.example/')
+    // the selection moves on (keyboard, a peer, a programmatic select) before the field blurs
+    await w.setProps({ elements: [el({ id: 'e2', link: 'https://two.example/' })] })
+    expect(w.emitted('link')).toEqual([['e1', 'https://typed.example/']])
+    // the field now shows the new element's link; a blur sends nothing more
+    expect(input().element.value).toBe('https://two.example/')
+    await input().trigger('blur')
+    expect(w.emitted('link')).toHaveLength(1)
+    // an edit started now goes to e2
+    await input().setValue('mailto:x@example.com')
+    await input().trigger('blur')
+    expect(w.emitted('link')!.at(-1)).toEqual(['e2', 'mailto:x@example.com'])
+    // an invalid draft pending at a selection change is dropped, never sent
+    await input().setValue('javascript:alert(1)')
+    await w.setProps({ elements: [el({ id: 'e3' })] })
+    expect(w.emitted('link')).toHaveLength(2)
+    expect(w.find('.me-sketch-link-hint').exists()).toBe(false)
+    // Enter during IME composition does not commit
+    await input().setValue('https://ime.example/')
+    await input().trigger('keydown', { key: 'Enter', isComposing: true })
+    expect(w.emitted('link')).toHaveLength(2)
     w.unmount()
   })
 })

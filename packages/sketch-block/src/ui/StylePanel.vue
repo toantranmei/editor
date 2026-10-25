@@ -34,8 +34,11 @@ const emit = defineEmits<{
   group: []
   ungroup: []
   lock: []
-  /** New link of the single selected element ('' = remove); only allowed values are emitted. */
-  link: [value: string]
+  /**
+   * New link ('' = remove) of element `id`: the single selected element when the edit began, even if the selection
+   * changed before the commit. Only allowed values are emitted.
+   */
+  link: [id: string, value: string]
 }>()
 
 /** Element type each drawing tool creates. */
@@ -223,33 +226,55 @@ const allLocked = computed(() => props.elements.length > 0 && props.elements.eve
 const linkTarget = computed(() => (props.elements.length === 1 ? props.elements[0]! : null))
 const linkDraft = ref('')
 const linkInvalid = ref(false)
-// the field follows the selected element (and remote / undo changes of its link)
-watch(() => [linkTarget.value?.id, linkTarget.value?.link] as const, () => {
+/** The edit in progress: the element it targets and its link when the edit began (null = not editing). */
+let linkEdit: { id: string; original: string } | null = null
+
+/** Focus / first keystroke: the edit targets the element selected now. */
+function startLinkEdit(): void {
+  const el = linkTarget.value
+  if (el && !linkEdit) linkEdit = { id: el.id, original: el.link ?? '' }
+}
+
+// the field follows the selected element (and remote / undo changes of its link) unless that element is being edited
+watch(() => [linkTarget.value?.id, linkTarget.value?.link] as const, ([id]) => {
+  // the selection moved on mid-edit: the draft still goes to the element it was typed for
+  if (linkEdit && linkEdit.id !== id) commitLink(true)
+  if (linkEdit) return
   linkDraft.value = linkTarget.value?.link ?? ''
   linkInvalid.value = false
 }, { immediate: true })
 
-/** Blur / Enter: an allowed link (or '' to remove it) is emitted; anything else shows the hint and is not saved. */
-function commitLink(): void {
-  const el = linkTarget.value
-  if (!el) return
+/**
+ * Blur / Enter: an allowed link (or '' to remove it) is emitted for the edited element; anything else shows the
+ * hint and is not saved (the edit stays open to fix it). `flush` (the selection changed): an invalid draft is dropped.
+ */
+function commitLink(flush = false): void {
+  const edit = linkEdit
+  if (!edit) return
   const raw = linkDraft.value.trim()
   if (raw && !sanitizeLink(raw)) {
-    linkInvalid.value = true
+    if (flush) {
+      linkEdit = null
+      linkInvalid.value = false
+    } else {
+      linkInvalid.value = true
+    }
     return
   }
+  linkEdit = null
   linkInvalid.value = false
-  if (raw === (el.link ?? '')) return
-  emit('link', raw)
+  if (raw !== edit.original) emit('link', edit.id, raw)
 }
 
 function onLinkKey(e: KeyboardEvent): void {
+  if (e.isComposing || e.keyCode === 229) return
   if (e.key === 'Enter') {
     e.preventDefault()
     commitLink()
   } else if (e.key === 'Escape') {
     // back to the stored value
     e.preventDefault()
+    linkEdit = null
     linkDraft.value = linkTarget.value?.link ?? ''
     linkInvalid.value = false
     ;(e.target as HTMLInputElement).blur()
@@ -517,8 +542,10 @@ function onLinkKey(e: KeyboardEvent): void {
           spellcheck="false"
           autocomplete="off"
           maxlength="2048"
+          @focus="startLinkEdit"
+          @input="startLinkEdit"
           @keydown.stop="onLinkKey"
-          @blur="commitLink"
+          @blur="commitLink()"
         >
         <p v-if="linkInvalid" class="me-sketch-link-hint" role="alert">
           {{ m.linkInvalid }}
