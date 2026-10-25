@@ -4,11 +4,13 @@
  * Pans at the fitted zoom (LOD path at 5000 shapes) and at zoom 1 and 0.35 (bitmap path), and
  * records the post-settle rebuild after zooming ("settle max"). The same runs go over a board of
  * long pen strokes (200 points each), and a drag of a selection of shapes reports the frame time
- * while moving it.
+ * while moving it. A board of sticky notes with bound arrows (n stickies, n/2 arrows each bound to a pair)
+ * reports the frame time while dragging some of the bound stickies at zoom 1 (their arrows re-route each move).
  *
- *   pnpm bench:sketch                     # 1000 and 5000 shapes, 2000 pen strokes, drag 500 shapes
- *   pnpm bench:sketch -- --sizes=500,10000 --pen=4000 --drag=1000 --no-build
- *   pnpm bench:sketch -- --pen=0 --drag=0  # shapes only
+ *   pnpm bench:sketch                     # 1000 and 5000 shapes, 2000 pen strokes, drag 500 shapes,
+ *                                         # 1000 stickies + 500 bound arrows: drag 50 bound stickies
+ *   pnpm bench:sketch -- --sizes=500,10000 --pen=4000 --drag=1000 --sticky=2000 --drag-bound=100 --no-build
+ *   pnpm bench:sketch -- --pen=0 --drag=0 --sticky=0  # shapes only
  *
  * Builds the playground (production), serves it, and drives /sketch-bench with Playwright.
  * Uses the installed Google Chrome; otherwise run `pnpm exec playwright install chromium`.
@@ -22,6 +24,8 @@ const args = Object.fromEntries(process.argv.slice(2).map(a => a.replace(/^--/, 
 const sizes = (args.sizes ?? '1000,5000').split(',').map(Number)
 const penStrokes = Number(args.pen ?? 2000)
 const dragCount = Number(args.drag ?? 500)
+const stickyCount = Number(args.sticky ?? 1000)
+const boundDragCount = Number(args['drag-bound'] ?? 50)
 const port = Number(args.port ?? 3170)
 const playground = fileURLToPath(new URL('../apps/playground', import.meta.url))
 
@@ -178,16 +182,81 @@ async function measureDrag(page) {
   })
 }
 
+/**
+ * Runs in the page: sets zoom 1 at the board center, selects the `count` stickies nearest the center (each bound
+ * to an arrow), presses on the nearest one and drags the selection with one pointermove per animation frame.
+ * Returns the average and 95th percentile frame time, how many stickies moved and how many arrows changed.
+ */
+async function measureBoundDrag(page, count) {
+  return page.evaluate(async (count) => {
+    const { el, board } = window.__sketchBench
+    const canvas = el.querySelector('.me-sketch-canvas--interactive')
+    const rect = canvas.getBoundingClientRect()
+    const frame = () => new Promise(r => requestAnimationFrame(r))
+    const center = { clientX: rect.left + rect.width / 2, clientY: rect.top + rect.height / 2 }
+    const wheel = init => el.dispatchEvent(new WheelEvent('wheel', { ...center, bubbles: true, cancelable: true, ...init }))
+    // zoom 1 at the board center: clamp to the minimum (0.1), then one step × 10
+    wheel({ deltaY: 2000, ctrlKey: true })
+    wheel({ deltaY: -Math.log(10) / 0.01, ctrlKey: true })
+    await frame()
+    await new Promise(r => setTimeout(r, 400))
+    const all = board.getElements()
+    const mid = { x: rect.width / 2, y: rect.height / 2 }
+    const dist = (e) => {
+      const p = board.toScreen({ x: e.x + e.w / 2, y: e.y + e.h / 2 })
+      return Math.hypot(p.x - mid.x, p.y - mid.y)
+    }
+    const picked = all.filter(e => e.type === 'sticky').map(e => [e, dist(e)]).sort((a, b) => a[1] - b[1]).slice(0, count).map(([e]) => e)
+    const ids = new Set(picked.map(e => e.id))
+    const arrows = all.filter(e => e.type === 'arrow')
+    const bound = arrows.filter(a => ids.has(a.startBinding?.id) || ids.has(a.endBinding?.id)).length
+    const before = new Map(all.map(e => [e.id, JSON.stringify([e.x, e.y, e.w, e.h, e.points])]))
+    board.select(ids)
+    await frame()
+    const start = board.toScreen({ x: picked[0].x + picked[0].w / 2, y: picked[0].y + picked[0].h / 2 })
+    const at = (dx, dy) => ({ clientX: rect.left + start.x + dx, clientY: rect.top + start.y + dy })
+    const ptr = (type, dx, dy) => canvas.dispatchEvent(new PointerEvent(type, {
+      ...at(dx, dy), pointerId: 1, pointerType: 'mouse', button: 0, buttons: type === 'pointerup' ? 0 : 1,
+      isPrimary: true, bubbles: true, cancelable: true,
+    }))
+    ptr('pointerdown', 0, 0)
+    await frame()
+    const STEPS = 60
+    const stamps = [await frame()]
+    for (let i = 1; i <= STEPS; i++) {
+      ptr('pointermove', i * 3, i * 2)
+      stamps.push(await frame())
+    }
+    stamps.push(await frame())
+    ptr('pointerup', STEPS * 3, STEPS * 2)
+    await frame()
+    const deltas = stamps.slice(1).map((t, i) => t - stamps[i]).sort((a, b) => a - b)
+    const avg = deltas.reduce((a, b) => a + b, 0) / deltas.length
+    const after = board.getElements()
+    const changed = e => before.get(e.id) !== JSON.stringify([e.x, e.y, e.w, e.h, e.points])
+    return {
+      avg: +avg.toFixed(1),
+      p95: +deltas[Math.floor(deltas.length * 0.95)].toFixed(1),
+      fps: +(1000 / avg).toFixed(1),
+      moved: after.filter(e => ids.has(e.id) && changed(e)).length,
+      bound,
+      rerouted: after.filter(e => e.type === 'arrow' && changed(e)).length,
+      zoom: el.querySelector('.me-sketch-zoom-pct')?.textContent?.trim() ?? '?',
+    }
+  }, count)
+}
+
 /** Opens the bench page and waits for the board's first frame; records the load timings. */
 async function openBoard(browser, n, kind, loads) {
   const page = await browser.newPage({ viewport: { width: 1280, height: 900 } })
+  const label = kind === 'sticky' ? `${n} stickies + ${Math.floor(n / 2)} bound arrows` : `${n} ${kind}`
   await page.goto(`http://localhost:${port}/sketch-bench?n=${n}&kind=${kind}`)
   await page.waitForFunction(() => window.__sketchBench?.firstFrameAt, null, { timeout: 300_000 })
   const { fillMs, firstFrameMs } = await page.evaluate(() => ({
     fillMs: Math.round(window.__sketchBench.fillMs),
     firstFrameMs: Math.round(window.__sketchBench.firstFrameAt - window.__sketchBench.mountStart),
   }))
-  loads.push({ board: `${n} ${kind}`, 'fill (ms)': fillMs, 'first frame (ms)': firstFrameMs })
+  loads.push({ board: label, 'fill (ms)': fillMs, 'first frame (ms)': firstFrameMs })
   return page
 }
 
@@ -214,6 +283,13 @@ if (dragCount > 0) {
   drag = await measureDrag(page)
   await page.close()
 }
+let boundDrag = null
+if (stickyCount > 0 && boundDragCount > 0) {
+  const page = await openBoard(browser, stickyCount, 'sticky', loads)
+  await page.waitForTimeout(500)
+  boundDrag = await measureBoundDrag(page, boundDragCount)
+  await page.close()
+}
 await browser.close()
 stop()
 
@@ -227,6 +303,17 @@ if (drag) {
   console.table([{ selected: dragCount, 'zoom (shown)': drag.zoom, 'avg frame (ms)': drag.avg, 'p95 (ms)': drag.p95, fps: drag.fps, moved: drag.moved }])
   if (drag.moved !== dragCount) {
     console.error(`drag moved ${drag.moved} of ${dragCount} elements`)
+    process.exitCode = 1
+  }
+}
+if (boundDrag) {
+  console.log(`\nBound drag: ${stickyCount} stickies + ${Math.floor(stickyCount / 2)} bound arrows; the ${boundDragCount} stickies nearest the view center selected, dragged at zoom 1, one pointermove per frame (60 frames).`)
+  console.table([{
+    selected: boundDragCount, 'bound arrows': boundDrag.bound, 'zoom (shown)': boundDrag.zoom, 'avg frame (ms)': boundDrag.avg,
+    'p95 (ms)': boundDrag.p95, fps: boundDrag.fps, moved: boundDrag.moved, 'arrows re-routed': boundDrag.rerouted,
+  }])
+  if (boundDrag.moved !== boundDragCount || boundDrag.rerouted !== boundDrag.bound) {
+    console.error(`bound drag moved ${boundDrag.moved} of ${boundDragCount} stickies and re-routed ${boundDrag.rerouted} of ${boundDrag.bound} bound arrows`)
     process.exitCode = 1
   }
 }

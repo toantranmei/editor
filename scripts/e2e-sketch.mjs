@@ -4,7 +4,10 @@
  * 1. insert via the slash menu → draw a rectangle and an ellipse → preview image → reload →
  *    preview still there and the board still holds both shapes;
  * 2. on a new block: a pen stroke, an arrow and the text "Xin chào" → the SVG preview holds the
- *    stroke path and the text → reload → 3 elements → copy + paste (mod+C / mod+V) → 6 elements.
+ *    stroke path and the text → reload → 3 elements → copy + paste (mod+C / mod+V) → 6 elements;
+ * 3. M2: two sticky notes (S, click, type, Tab) → two rects and an arrow bound to both → moving a rect moves the
+ *    arrow endpoint → a frame around a rect, moving the frame moves the rect → mod+G groups → preview → reload
+ *    keeps the elements, bindings, frame and group.
  *
  *   pnpm e2e:sketch
  *   pnpm e2e:sketch -- --port=3161 --headed
@@ -83,6 +86,18 @@ async function drag(page, x, y, dx, dy) {
   await page.mouse.down()
   for (let i = 1; i <= 8; i++) await page.mouse.move(box.x + x + (dx * i) / 8, box.y + y + (dy * i) / 8)
   await page.mouse.up()
+}
+
+/** Waits until the board canvas stops moving (the page may still be scrolling after an editor closed). */
+async function settle(page) {
+  const canvas = page.locator('.me-sketch .me-sketch-canvas--interactive')
+  let prev = JSON.stringify(await canvas.boundingBox())
+  for (let i = 0; i < 20; i++) {
+    await page.waitForTimeout(150)
+    const next = JSON.stringify(await canvas.boundingBox())
+    if (next === prev) return
+    prev = next
+  }
 }
 
 /** Presses Escape until the board is gone (commit text, clear the selection, leave). */
@@ -234,6 +249,125 @@ try {
 
   check(errors.length === 0, `page errors: ${errors.join(' | ')}`)
   await ctx2.close()
+
+  // --- M2: sticky notes, arrow binding, frames, groups ----------------------------------
+  const ctx3 = await browser.newContext({ viewport: { width: 1280, height: 900 } })
+  const page3 = await ctx3.newPage()
+  page3.on('pageerror', e => errors.push(e.message))
+  const els = () => page3.evaluate(() => window.__sketchDebug.getElements())
+  const byId = async id => (await els()).find(e => e.id === id)
+  /** Scene point → px relative to the board canvas' top-left corner (what `drag` takes). */
+  const toScreen = p => page3.evaluate(p => window.__sketchDebug.toScreen(p), p)
+  /** Scene end point of a linear element (its last point). */
+  const endOf = el => ({ x: el.x + el.points.at(-1)[0], y: el.y + el.points.at(-1)[1] })
+
+  step = 'M2: sticky (s, click, type "Ghi chú", Tab → the next sticky)'
+  await insertSketch(page3)
+  await page3.locator('.me-sketch').getByRole('button', { name: INTERACT }).click()
+  await page3.locator('.me-sketch .me-sketch-board').waitFor()
+  await page3.keyboard.press('s')
+  const box3 = await page3.locator('.me-sketch .me-sketch-canvas--interactive').boundingBox()
+  await page3.mouse.click(box3.x + 380, box3.y + 220)
+  const editor = page3.locator('.me-sketch-text-editor')
+  await editor.waitFor()
+  await page3.keyboard.type('Ghi chú')
+  await page3.keyboard.press('Tab')
+  await page3.waitForFunction(() => window.__sketchDebug.getElements().filter(e => e.type === 'sticky').length === 2, null, { timeout: 5_000 })
+    .catch(async () => {
+      throw new Error(`expected 2 stickies after Tab, found ${(await els()).filter(e => e.type === 'sticky').length}`)
+    })
+  await editor.waitFor()
+  await page3.keyboard.type('Tiếp')
+  await page3.keyboard.press('Escape') // commits the text
+  await editor.waitFor({ state: 'detached' })
+  const stickyTexts = (await els()).filter(e => e.type === 'sticky').map(e => e.text).sort().join('|')
+  check(stickyTexts === 'Ghi chú|Tiếp', `sticky texts: ${stickyTexts}`)
+
+  step = 'M2: clear the board'
+  await page3.keyboard.press('ControlOrMeta+a')
+  await page3.keyboard.press('Delete')
+  check((await els()).length === 0, `expected an empty board, found ${(await els()).length} elements`)
+
+  step = 'M2: two rects and an arrow bound to both'
+  await settle(page3)
+  await page3.keyboard.press('r')
+  await drag(page3, 260, 120, 100, 80)
+  await page3.keyboard.press('r')
+  await drag(page3, 460, 120, 100, 80)
+  const rects = (await els()).filter(e => e.type === 'rectangle').sort((a, b) => a.x - b.x)
+  check(rects.length === 2, `expected 2 rectangles, found ${rects.length}`)
+  const [rectA, rectB] = rects
+  const aRight = await toScreen({ x: rectA.x + rectA.w - 6, y: rectA.y + rectA.h / 2 })
+  const bLeft = await toScreen({ x: rectB.x + 6, y: rectB.y + rectB.h / 2 })
+  await page3.keyboard.press('a')
+  await drag(page3, aRight.x, aRight.y, bLeft.x - aRight.x, bLeft.y - aRight.y)
+  const arrow = (await els()).find(e => e.type === 'arrow')
+  check(arrow, 'no arrow drawn')
+  check(arrow.startBinding?.id === rectA.id && arrow.endBinding?.id === rectB.id,
+    `arrow bindings: ${JSON.stringify([arrow.startBinding, arrow.endBinding])}`)
+
+  step = 'M2: moving the end rect moves the arrow endpoint'
+  await page3.keyboard.press('v')
+  // press on B's top edge (an unfilled shape is hit on its outline)
+  const bTop = await toScreen({ x: rectB.x + rectB.w / 2, y: rectB.y })
+  await drag(page3, bTop.x, bTop.y, 40, 140)
+  const movedB = await byId(rectB.id)
+  check(movedB.y - rectB.y > 100, `rect B did not move (dy ${movedB.y - rectB.y})`)
+  const arrowAfter = await byId(arrow.id)
+  const endBefore = endOf(arrow)
+  const endAfter = endOf(arrowAfter)
+  check(endAfter.y - endBefore.y > 100, `arrow endpoint did not follow rect B (dy ${endAfter.y - endBefore.y})`)
+  check(arrowAfter.endBinding?.id === rectB.id, 'arrow lost its end binding')
+
+  step = 'M2: a frame around rect A takes it in; moving the frame moves the rect'
+  const fTopLeft = await toScreen({ x: rectA.x - 30, y: rectA.y - 30 })
+  const fBottomRight = await toScreen({ x: rectA.x + rectA.w + 30, y: rectA.y + rectA.h + 30 })
+  await page3.keyboard.press('f')
+  await drag(page3, fTopLeft.x, fTopLeft.y, fBottomRight.x - fTopLeft.x, fBottomRight.y - fTopLeft.y)
+  const frame = (await els()).find(e => e.type === 'frame')
+  check(frame, 'no frame drawn')
+  check((await byId(rectA.id)).frameId === frame.id, `rect A frameId is ${(await byId(rectA.id)).frameId}`)
+  await page3.keyboard.press('v')
+  // press on the frame's bottom border (its inside is click-through), away from the resize handles
+  const fBorder = await toScreen({ x: frame.x + frame.w / 4, y: frame.y + frame.h })
+  const aBefore = await byId(rectA.id)
+  await drag(page3, fBorder.x, fBorder.y, 0, 120)
+  const frameAfter = await byId(frame.id)
+  const aAfter = await byId(rectA.id)
+  const fdy = frameAfter.y - frame.y
+  check(fdy > 80, `frame did not move (dy ${fdy})`)
+  check(Math.abs((aAfter.y - aBefore.y) - fdy) < 0.01 && Math.abs((aAfter.x - aBefore.x) - (frameAfter.x - frame.x)) < 0.01,
+    `rect A did not move with the frame (frame dy ${fdy}, rect dy ${aAfter.y - aBefore.y})`)
+
+  step = 'M2: mod+g groups the selection'
+  await page3.keyboard.press('ControlOrMeta+a')
+  await page3.keyboard.press('ControlOrMeta+g')
+  const grouped = await els()
+  const gid = grouped[0]?.groupIds?.at(-1)
+  check(gid && grouped.every(e => e.groupIds.at(-1) === gid), `not one group: ${JSON.stringify(grouped.map(e => e.groupIds))}`)
+  const m2Count = grouped.length // 2 rects, the arrow, the frame
+
+  step = 'M2: leave; the preview is visible'
+  await leaveBoard(page3)
+  await page3.locator('.me-sketch img[src^="data:image/svg+xml"]').waitFor({ state: 'visible', timeout: 10_000 })
+
+  step = 'M2: reload keeps the elements, the binding, the frame and the group'
+  await page3.waitForTimeout(1500)
+  await page3.reload()
+  await page3.locator('.me-sketch img[src^="data:image/svg+xml"]').waitFor({ state: 'visible', timeout: 30_000 })
+  await page3.locator('.me-sketch').getByRole('button', { name: INTERACT }).click()
+  await page3.waitForFunction(n => window.__sketchDebug?.getElements().length === n, m2Count, { timeout: 15_000 })
+    .catch(async () => {
+      throw new Error(`expected ${m2Count} elements after reload, found ${await elementCount(page3)}`)
+    })
+  const reloaded = await els()
+  const ra = reloaded.find(e => e.id === arrow.id)
+  check(ra?.startBinding?.id === rectA.id && ra?.endBinding?.id === rectB.id, 'arrow bindings lost on reload')
+  check(reloaded.find(e => e.id === rectA.id)?.frameId === frame.id, 'frame membership lost on reload')
+  check(reloaded.every(e => e.groupIds.at(-1) === gid), 'group lost on reload')
+
+  check(errors.length === 0, `page errors: ${errors.join(' | ')}`)
+  await ctx3.close()
   console.log('e2e:sketch PASS')
 }
 catch (err) {

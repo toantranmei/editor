@@ -151,10 +151,14 @@ function pick(shape: ShapeType): void {
   emit('pickShape', shape)
 }
 
-/** Focus moving out of the popover (Tab, a click elsewhere) closes it. */
+/**
+ * Focus moving out of the toolbar (Tab past it, a click elsewhere) closes the popover. Focus moving to a toolbar
+ * button is left to that button's click: on the shapes button it toggles the popover closed (closing here first
+ * would make that click reopen it).
+ */
 function onFocusOut(e: FocusEvent): void {
   const next = e.relatedTarget
-  if (next instanceof Node && popover.value?.contains(next)) return
+  if (next instanceof Node && wrap.value?.contains(next)) return
   open.value = false
 }
 

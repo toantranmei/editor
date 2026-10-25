@@ -17,10 +17,12 @@ import { newBoardId, SKETCH_MAX_HEIGHT, SKETCH_MIN_HEIGHT, type SketchOptions } 
 
 type Engine = typeof import('../engine')
 type BoardSession = import('../engine').BoardSession
-interface BoardHandle { getElements(): readonly SketchElement[], fit(): void }
+interface BoardHandle { getElements(): readonly SketchElement[], fit(): void, toScreen(p: { x: number, y: number }): { x: number, y: number } }
 
 declare global {
-  interface Window { __sketchDebug?: { getElements(): readonly SketchElement[] } }
+  interface Window {
+    __sketchDebug?: { getElements(): readonly SketchElement[], toScreen(p: { x: number, y: number }): { x: number, y: number } }
+  }
 }
 
 const SAVE_DELAY = 2000
@@ -288,7 +290,7 @@ async function save(elements: readonly SketchElement[] | null) {
 // --- Debug hook for e2e tests ----------------------------------------------------
 if (import.meta.env.DEV) {
   watch(board, (b) => {
-    if (b && typeof window !== 'undefined') window.__sketchDebug = { getElements: () => b.getElements() }
+    if (b && typeof window !== 'undefined') window.__sketchDebug = { getElements: () => b.getElements(), toScreen: p => b.toScreen(p) }
   })
 }
 

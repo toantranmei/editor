@@ -707,6 +707,8 @@ defineExpose({
   fit,
   /** Selects every element (as mod+A). */
   selectAll: (): void => controller.selectAll(),
+  /** Selects the elements with these ids (as a click / marquee would; groups are not expanded). */
+  select: (ids: Iterable<string>): void => controller.setSelection(ids),
   /** Scene point → px relative to the board canvas' top-left corner. */
   toScreen: (p: Point): Point => viewport.toScreen(p),
   /** Opens the image file picker; the chosen images are inserted at the view center. */

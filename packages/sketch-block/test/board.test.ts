@@ -185,6 +185,21 @@ describe('SketchBoard', () => {
     expect(popover().exists()).toBe(false)
   })
 
+  it('clicking the shapes button while the popover is open closes it (focusout to the button does not reopen it)', async () => {
+    const { wrapper } = await setup()
+    const popover = () => wrapper.find('.me-sketch-shapes')
+    const shapesBtn = () => wrapper.find('[data-tool="shapes"]')
+    await shapesBtn().trigger('click')
+    await nextTick()
+    expect(popover().exists()).toBe(true)
+    // a real click: focus leaves the focused cell for the shapes button, then the click fires
+    await popover().find('button[data-shape]').trigger('focusout', { relatedTarget: shapesBtn().element })
+    expect(popover().exists()).toBe(true)
+    await shapesBtn().trigger('click')
+    expect(popover().exists()).toBe(false)
+    expect(shapesBtn().attributes('aria-expanded')).toBe('false')
+  })
+
   it('a gesture on the board blocks native drag-and-drop of a draggable ancestor (the block node view)', async () => {
     const { pointer, store } = await setup()
     const dragstart = () => {
