@@ -126,13 +126,14 @@ describe('quick flowchart creation', () => {
     expect(store.get([...c.selectedIds.value][0]!)).toMatchObject({ x: 180, y: 1000 })
   })
 
-  it('ignored with 0 or 2 selected', () => {
+  it('ignored with 0 or 2 selected (but still claimed, so the browser never navigates)', () => {
     const { store, c } = setup()
     const a = rect(store, 0, 0)
     const b = rect(store, 0, 500)
-    expect(c.keyDown(modKey('ArrowRight'))).toBe(false)
+    expect(c.keyDown(modKey('ArrowLeft'))).toBe(true)
+    expect(c.keyDown(modKey('ArrowRight'))).toBe(true)
     c.setSelection([a.id, b.id])
-    expect(c.keyDown(modKey('ArrowRight'))).toBe(false)
+    expect(c.keyDown(modKey('ArrowRight'))).toBe(true)
     expect(store.all()).toHaveLength(2)
     // and the selection was not nudged either
     expect(store.get(a.id)).toMatchObject({ x: 0, y: 0 })
@@ -156,8 +157,18 @@ describe('quick flowchart creation', () => {
     const ro = setup(true)
     const r2 = rect(ro.store, 0, 0)
     ro.c.setSelection([r2.id])
-    expect(ro.c.keyDown(modKey('ArrowRight'))).toBe(false)
+    // claimed (no browser back) but nothing is created
+    expect(ro.c.keyDown(modKey('ArrowRight'))).toBe(true)
     expect(ro.store.all()).toHaveLength(1)
+  })
+
+  it('Alt+Arrow is claimed even with nothing selected or read-only (Alt+Left is browser back)', () => {
+    const { c } = setup()
+    const alt = (key: string) => ({ key, mod: false, shift: false, alt: true })
+    expect(c.keyDown(alt('ArrowLeft'))).toBe(true)
+    expect(setup(true).c.keyDown(alt('ArrowRight'))).toBe(true)
+    // a plain arrow with nothing selected stays unclaimed (page scroll)
+    expect(c.keyDown({ key: 'ArrowDown', mod: false, shift: false, alt: false })).toBe(false)
   })
 
   it('plain arrows still nudge', () => {

@@ -565,9 +565,13 @@ export class ToolController implements ToolHost {
     if ((k === 'Tab' && !e.mod && !e.alt && !e.shift) || (k === 'Enter' && e.mod && !e.alt && !e.shift)) {
       if (!ro && this.quickCreateSticky()) return true
     }
-    // quick flowchart (before the mod guard): mod+Arrow → a bound copy of the single selected shape / sticky
+    // quick flowchart (before the mod guard): mod+Arrow → a bound copy of the single selected shape / sticky.
+    // Claimed even when it does not apply, so the browser never navigates back / forward from the board
     const quick = e.mod && !e.alt && !e.shift ? QUICK_KEYS[k] : undefined
-    if (quick) return !ro && this.quickCreate(quick)
+    if (quick) {
+      if (!ro) this.quickCreate(quick)
+      return true
+    }
     if (e.mod) {
       if (e.alt && e.code === 'KeyC') {
         return this.copyStyle()
@@ -646,7 +650,8 @@ export class ToolController implements ToolHost {
     }
     const dir = NUDGE[k]
     if (dir) {
-      if (ro || !this.selectedIds.value.size) return false
+      // Alt+Arrow is browser back / forward: claimed even when nothing moves
+      if (ro || !this.selectedIds.value.size) return !!e.alt
       const step = e.shift ? 10 : 1
       this.nudge(dir[0] * step, dir[1] * step)
       return true
