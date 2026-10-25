@@ -1,5 +1,11 @@
 # @toantranmei/sketch-block
 
+## 0.1.1
+
+### Patch Changes
+
+- c637b36: Presence: strip zero-width and other invisible characters from collaborator names, so a name can't render as a blank tag.
+
 ## 0.1.0
 
 ### Minor Changes

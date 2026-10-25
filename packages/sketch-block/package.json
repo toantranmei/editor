@@ -1,6 +1,6 @@
 {
   "name": "@toantranmei/sketch-block",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Optional whiteboard block for @toantranmei/editor.",
   "keywords": [
     "vue",
