@@ -241,8 +241,9 @@ Boards are Yjs documents, so concurrent edits merge without conflicts. A few thi
   element at the same time, one side's grouping is kept.
 - **Derived data is repaired.** An arrow's geometry follows the shapes it is bound to, and an element's frame follows
   where it is. When concurrent edits merge into a state nobody wrote (an arrow bound to a shape a peer moved, a
-  child of a frame a peer deleted), every client recomputes it the same way, so all peers converge. Repairs are not
-  undo steps.
+  child of a frame a peer deleted), every client recomputes it the same way, so all peers converge. A board is also
+  checked once when it opens (a server state merged with offline edits) and when a read-only board becomes
+  editable. Repairs are not undo steps.
 - **Undo is local:** `Ctrl/⌘ + Z` undoes only your own edits, never a collaborator's.
 
 ### Custom provider

@@ -1,6 +1,6 @@
 // Heavy part of the package (roughjs, rbush, board UI). Loaded lazily by the node view.
-import { type Ref, ref, toRaw } from 'vue'
-import { installRepair } from './collab/repair'
+import { type Ref, ref, toRaw, watch } from 'vue'
+import { installRepair, repair } from './collab/repair'
 import { History } from './model/history'
 import { Scene } from './model/scene'
 import { BoardStore } from './model/store'
@@ -50,6 +50,15 @@ export function createBoardSession(connection: BoardConnection): BoardSession {
   // one repair observer per session (the inline and fullscreen boards share it)
   const uninstallRepair = installRepair(store, scene, { canWrite: () => canWrite.value })
   let destroyed = false
+  // The provider's load (server state merged with an offline cache) came in before the observer: one full pass on
+  // the next microtask, and again whenever the board becomes writable (changes seen while read-only were dropped).
+  const repairAll = () => {
+    if (!destroyed && canWrite.value) repair(store, scene, store.all().map(el => el.id))
+  }
+  queueMicrotask(repairAll)
+  const stopWritable = watch(canWrite, (now, before) => {
+    if (now && !before) queueMicrotask(repairAll)
+  }, { flush: 'sync' })
   return {
     store,
     scene,
@@ -63,6 +72,7 @@ export function createBoardSession(connection: BoardConnection): BoardSession {
     destroy() {
       if (destroyed) return
       destroyed = true
+      stopWritable()
       uninstallRepair()
       history.destroy()
       scene.destroy()
