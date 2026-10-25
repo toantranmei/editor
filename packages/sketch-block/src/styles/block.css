@@ -1,0 +1,93 @@
+/*
+ * Sketch block in the document (preview, cover, notice, fullscreen modal).
+ * Only var(--me-…) tokens from @toantranmei/editor; mirrors the HTML block.
+ */
+@layer mei-editor {
+  .me-sketch { margin: var(--me-block-box-spacing) 0; }
+  .me-sketch-frame {
+    position: relative;
+    border-radius: var(--me-box-radius);
+    background: var(--me-box-bg);
+  }
+  .me-sketch-bar { padding-bottom: var(--me-space-2); }
+  .me-sketch-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* Connection status dot (networked providers): green online / saved, amber connecting / saving, grey offline,
+     red error. */
+  .me-sketch-status {
+    flex: none;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #868e96;
+  }
+  .me-sketch-status.is-online, .me-sketch-status.is-saved { background: #2f9e44; }
+  .me-sketch-status.is-connecting, .me-sketch-status.is-saving { background: #f08c00; }
+  .me-sketch-status.is-error { background: var(--me-color-danger, #e03131); }
+  .me-sketch-loading { font-size: var(--me-font-size-xs); color: var(--me-color-text-muted); }
+  .me-sketch-error { padding: 0 var(--me-space-5) var(--me-space-2); }
+  .me-sketch-notice {
+    margin: 0;
+    padding: var(--me-space-2) var(--me-space-5);
+    font-size: var(--me-font-size-xs);
+    color: var(--me-color-text-muted);
+  }
+
+  .me-sketch-body {
+    position: relative;
+    overflow: hidden;
+    border-top: var(--me-border-width-thin) solid var(--me-box-border);
+    border-radius: 0 0 var(--me-box-radius) var(--me-box-radius);
+    background: var(--me-color-bg);
+  }
+  .me-sketch-preview {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    user-select: none;
+    -webkit-user-drag: none;
+  }
+  /* An SVG preview is exported in the light theme (dark strokes, no background); in a dark
+     editor invert it, keeping hues, as Excalidraw does with its dark mode. A raster preview (a
+     board with images: WebP / JPEG) is a white card and is left alone, so photos are not inverted. */
+  html.dark .me-scope:not(.me-light) .me-sketch-preview[src^="data:image/svg+xml"],
+  html.dark .me-scope:not(.me-light) .me-sketch-preview[src$=".svg"],
+  .me-scope.me-dark .me-sketch-preview[src^="data:image/svg+xml"],
+  .me-scope.me-dark .me-sketch-preview[src$=".svg"] {
+    filter: invert(1) hue-rotate(180deg);
+  }
+  .me-sketch-empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    margin: 0;
+    font-size: var(--me-font-size-xs);
+    color: var(--me-color-text-muted);
+  }
+  /* Until "Interact", clicks and wheel go to the page, not the board. */
+  .me-sketch-cover {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--me-html-cover-bg);
+    opacity: 0;
+    transition: opacity var(--me-duration-fast);
+  }
+  .me-sketch-body:hover .me-sketch-cover, .me-sketch-cover:focus-within { opacity: 1; }
+
+  /* Full-screen view */
+  .me-sketch-modal { position: fixed; inset: 0; z-index: 70; display: flex; padding: var(--me-modal-inset); background: var(--me-modal-backdrop); }
+  .me-sketch-modal-panel {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    overflow: hidden;
+    border-radius: var(--me-box-radius);
+    background: var(--me-color-bg);
+    box-shadow: var(--me-popover-shadow);
+  }
+  .me-sketch-modal-body { position: relative; flex: 1; min-height: 0; border-top: var(--me-border-width-thin) solid var(--me-box-border); }
+}

@@ -50,4 +50,9 @@ export {
 } from './theme'
 export { en, locales, resolveMessages, vi, type BlockGroup, type EditorMessages, type LocaleName, type PartialMessages } from './locale'
 
+export { blockNodeView } from './nodeviews/renderer'
+export { useClickOutside } from './composables/useClickOutside'
+export { useEditable } from './composables/useEditable'
+export { useScope } from './composables/useScope'
+
 export type { Editor, JSONContent } from '@tiptap/vue-3'

@@ -8,14 +8,20 @@
   },
   "scripts": {
     "dev": "pnpm --filter playground dev",
-    "build": "pnpm --filter @toantranmei/editor build",
+    "build": "pnpm -r --filter './packages/*' build",
     "build:playground": "pnpm --filter playground build",
     "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r --if-present test",
+    "dev:sketch": "pnpm --filter @toantranmei/sketch-block dev",
+    "sync": "HOST=localhost PORT=1234 pnpm --filter playground exec y-websocket",
     "pack:editor": "pnpm --filter @toantranmei/editor build && pnpm --filter @toantranmei/editor pack --pack-destination dist",
     "changeset": "changeset",
     "version-packages": "changeset version",
     "release": "pnpm build && changeset publish",
-    "bench": "node scripts/bench.mjs"
+    "bench": "node scripts/bench.mjs",
+    "e2e:sketch": "node scripts/e2e-sketch.mjs",
+    "e2e:sketch:collab": "node scripts/e2e-sketch-collab.mjs",
+    "bench:sketch": "node scripts/bench-sketch.mjs"
   },
   "devDependencies": {
     "@changesets/cli": "^3.0.3",

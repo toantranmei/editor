@@ -11,13 +11,17 @@
   },
   "dependencies": {
     "@toantranmei/editor": "workspace:*",
+    "@toantranmei/sketch-block": "workspace:*",
+    "fractional-indexing": "4.0.0",
     "katex": "^0.19.1",
     "mermaid": "^12.2.0",
     "nuxt": "^4.6.2",
-    "vue": "^3.5.0"
+    "vue": "^3.5.0",
+    "yjs": "^13.6.0"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.3",
+    "@y/websocket-server": "0.1.5",
     "tailwindcss": "^4.3.3",
     "typescript": "~5.9.3",
     "vue-tsc": "^3.0.0"
