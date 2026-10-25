@@ -151,8 +151,13 @@ sketch.configure({ provider: api })
 ## Storage
 
 - **The document** stores only `{ boardId, preview, height, version }` on the `sketch` node, never the
-  drawing itself. `preview` is an SVG data URL (a PNG up to 1200 px wide when the SVG is over 150 KB),
-  or the URL returned by `savePreview`. Read-only editors and exported HTML show this image.
+  drawing itself. `preview` is an image data URL, or the URL returned by `savePreview`. Read-only editors
+  and exported HTML show this image:
+  - **Boards without images:** an SVG (a PNG up to 1200 px wide when the SVG is over 150 KB). In a dark editor
+    the SVG is inverted (keeping hues), so strokes stay readable.
+  - **Boards with images:** the board is drawn onto a canvas (up to 1200 px wide) and encoded as WebP at
+    quality 0.85, or JPEG 0.85 in browsers that cannot encode WebP. It is a white card in both themes (never
+    inverted, so photos keep their colors).
 - **The board** lives in the provider. With the default IndexedDB provider it is stored **per browser
   and device**: the same document opened on another device (or after clearing site data) shows the
   preview, and the board opens empty with a "not available on this device" notice. Use a custom
@@ -238,6 +243,10 @@ arrows. `Esc` closes the popover; clicking the shapes button again closes it too
   the board. SVG files are not accepted.
 - **Where images are stored:** the provider's `uploadImage`, else the editor's `uploadImage` option, else the
   image is stored in the board as a data URL.
+- **CORS:** the URLs returned by `uploadImage` should be served with CORS headers
+  (`Access-Control-Allow-Origin` for the editor's origin). The board shows them either way, but the preview is
+  drawn on a canvas: an image without CORS headers would taint it, so the preview shows a placeholder in its
+  place.
 - **Data-URL fallback:** the image is scaled down to at most 2048 px on its long edge and re-encoded (JPEG at
   quality 0.85, or PNG when it has transparency). Images still over 4 MB after that are refused with an inline
   message. Set an uploader for large or many images.
@@ -301,7 +310,11 @@ distribute (horizontally, vertically; 3 or more) buttons. Each is one undo step.
 - `Ctrl/⌘ + C`, `X`, `V` copy, cut and paste the selection through the system clipboard (as JSON text), so
   elements can move between boards and tabs. Pasted elements land at the pointer (or next to the
   originals), with new ids.
-- Pasting plain text creates a text element.
+- **Size limit:** a copied selection may be up to 24 million characters of JSON (images stored as data URLs
+  count in full). Over that, copy and paste show an inline "too large" message and nothing is copied or
+  pasted; use an image uploader to keep boards with many images small. Text from other apps is ignored above
+  2 million characters.
+- Pasting plain text creates a text element (cut to 10,000 characters).
 - `Ctrl/⌘ + D` duplicates the selection.
 - `Ctrl/⌘ + Alt + C` copies the style of the selected element; `Ctrl/⌘ + Alt + V` applies it to the selection.
 
