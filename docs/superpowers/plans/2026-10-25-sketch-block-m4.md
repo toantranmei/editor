@@ -74,6 +74,29 @@
   - (f) Interactive-layer knockout LRU bounded by pixels.
   - (g) Bench: report sync handler time and per-frame long-task count (PerformanceObserver `longtask`), not only rAF fps.
 
+## Notes from the M3 final review (binding)
+- Centralize the networked inline-image limit in the controller's insert/paste path (`pasteElements`/`insert`), not only in `prepareImage`. Library items, templates and `.excalidraw` import all pass through it.
+  - For Excalidraw data-URL images on a networked board that has an uploader, convert the data URL to a `File`, upload it, then insert.
+  - Otherwise skip the image and count it in `skipped`.
+- Pass the image resolver explicitly through the kinds' draw options instead of relying on the module-global `current`. Every new draw path (PNG export, minimap, offscreen) must use it.
+  - Test: a src blocked by the resolver is never requested by any M4 path.
+- Links in M4:
+  - SVG `<a>` uses only sanitized external links; `#el:` links are dropped or mapped to in-SVG anchors.
+  - Library items drop `#el:` links whose target isn't in the item.
+  - The Excalidraw mapping passes `link` through `sanitizeLink`.
+  - Add a "Copy link to element" context action (copies `#el:<id>`) so internal links are discoverable.
+- Minimap: subscribe to `session.scene`, unsubscribe on unmount, keep state on BoardSession, and draw peers' viewport rectangles from presence.
+- Perf pass additions:
+  - item (c) caches the whole `normalizeElement` result;
+  - repair's `frameIdPatches` full scan runs only when a changed id was a frame or was deleted;
+  - add a relay-based "remote drag receiver" bench scenario;
+  - repairer election (lowest writable awareness clientID with jitter) cuts duplicate repair writes across peers.
+- Other fold-ins:
+  - republish the cursor from the last screen position after wheel/pan;
+  - drive `session.canWrite` from SketchView `editable` even while no board is mounted;
+  - assert the clone test spy;
+  - harden e2e port checks and kill with SIGKILL as a fallback.
+
 ## Review Focus
 1. Export of huge or empty selections:
    - An empty scope disables the export item.
