@@ -10,6 +10,7 @@ import { messages, sketch, SKETCH_NODE, SketchNode, type SketchProvider } from '
 import { BoardStore } from '../src/model/store'
 import { DEFAULT_STYLE } from '../src/model/types'
 import { memory } from '../src/providers/memory'
+import type { SketchOptions } from '../src/block/node'
 import type { BoardConnection } from '../src/providers/types'
 import { stubCanvas, stubFrames } from './helpers/canvas'
 
@@ -57,6 +58,7 @@ function recording(base: SketchProvider = memory()) {
 
 interface SetupOpts {
   provider?: SketchProvider
+  user?: SketchOptions['user']
   attrs?: Record<string, unknown>
   editable?: boolean
   config?: Parameters<typeof MeiConfig.configure>[0]
@@ -64,7 +66,7 @@ interface SetupOpts {
 }
 
 async function setup(opts: SetupOpts = {}) {
-  const block = sketch.configure({ provider: opts.provider ?? memory() })
+  const block = sketch.configure({ provider: opts.provider ?? memory(), ...(opts.user !== undefined ? { user: opts.user } : {}) })
   const editor = new Editor({
     extensions: [Doc, Paragraph, Text, History, MeiConfig.configure(opts.config ?? {}), ...block.extensions],
     editable: opts.editable ?? true,
@@ -370,6 +372,21 @@ describe('sketch block', () => {
     const c = await setup({ attrs })
     await enter(c.wrapper)
     expect(uploaderOf(c.wrapper)).toBeNull()
+  })
+
+  it('passes the user option to the board', async () => {
+    const attrs = { boardId: 'bd_x', preview: null, height: null, version: 0 }
+    const userOf = () => (document.querySelector('.me-sketch-board') as unknown as { __vueParentComponent: { props: Record<string, unknown> } })
+      .__vueParentComponent.props.user
+    const user = () => ({ name: 'Ann', color: '#2f9e44' })
+    const a = await setup({ attrs, user })
+    await enter(a.wrapper)
+    expect(userOf()).toBe(user)
+    a.editor.destroy()
+    await settle()
+    const b = await setup({ attrs })
+    await enter(b.wrapper)
+    expect(userOf()).toBeNull()
   })
 
   it('follows the app dark class unless the editor scope forces light', async () => {

@@ -2,6 +2,7 @@ import { Node } from '@tiptap/core'
 import { Plugin, PluginKey } from '@tiptap/pm/state'
 import { blockNodeView } from '@toantranmei/editor'
 import { nanoid } from 'nanoid'
+import type { UserOption } from '../collab/presence'
 import type { SketchProvider } from '../providers/types'
 import { liveViews } from './live'
 import SketchView from './SketchView.vue'
@@ -23,6 +24,11 @@ export interface SketchOptions {
   provider: SketchProvider | null
   /** Height of a board without a stored height, in px. */
   defaultHeight: number
+  /**
+   * Identity shown to others on a networked board (presence): `{ name, color }` or a function returning it,
+   * called when a board opens. `null`: `Khách N` / `Guest N` with a color picked from the client id.
+   */
+  user?: UserOption | null
 }
 
 export interface SketchStorage {
@@ -55,7 +61,7 @@ export const SketchNode = Node.create<SketchOptions, SketchStorage>({
   atom: true,
   draggable: true,
 
-  addOptions: () => ({ provider: null, defaultHeight: 480 }),
+  addOptions: () => ({ provider: null, defaultHeight: 480, user: null }),
 
   addStorage() {
     let provider: Promise<SketchProvider> | null = null

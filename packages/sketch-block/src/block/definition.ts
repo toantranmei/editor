@@ -5,7 +5,7 @@ import { SketchNode, type SketchOptions } from './node'
 /** Whiteboard block for `<MeiEditor :blocks>`: `sketch` or `sketch.configure({ provider })`. */
 export const sketch = defineBlock<SketchOptions>({
   name: 'sketch',
-  defaults: { provider: null, defaultHeight: 480 },
+  defaults: { provider: null, defaultHeight: 480, user: null },
   nodes: ['sketch'],
   extensions: o => [SketchNode.configure(o)],
   items: () => [{

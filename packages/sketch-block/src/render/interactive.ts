@@ -50,6 +50,19 @@ export interface Overlay {
   bindTarget: string | null
   /** Snap guides of the gesture in progress (scene coords): accent lines, 1 screen px. */
   guides: Guide[]
+  /** Remote peers (presence): cursors, selections and laser trails in each peer's color. */
+  remote?: RemoteOverlay[]
+}
+
+/** One remote peer on the overlay (scene coords; laser `t` on the `now` clock). */
+export interface RemoteOverlay {
+  clientId: number
+  color: string
+  name: string
+  cursor: Point | null
+  /** Rotated corners of each element the peer has selected. */
+  selectionBoxes: Point[][]
+  laser: { x: number; y: number; t: number; start?: boolean }[]
 }
 
 /** Opacity factor of the image outside the crop rect. */
@@ -66,6 +79,14 @@ const HANDLE_PX = 8
 const SELECTION_GAP_PX = 4
 /** Line width of the bind target's outline, screen px. */
 const BIND_TARGET_PX = 2
+/** Remote selection outline width, screen px. */
+export const REMOTE_SELECTION_PX = 1.5
+const CURSOR_FONT_PX = 12
+const CURSOR_FONT = `500 ${CURSOR_FONT_PX}px system-ui, -apple-system, 'Segoe UI', sans-serif`
+/** Rough glyph width for the name tag's background (measureText is not reliable on every canvas). */
+const CURSOR_CHAR_PX = 7
+/** Cursor arrow outline, screen px from its tip. */
+const CURSOR_ARROW: [number, number][] = [[0, 0], [0, 14], [4, 10.5], [7, 17], [9.5, 16], [6.5, 9.5], [11, 9.5]]
 
 let accentCache = new WeakMap<HTMLCanvasElement, string>()
 
@@ -140,11 +161,13 @@ function drawElement(
 }
 
 /** Laser trail: each segment fades linearly with the age of its newer point; a lone stroke start is a dot. */
-function drawLaser(ctx: CanvasRenderingContext2D, state: RenderState, trail: Overlay['laser'], now: number): void {
+function drawLaser(
+  ctx: CanvasRenderingContext2D, state: RenderState, trail: Overlay['laser'], now: number, color = LASER_COLOR,
+): void {
   const zoom = state.viewport.zoom
   elementFrame(ctx, state, 0, 0, 0)
-  ctx.strokeStyle = LASER_COLOR
-  ctx.fillStyle = LASER_COLOR
+  ctx.strokeStyle = color
+  ctx.fillStyle = color
   ctx.lineWidth = LASER_WIDTH_PX / zoom
   ctx.lineCap = 'round'
   ctx.lineJoin = 'round'
@@ -220,6 +243,60 @@ function drawCrop(ctx: CanvasRenderingContext2D, state: RenderState, crop: CropO
     ctx.fillRect(p.x - size / 2, p.y - size / 2, size, size)
     ctx.strokeRect(p.x - size / 2, p.y - size / 2, size, size)
   }
+}
+
+/** Remote peers: selection outlines (scene), laser trails, then cursors with name tags (screen size). */
+function drawRemote(ctx: CanvasRenderingContext2D, state: RenderState, remote: RemoteOverlay[], now: number): void {
+  const vp = state.viewport
+  const zoom = vp.zoom
+  ctx.setLineDash([])
+  ctx.globalAlpha = 1
+  for (const r of remote) {
+    if (!r.selectionBoxes.length) continue
+    elementFrame(ctx, state, 0, 0, 0)
+    ctx.strokeStyle = r.color
+    ctx.lineWidth = REMOTE_SELECTION_PX / zoom
+    ctx.beginPath()
+    for (const box of r.selectionBoxes) {
+      box.forEach((p, i) => (i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y)))
+      ctx.closePath()
+    }
+    ctx.stroke()
+  }
+  for (const r of remote) {
+    if (r.laser.length) drawLaser(ctx, state, r.laser, now, r.color)
+  }
+  const w = state.widthCss
+  const h = state.heightCss
+  for (const r of remote) {
+    if (!r.cursor) continue
+    const at = vp.toScreen(r.cursor)
+    if (at.x < -200 || at.y < -40 || at.x > w + 20 || at.y > h + 20) continue
+    ctx.setTransform(state.dpr, 0, 0, state.dpr, 0, 0)
+    // arrow, tip at the cursor point (screen px)
+    ctx.beginPath()
+    CURSOR_ARROW.forEach(([x, y], i) => (i === 0 ? ctx.moveTo(at.x + x, at.y + y) : ctx.lineTo(at.x + x, at.y + y)))
+    ctx.closePath()
+    ctx.fillStyle = r.color
+    ctx.fill()
+    ctx.strokeStyle = '#ffffff'
+    ctx.lineWidth = 1
+    ctx.stroke()
+    if (!r.name) continue
+    // name tag: plain canvas text on a pill in the user color
+    const tagX = at.x + 10
+    const tagY = at.y + 18
+    const tagW = r.name.length * CURSOR_CHAR_PX + 10
+    const tagH = CURSOR_FONT_PX + 6
+    ctx.fillStyle = r.color
+    ctx.fillRect(tagX, tagY, tagW, tagH)
+    ctx.font = CURSOR_FONT
+    ctx.textBaseline = 'middle'
+    ctx.textAlign = 'left'
+    ctx.fillStyle = '#ffffff'
+    ctx.fillText(r.name, tagX + 5, tagY + tagH / 2, tagW - 10)
+  }
+  ctx.setTransform(state.dpr, 0, 0, state.dpr, 0, 0)
 }
 
 function outline(ctx: CanvasRenderingContext2D, el: SketchElement, gap: number): void {
@@ -351,6 +428,12 @@ export function renderInteractive(
 
   if (overlay.laser.length) {
     drawLaser(ctx, state, overlay.laser, overlay.now ?? performance.now())
+    ctx.strokeStyle = accent
+    ctx.lineWidth = 1 / zoom
+  }
+
+  if (overlay.remote?.length) {
+    drawRemote(ctx, state, overlay.remote, overlay.now ?? performance.now())
     ctx.strokeStyle = accent
     ctx.lineWidth = 1 / zoom
   }

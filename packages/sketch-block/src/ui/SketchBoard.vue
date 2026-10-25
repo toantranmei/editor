@@ -2,8 +2,12 @@
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, toRaw, watch } from 'vue'
 import type * as Y from 'yjs'
 import '../styles/sketch.css'
+import {
+  MAX_LASER_POINTS, MAX_SELECTION_IDS, PresencePublisher, PresenceReader, resolveUser, type UserOption,
+} from '../collab/presence'
 import type { BoardSession } from '../engine'
 import { shapeKeyOf } from '../elements/kind'
+import { elementCorners } from '../geometry/bounds'
 import type { Point } from '../geometry/math'
 import {
   clipboardImageFiles, clipboardTooLarge, parseClipboard, pastedImageFiles, serializeClipboard,
@@ -17,13 +21,15 @@ import { BoardStore } from '../model/store'
 import { isFrame, isImage, isLinear, isShape, isSticky, type ShapeType, type SketchElement } from '../model/types'
 import type { BoardConnection } from '../providers/types'
 import { BitmapCache, bindCacheInvalidation } from '../render/bitmap-cache'
-import { renderInteractive, resetAccentCache } from '../render/interactive'
+import { type RemoteOverlay, renderInteractive, resetAccentCache } from '../render/interactive'
 import { RenderScheduler, ZoomSettler } from '../render/scheduler'
 import { type RenderState, renderStatic } from '../render/static'
 import { loadFonts } from '../text/fonts'
 import { clearTextCache } from '../text/measure'
 import { type CurrentStyle, type PointerInput, ToolController, type ToolName } from '../tools/controller'
+import { LASER_FADE_MS } from '../tools/laser'
 import { Viewport } from '../viewport'
+import Avatars, { type AvatarPeer } from './Avatars.vue'
 import StylePanel from './StylePanel.vue'
 import TextEditor from './TextEditor.vue'
 import Toolbar from './Toolbar.vue'
@@ -38,7 +44,9 @@ const props = withDefaults(defineProps<{
   session?: BoardSession
   /** Uploads an inserted image and resolves to its URL; without one, images are stored as data URLs. */
   uploadImage?: ImageUploader | null
-}>(), { readonly: false, locale: 'vi', theme: 'light', session: undefined, uploadImage: null })
+  /** Identity shown to peers on a networked board (`sketch.configure({ user })`); default: a guest. */
+  user?: UserOption | null
+}>(), { readonly: false, locale: 'vi', theme: 'light', session: undefined, uploadImage: null, user: null })
 
 const emit = defineEmits<{
   /** Any local edit (including undo/redo); the caller debounces preview generation. */
@@ -116,9 +124,17 @@ function drawStatic(): void {
 
 function drawInteractive(): void {
   const ctx = interactiveCanvas.value?.getContext('2d')
-  if (ctx) renderInteractive(ctx, scene, renderState(), controller.overlay())
-  // the laser trail fades on its own: keep drawing frames until it is gone
-  if (controller.laserTrail().length) scheduler.invalidateInteractive()
+  const overlay = controller.overlay()
+  let remoteLaser = false
+  if (reader) {
+    const remote = remoteOverlay(overlay.now ?? controller.now())
+    if (remote.length) overlay.remote = remote
+    remoteLaser = remote.some(r => r.laser.length > 0)
+    publishLaser()
+  }
+  if (ctx) renderInteractive(ctx, scene, renderState(), overlay)
+  // laser trails fade on their own: keep drawing frames until they are gone
+  if (controller.laserTrail().length || remoteLaser) scheduler.invalidateInteractive()
 }
 
 function invalidateAll(): void {
@@ -143,6 +159,9 @@ function syncView(): void {
   zoom.value = vp.zoom
   view.value = { x: vp.x, y: vp.y, zoom: vp.zoom }
   invalidateAll()
+  // a pan / zoom of our own ends follow mode
+  if (!applyingFollow && following.value !== null) following.value = null
+  publishViewport()
 }
 
 // ---------- tools ----------
@@ -168,6 +187,7 @@ const controller = new ToolController({
     scheduler.invalidateInteractive()
     if (controller.erasing !== drawnErasing) scheduler.invalidateStatic()
     syncView()
+    if (publisher) publishLaser()
   },
 })
 const tool = controller.tool
@@ -180,6 +200,114 @@ const cursor = controller.cursor
 const editing = controller.editing
 const { canUndo, canRedo } = history
 const currentStyle = controller.currentStyle
+
+// ---------- presence (networked providers only; fully inert without an awareness) ----------
+const awareness = toRaw(toRaw(props.connection).awareness) ?? null
+const hasPresence = !!awareness
+const publisher = awareness
+  ? new PresencePublisher(awareness, resolveUser(props.user, awareness.clientID, props.locale))
+  : null
+const reader = awareness
+  ? new PresenceReader(awareness, { now: () => controller.now(), locale: () => props.locale, onChange: onRemote })
+  : null
+/** Peers for the avatars list (replaced only when someone joins, leaves or changes name / color). */
+const avatarPeers = shallowRef<AvatarPeer[]>([])
+let avatarKey = ''
+/** Client id whose view we follow (null = none). */
+const following = ref<number | null>(null)
+/** True while follow mode moves the viewport (so syncView does not take it for a local pan). */
+let applyingFollow = false
+/** Newest laser point time last published ('' = empty trail). */
+let laserKey = ''
+
+function onRemote(): void {
+  refreshAvatars()
+  if (following.value !== null) applyFollow()
+  // remote state lives on the interactive layer only
+  scheduler.invalidateInteractive()
+}
+
+function refreshAvatars(): void {
+  const peers = reader!.peers()
+  const key = peers.map(p => `${p.clientId}\u0000${p.user.name}\u0000${p.user.color}`).join('\u0001')
+  if (key === avatarKey) return
+  avatarKey = key
+  avatarPeers.value = peers.map(p => ({ clientId: p.clientId, name: p.user.name, color: p.user.color }))
+}
+
+/** Our viewport takes the followed peer's view center and zoom (centered in our own canvas). */
+function applyFollow(): void {
+  const id = following.value
+  if (id === null || !reader) return
+  const peer = reader.get(id)
+  if (!peer) {
+    following.value = null
+    return
+  }
+  const v = peer.viewport
+  if (!v || widthCss <= 0 || heightCss <= 0) return
+  applyingFollow = true
+  try {
+    viewport.zoom = v.zoom
+    viewport.x = v.x - widthCss / 2 / v.zoom
+    viewport.y = v.y - heightCss / 2 / v.zoom
+    syncView()
+  } finally {
+    applyingFollow = false
+  }
+}
+
+function follow(clientId: number): void {
+  following.value = clientId
+  applyFollow()
+}
+
+function stopFollowing(): void {
+  following.value = null
+}
+
+function publishViewport(): void {
+  if (!publisher || widthCss <= 0 || heightCss <= 0) return
+  const z = viewport.zoom
+  publisher.set({ viewport: { x: viewport.x + widthCss / 2 / z, y: viewport.y + heightCss / 2 / z, zoom: z } })
+}
+
+/** Publishes the local laser trail when a point was added, and once more when it has faded out. */
+function publishLaser(): void {
+  if (!publisher) return
+  const trail = controller.laser
+  const lastPt = trail[trail.length - 1]
+  const key = lastPt ? `${lastPt.t}:${lastPt.x}:${lastPt.y}` : ''
+  if (key === laserKey) return
+  laserKey = key
+  publisher.set({
+    laser: trail.slice(-MAX_LASER_POINTS).map(p => (p.start ? { x: p.x, y: p.y, t: p.t, start: true } : { x: p.x, y: p.y, t: p.t })),
+  })
+}
+
+/** Remote peers for the overlay: selection boxes of elements we have, laser points not yet faded. */
+function remoteOverlay(now: number): RemoteOverlay[] {
+  const out: RemoteOverlay[] = []
+  const cutoff = now - LASER_FADE_MS
+  for (const p of reader!.peers()) {
+    const selectionBoxes = []
+    for (const id of p.selection) {
+      const el = scene.get(id)
+      if (el) selectionBoxes.push(elementCorners(el))
+    }
+    const laser = p.laser.length && p.laser[p.laser.length - 1]!.t > cutoff ? p.laser.filter(l => l.t > cutoff) : []
+    if (!p.cursor && !selectionBoxes.length && !laser.length) continue
+    out.push({ clientId: p.clientId, color: p.user.color, name: p.user.name, cursor: p.cursor, selectionBoxes, laser })
+  }
+  return out
+}
+
+if (publisher) {
+  watch(controller.selectedIds, ids => {
+    publisher.set({ selection: [...ids].slice(0, MAX_SELECTION_IDS) })
+  }, { immediate: true })
+}
+if (reader) refreshAvatars()
 
 // ---------- style panel ----------
 /** Bumped on every scene change so the panel re-reads the selected elements. */
@@ -354,6 +482,8 @@ function measure(): void {
     placed = true
     fit()
   }
+  if (following.value !== null) applyFollow()
+  publishViewport()
   invalidateAll()
 }
 
@@ -406,6 +536,7 @@ function onDocDragStart(e: DragEvent): void {
 
 function onPointerDown(e: PointerEvent): void {
   root.value?.focus({ preventScroll: true })
+  if (following.value !== null) following.value = null
   if (activePointer !== null) return
   activePointer = e.pointerId
   try {
@@ -429,6 +560,11 @@ function onPointerMove(e: PointerEvent): void {
     input.coalesced = samples.map(s => ({ ...toInput(s, rect).screen, pressure: s.pressure }))
   }
   controller.pointerMove(input)
+  if (publisher) publisher.set({ cursor: viewport.toScene(input.screen) })
+}
+
+function onPointerLeave(): void {
+  if (publisher) publisher.set({ cursor: null })
 }
 
 function onPointerUp(e: PointerEvent): void {
@@ -514,6 +650,8 @@ function onKeyDown(e: KeyboardEvent): void {
 function onEscape(input: Parameters<ToolController['keyDown']>[0]): void {
   if (activePointer !== null || controller.isGestureActive()) {
     controller.keyDown(input)
+  } else if (following.value !== null) {
+    following.value = null
   } else if (tool.value !== 'select' && !locked.value) {
     controller.setTool('select')
   } else if (controller.selectedIds.value.size > 0) {
@@ -709,6 +847,8 @@ onBeforeUnmount(() => {
   dprQuery?.removeEventListener('change', onDprChange)
   dprQuery = null
   for (const off of offs.splice(0)) off()
+  reader?.destroy()
+  publisher?.destroy()
   settler.destroy()
   scheduler.destroy()
   controller.destroy()
@@ -755,6 +895,7 @@ defineExpose({
       @pointerup="onPointerUp"
       @pointercancel="onPointerCancel"
       @lostpointercapture="onPointerCancel"
+      @pointerleave="onPointerLeave"
       @contextmenu.prevent
       @dblclick="onDblClick"
     />
@@ -831,6 +972,14 @@ defineExpose({
     >
       {{ t.viewMode }}
     </button>
+    <Avatars
+      v-if="hasPresence && !zen && avatarPeers.length"
+      :peers="avatarPeers"
+      :following="following"
+      :messages="t.presence"
+      @follow="follow"
+      @stop="stopFollowing"
+    />
     <ZoomControls
       v-if="!zen"
       :zoom="zoom"

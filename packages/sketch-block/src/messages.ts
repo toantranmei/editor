@@ -36,7 +36,21 @@ export interface SketchMessages {
   imageError: Record<'type' | 'size' | 'upload', string>
   /** Inline error shown for 4 s when a copy / paste is over the clipboard size limit. */
   clipboardTooLarge: string
+  /** Presence (networked boards); `{name}` / `{n}` are replaced. */
+  presence: PresenceMessages
   style: StyleMessages
+}
+
+export interface PresenceMessages {
+  /** Accessible name of the avatars list. */
+  people: string
+  /** Avatar button: follow this user's view. */
+  follow: string
+  /** Pill shown while following. */
+  following: string
+  stopFollowing: string
+  /** "+N" badge tooltip. */
+  more: string
 }
 
 export interface StyleMessages {
@@ -168,6 +182,13 @@ export const messages: Record<'vi' | 'en', SketchMessages> = {
     zen: 'Chế độ tập trung',
     viewMode: 'Chế độ xem',
     exitZen: 'Thoát chế độ tập trung',
+    presence: {
+      people: 'Người đang xem',
+      follow: 'Theo dõi {name}',
+      following: 'Đang theo dõi {name}',
+      stopFollowing: 'Dừng theo dõi',
+      more: '{n} người khác',
+    },
     imageError: {
       type: 'Tệp này không phải ảnh được hỗ trợ.',
       size: 'Ảnh quá lớn (tối đa 4 MB).',
@@ -301,6 +322,13 @@ export const messages: Record<'vi' | 'en', SketchMessages> = {
     zen: 'Zen mode',
     viewMode: 'View mode',
     exitZen: 'Exit zen mode',
+    presence: {
+      people: 'People here',
+      follow: 'Follow {name}',
+      following: 'Following {name}',
+      stopFollowing: 'Stop following',
+      more: '{n} more',
+    },
     imageError: {
       type: 'This file is not a supported image.',
       size: 'The image is too large (max 4 MB).',

@@ -385,6 +385,7 @@ onMounted(() => {
           :locale="locale"
           :theme="theme"
           :upload-image="imageUploader"
+          :user="options.user ?? null"
           @change="onChange"
           @exit="leave"
         />
@@ -429,6 +430,7 @@ onMounted(() => {
               :locale="locale"
               :theme="theme"
               :upload-image="imageUploader"
+              :user="options.user ?? null"
               @change="onChange"
               @exit="leave"
             />
