@@ -62,6 +62,8 @@ const fullscreen = ref(false)
 const live = computed(() => interacting.value || fullscreen.value)
 const loading = ref(false)
 const error = ref('')
+/** The board is being copied from the block it was pasted / duplicated from: no Interact until it is done. */
+const cloning = ref(false)
 const root = ref<HTMLElement | null>(null)
 const board = shallowRef<BoardHandle | null>(null)
 
@@ -141,12 +143,12 @@ function closeConnection() {
 }
 
 async function enter() {
-  if (live.value || loading.value) return
+  if (live.value || loading.value || cloning.value) return
   if (await ensureOpen()) interacting.value = true
 }
 
 async function openFullscreen() {
-  if (fullscreen.value) return
+  if (fullscreen.value || cloning.value) return
   if (await ensureOpen()) {
     // Only one board is mounted at a time: the inline one gives way to the modal.
     interacting.value = false
@@ -306,6 +308,27 @@ watch(boardId, () => {
   closeConnection()
 })
 
+// --- Clone on paste / duplicate (node.ts): wait for the copy before the board opens --
+function followClone(id: string | null) {
+  cloning.value = false
+  const pending = id ? props.editor.storage.sketch?.ensureClone(id) : null
+  if (!pending) return
+  cloning.value = true
+  pending.then(
+    () => {
+      if (boardId.value === id) cloning.value = false
+    },
+    () => {
+      // keep the new id and the preview; the board opens empty (ensureClone logged the cause)
+      if (boardId.value !== id || disposed) return
+      cloning.value = false
+      error.value = m.value.cloneError
+    },
+  )
+}
+onMounted(() => followClone(boardId.value))
+watch(boardId, followClone)
+
 // --- Resize ----------------------------------------------------------------------
 const dragHeight = ref<number | null>(null)
 const shownHeight = computed(() => dragHeight.value ?? height.value)
@@ -364,7 +387,8 @@ onMounted(() => {
         <PenTool />
         <span class="me-sketch-name">{{ m.title }}</span>
         <span v-if="loading" class="me-sketch-loading" role="status">{{ m.loading }}</span>
-        <button type="button" class="me-tool-btn me-sketch-expand" :title="m.expand" :disabled="loading" @click="openFullscreen">
+        <span v-else-if="cloning" class="me-sketch-loading" role="status">{{ m.copying }}</span>
+        <button type="button" class="me-tool-btn me-sketch-expand" :title="m.expand" :disabled="loading || cloning" @click="openFullscreen">
           <Maximize2 />
         </button>
       </div>
@@ -400,8 +424,8 @@ onMounted(() => {
           </p>
           <!-- Until "Interact", clicks and wheel go to the page, not the board (like Notion). -->
           <div class="me-sketch-cover" @dblclick="enter">
-            <button type="button" class="me-btn me-btn--floating" :disabled="loading" @click="enter">
-              <Pointer /> {{ loading ? m.loading : m.interact }}
+            <button type="button" class="me-btn me-btn--floating" :disabled="loading || cloning" @click="enter">
+              <Pointer /> {{ cloning ? m.copying : loading ? m.loading : m.interact }}
             </button>
           </div>
         </template>

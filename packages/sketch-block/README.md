@@ -147,6 +147,10 @@ const api: SketchProvider = {
   async uploadImage(file: File) {
     return uploadFile(`sketch/images/${file.name}`, file)
   },
+  // Optional: copy a board server-side when a block is pasted or duplicated (default: connect + copy).
+  async clone(from, to) {
+    await copyBoardOnServer(from, to)
+  },
 }
 
 sketch.configure({ provider: api })
@@ -167,10 +171,14 @@ sketch.configure({ provider: api })
   preview, and the board opens empty with a "not available on this device" notice. Use a custom
   provider to sync boards between devices.
 - The preview is regenerated 2 s after the last edit and when you leave the board.
-- **Copies share the board.** Copy/paste, duplicating the block or pasting it into another document
-  keeps its `boardId`, so both blocks open and edit the *same* board (each block keeps its own preview
-  image, refreshed when that block saves). Giving a pasted block its own copy of the board is planned
-  for M3. Until then, to start a separate board, insert a new sketch block instead.
+- **Copies get their own board.** When a paste, drop or the block's *Duplicate* creates a block whose
+  `boardId` is already used elsewhere in the document, the copy gets a new id (`bd_…`) and the board is copied
+  into it: `provider.clone(from, to)` when the provider implements it, else the block connects to both boards
+  and copies the Yjs state. The copy keeps the original's preview; it shows "Copying board…" and Interact is
+  disabled until the copy finishes. If the copy fails, an inline error is shown and the new block keeps its new
+  id with an empty board (and the preview). Moving a block (drag, cut + paste) keeps its id. The id change is
+  part of the same editor undo step as the paste or duplicate. Set `sketch.configure({ onPasteClone: false })`
+  to let copies share the board instead.
 - Preview, board id and version changes are not editor undo steps: `Ctrl/⌘ + Z` in the text only
   undoes inserting or deleting the block.
 
@@ -394,7 +402,7 @@ In view mode (`Alt + R`) step 2 is skipped, so the hand tool stays active.
 - **M0 – Foundation (done):** the `sketch` block, Yjs board store, two-layer canvas renderer with caching and level of detail, pan/zoom, select/move/resize/rotate, rectangle/ellipse/diamond, undo/redo, IndexedDB and memory providers, SVG preview.
 - **M1 – Drawing tools (done):** pen, highlighter, line, arrow (straight/elbow/curved), text and shape labels, eraser, laser, lasso, style panel, eyedropper, copy/paste/duplicate and copy style, zen and view mode.
 - **M2 – Miro core (done):** sticky notes, images with crop, frames, shape library and flowchart shapes, arrows bound to shapes, arrow labels, quick flowchart (`Ctrl/⌘ + arrow`), group/lock, align/distribute, grid and snapping.
-- **M3 – Backend & collaboration:** `http()` and `websocket()` providers with live cursors, cloning boards on paste and duplicate (until then a copied block shares its board with the original), board export, search, element links.
+- **M3 – Backend & collaboration:** `http()` and `websocket()` providers with live cursors, cloning boards on paste and duplicate, board export, search, element links.
 - **M4 – Export & library:** PNG/SVG/clipboard export, library, templates, `.excalidraw` import, minimap, performance work.
 - **M5 – Rich content (→ 1.0):** web embeds, emoji/stamps, code blocks, tables, cards/kanban, Mermaid → sketch, mind maps, auto layout.
 

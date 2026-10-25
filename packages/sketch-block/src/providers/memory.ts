@@ -21,5 +21,19 @@ export function memory(): SketchProvider {
         },
       }
     },
+    async clone(from: string, to: string): Promise<void> {
+      const state = store.get(from)
+      if (!state) throw new Error(`sketch-block: board ${from} has nothing to copy`)
+      const doc = new Y.Doc()
+      try {
+        // merge (never replace) whatever `to` already holds
+        const existing = store.get(to)
+        if (existing) Y.applyUpdate(doc, existing)
+        Y.applyUpdate(doc, state)
+        store.set(to, Y.encodeStateAsUpdate(doc))
+      } finally {
+        doc.destroy()
+      }
+    },
   }
 }

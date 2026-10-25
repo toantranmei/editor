@@ -39,4 +39,9 @@ export interface SketchProvider {
    * keeps the original src.
    */
   resolveImageSrc?(src: string): string | null
+  /**
+   * Copies board `from` into the new board `to` (clone on paste / duplicate). Optional: without it the block
+   * connects to both boards and copies the Yjs state. Should reject when `from` cannot be copied.
+   */
+  clone?(from: string, to: string): Promise<void>
 }

@@ -1,5 +1,5 @@
 import { Extension, Node } from '@tiptap/core'
-import { history, undo, undoDepth } from '@tiptap/pm/history'
+import { history, redo, undo, undoDepth } from '@tiptap/pm/history'
 import { Editor, EditorContent } from '@tiptap/vue-3'
 import { MeiConfig } from '@toantranmei/editor'
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
@@ -63,10 +63,15 @@ interface SetupOpts {
   editable?: boolean
   config?: Parameters<typeof MeiConfig.configure>[0]
   content?: Record<string, unknown>
+  onPasteClone?: boolean
 }
 
 async function setup(opts: SetupOpts = {}) {
-  const block = sketch.configure({ provider: opts.provider ?? memory(), ...(opts.user !== undefined ? { user: opts.user } : {}) })
+  const block = sketch.configure({
+    provider: opts.provider ?? memory(),
+    ...(opts.user !== undefined ? { user: opts.user } : {}),
+    ...(opts.onPasteClone !== undefined ? { onPasteClone: opts.onPasteClone } : {}),
+  })
   const editor = new Editor({
     extensions: [Doc, Paragraph, Text, History, MeiConfig.configure(opts.config ?? {}), ...block.extensions],
     editable: opts.editable ?? true,
@@ -649,5 +654,214 @@ describe('sketch block', () => {
     await settle()
     expect(focus).not.toHaveBeenCalled()
     destroyed.mockRestore()
+  })
+})
+
+describe('clone on paste and duplicate', () => {
+  const ORIGINAL = 'bd_original01'
+  const PREVIEW = 'data:image/svg+xml;base64,AA'
+  const attrs = { boardId: ORIGINAL, preview: PREVIEW, height: null, version: 2 }
+
+  /** A memory provider whose board ORIGINAL holds `n` rectangles. */
+  async function seeded(n = 1) {
+    const base = memory()
+    const conn = await base.connect(ORIGINAL)
+    const store = new BoardStore(conn.doc)
+    for (let i = 0; i < n; i++) store.create(rect())
+    conn.destroy()
+    return base
+  }
+
+  const count = async (provider: SketchProvider, id: string) => {
+    const conn = await provider.connect(id)
+    const size = conn.doc.getMap('elements').size
+    conn.destroy()
+    return size
+  }
+
+  /** Pastes `html` at the end of the document. */
+  function pasteAtEnd(editor: Editor, html: string) {
+    editor.commands.setTextSelection(editor.state.doc.content.size)
+    editor.view.pasteHTML(html)
+  }
+
+  it('pasting a sketch whose boardId exists assigns a new id and clones state', async () => {
+    const provider = await seeded(1)
+    const { editor } = await setup({ provider, content: { type: 'doc', content: [{ type: 'sketch', attrs }, { type: 'paragraph' }] } })
+    const html = editor.getHTML()
+    const before = undoDepth(editor.state)
+    pasteAtEnd(editor, html)
+    const nodes = sketchNodes(editor)
+    expect(nodes).toHaveLength(2)
+    expect(nodes[0]!.boardId).toBe(ORIGINAL)
+    expect(nodes[1]!.boardId).toMatch(/^bd_[\w-]{10}$/)
+    expect(nodes[1]!.boardId).not.toBe(ORIGINAL)
+    // the preview is kept
+    expect(nodes[1]!.preview).toBe(PREVIEW)
+    await vi.waitFor(async () => expect(await count(provider, nodes[1]!.boardId as string)).toBe(1))
+    // the paste and the id rewrite are one undo step
+    expect(undoDepth(editor.state)).toBe(before + 1)
+    undo(editor.state, editor.view.dispatch)
+    expect(sketchNodes(editor).map(n => n.boardId)).toEqual([ORIGINAL])
+    // redo brings back the copy with the same new id (no second clone)
+    redo(editor.state, editor.view.dispatch)
+    expect(sketchNodes(editor).map(n => n.boardId)).toEqual([ORIGINAL, nodes[1]!.boardId])
+  })
+
+  it('two pastes → two independent boards', async () => {
+    const provider = await seeded(1)
+    const { editor } = await setup({ provider, content: { type: 'doc', content: [{ type: 'sketch', attrs }, { type: 'paragraph' }] } })
+    const html = editor.getHTML()
+    pasteAtEnd(editor, html)
+    pasteAtEnd(editor, html)
+    const ids = sketchNodes(editor).map(n => n.boardId as string)
+    expect(ids).toHaveLength(3)
+    expect(new Set(ids).size).toBe(3)
+    await vi.waitFor(async () => {
+      expect(await count(provider, ids[1]!)).toBe(1)
+      expect(await count(provider, ids[2]!)).toBe(1)
+    })
+    // editing one copy leaves the other and the original alone
+    const conn = await provider.connect(ids[1]!)
+    new BoardStore(conn.doc).create(rect())
+    conn.destroy()
+    expect(await count(provider, ids[1]!)).toBe(2)
+    expect(await count(provider, ids[2]!)).toBe(1)
+    expect(await count(provider, ORIGINAL)).toBe(1)
+
+    // a pasted slice that holds the same board twice also gets distinct ids
+    const { editor: other } = await setup({ provider })
+    pasteAtEnd(other, html + html)
+    const pasted = sketchNodes(other).map(n => n.boardId)
+    expect(pasted).toHaveLength(2)
+    expect(pasted[0]).toBe(ORIGINAL)
+    expect(pasted[1]).not.toBe(ORIGINAL)
+  })
+
+  it('paste into an empty doc (no duplicate) keeps id', async () => {
+    const base = await seeded(1)
+    const clone = vi.fn(async () => {})
+    const provider: SketchProvider = { ...base, connect: id => base.connect(id), clone }
+    const { editor } = await setup({ provider, content: { type: 'doc', content: [{ type: 'sketch', attrs }] } })
+    const html = editor.getHTML()
+    const { editor: other } = await setup({ provider })
+    pasteAtEnd(other, html)
+    expect(sketchNodes(other).map(n => n.boardId)).toEqual([ORIGINAL])
+    // moving the block (delete + insert in one transaction) keeps its id too
+    const { state } = editor
+    const node = state.doc.firstChild!
+    editor.view.dispatch(state.tr.delete(0, node.nodeSize).insert(0, [state.schema.nodes.paragraph!.create(), node]))
+    expect(sketchNodes(editor).map(n => n.boardId)).toEqual([ORIGINAL])
+    // loading a document that already shares a board between two blocks (M2) does not rewrite it
+    editor.commands.setContent({ type: 'doc', content: [{ type: 'sketch', attrs }, { type: 'sketch', attrs }] })
+    expect(sketchNodes(editor).map(n => n.boardId)).toEqual([ORIGINAL, ORIGINAL])
+    await settle()
+    expect(clone).not.toHaveBeenCalled()
+  })
+
+  it('duplicating the block (a transaction, not a paste) assigns a new id in the same undo step', async () => {
+    const base = await seeded(2)
+    const clone = vi.fn((from: string, to: string) => {
+      void from
+      void to
+      return Promise.resolve()
+    })
+    const provider: SketchProvider = { ...base, connect: id => base.connect(id), clone }
+    const { editor } = await setup({ provider, content: { type: 'doc', content: [{ type: 'sketch', attrs }] } })
+    const before = undoDepth(editor.state)
+    // what the editor's duplicateBlocks does
+    const { state } = editor
+    const slice = state.doc.slice(0, state.doc.firstChild!.nodeSize)
+    editor.view.dispatch(state.tr.insert(slice.content.size, slice.content))
+    const ids = sketchNodes(editor).map(n => n.boardId)
+    expect(ids[0]).toBe(ORIGINAL)
+    expect(ids[1]).toMatch(/^bd_/)
+    expect(ids[1]).not.toBe(ORIGINAL)
+    await vi.waitFor(() => expect(clone).toHaveBeenCalledWith(ORIGINAL, ids[1]))
+    expect(clone).toHaveBeenCalledTimes(1)
+    expect(undoDepth(editor.state)).toBe(before + 1)
+    undo(editor.state, editor.view.dispatch)
+    expect(sketchNodes(editor).map(n => n.boardId)).toEqual([ORIGINAL])
+  })
+
+  it('shows "Copying board…" and disables Interact until the clone finishes', async () => {
+    const base = await seeded(1)
+    let finish!: () => void
+    const clone = vi.fn(() => new Promise<void>(resolve => (finish = resolve)))
+    const provider: SketchProvider = { ...base, connect: id => base.connect(id), clone }
+    const { editor, wrapper } = await setup({ provider, content: { type: 'doc', content: [{ type: 'sketch', attrs }, { type: 'paragraph' }] } })
+    pasteAtEnd(editor, editor.getHTML())
+    await settle()
+    const buttons = () => wrapper.findAll('.me-sketch-cover button')
+    expect(buttons()).toHaveLength(2)
+    expect(buttons()[1]!.text()).toBe(messages.vi.copying)
+    expect(buttons()[1]!.attributes('disabled')).toBeDefined()
+    expect(buttons()[0]!.attributes('disabled')).toBeUndefined()
+    finish()
+    await settle()
+    expect(buttons()[1]!.text()).toBe(messages.vi.interact)
+    expect(buttons()[1]!.attributes('disabled')).toBeUndefined()
+  })
+
+  it('clone failure shows error, no throw', async () => {
+    const base = await seeded(1)
+    const clone = vi.fn(async () => { throw new Error('backend down') })
+    const provider: SketchProvider = { ...base, connect: id => base.connect(id), clone }
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const { editor, wrapper } = await setup({ provider, content: { type: 'doc', content: [{ type: 'sketch', attrs }, { type: 'paragraph' }] } })
+    expect(() => pasteAtEnd(editor, editor.getHTML())).not.toThrow()
+    await settle()
+    const [, copy] = sketchNodes(editor)
+    // the new id and the preview are kept
+    expect(copy!.boardId).not.toBe(ORIGINAL)
+    expect(copy!.preview).toBe(PREVIEW)
+    expect(wrapper.find('.me-sketch-error').text()).toBe(messages.vi.cloneError)
+    expect(warn).toHaveBeenCalled()
+    // the (empty) board can still be opened
+    expect(wrapper.findAll('.me-sketch-cover button')[1]!.attributes('disabled')).toBeUndefined()
+  })
+
+  it('generic clone copies through connect when the provider has no clone()', async () => {
+    const { cloneBoard } = await import('../src/block/clone')
+    const provider = await seeded(3)
+    await cloneBoard({ connect: id => provider.connect(id) }, ORIGINAL, 'bd_copy000001')
+    expect(await count(provider, 'bd_copy000001')).toBe(3)
+    // memory() clones directly
+    await cloneBoard(provider, ORIGINAL, 'bd_copy000002')
+    expect(await count(provider, 'bd_copy000002')).toBe(3)
+    // a networked connection: waits for the save before closing
+    let status: 'saving' | 'saved' = 'saved'
+    const listeners = new Set<(s: 'saving' | 'saved') => void>()
+    const destroyed = vi.fn()
+    const networked: SketchProvider = {
+      async connect(id) {
+        const conn = await provider.connect(id)
+        conn.doc.on('update', () => {
+          status = 'saving'
+          setTimeout(() => {
+            status = 'saved'
+            for (const cb of listeners) cb('saved')
+          }, 20)
+        })
+        return {
+          ...conn,
+          networked: true,
+          status: { get: () => status, on: (cb) => { listeners.add(cb as never); return () => listeners.delete(cb as never) } },
+          destroy: () => { destroyed(status); conn.destroy() },
+        }
+      },
+    }
+    await cloneBoard(networked, ORIGINAL, 'bd_copy000003')
+    expect(destroyed).toHaveBeenLastCalledWith('saved')
+    // an unknown source is an error (nothing to copy)
+    const empty = memory()
+    await expect(cloneBoard({ connect: id => empty.connect(id) }, 'bd_missing001', 'bd_x')).rejects.toThrow()
+  })
+
+  it('onPasteClone false keeps id', async () => {
+    const provider = await seeded(1)
+    const { editor } = await setup({ provider, onPasteClone: false, content: { type: 'doc', content: [{ type: 'sketch', attrs }, { type: 'paragraph' }] } })
+    pasteAtEnd(editor, editor.getHTML())
+    expect(sketchNodes(editor).map(n => n.boardId)).toEqual([ORIGINAL, ORIGINAL])
   })
 })

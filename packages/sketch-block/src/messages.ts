@@ -10,6 +10,9 @@ export interface SketchMessages {
   notOnDevice: string
   loading: string
   loadError: string
+  /** A pasted / duplicated block while its board is being copied. */
+  copying: string
+  cloneError: string
   tools: Record<ToolName | 'lock', string>
   /** Tool bar button (and popover title) for the other shapes. */
   shapes: string
@@ -138,6 +141,8 @@ export const messages: Record<'vi' | 'en', SketchMessages> = {
     notOnDevice: 'Bảng vẽ này không có trên thiết bị này',
     loading: 'Đang tải…',
     loadError: 'Không mở được bảng vẽ',
+    copying: 'Đang sao chép bảng…',
+    cloneError: 'Không sao chép được nội dung bảng vẽ. Bảng mới đang trống.',
     tools: {
       hand: 'Kéo (H)',
       select: 'Chọn (V)',
@@ -279,6 +284,8 @@ export const messages: Record<'vi' | 'en', SketchMessages> = {
     notOnDevice: 'This board is not available on this device',
     loading: 'Loading…',
     loadError: 'Could not open the board',
+    copying: 'Copying board…',
+    cloneError: 'Could not copy the board. The new board is empty.',
     tools: {
       hand: 'Hand (H)',
       select: 'Select (V)',
