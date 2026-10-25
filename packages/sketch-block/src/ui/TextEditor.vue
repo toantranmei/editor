@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef } from 'vue'
 import { FRAME_COLOR, FRAME_LABEL_PX, FRAME_NAME_MAX } from '../elements/frame'
+import { linearLabelBox } from '../elements/linear'
 import { labelBox } from '../elements/shape'
 import { STICKY_PAD, STICKY_TEXT_COLOR, stickyLayout } from '../elements/sticky'
 import { editedTextBox } from '../elements/text'
-import { isFrame, isShape, isSticky, isText, type SketchElement } from '../model/types'
+import { isFrame, isLinear, isShape, isSticky, isText, type SketchElement } from '../model/types'
 import { FRAME_LABEL_H_PX, frameLabelBox } from '../render/frame-labels'
 import { displayColor, type Theme } from '../render/shapes'
 import { FONT_FAMILIES, LINE_HEIGHT } from '../text/fonts'
@@ -33,7 +34,7 @@ const CARET_PX = 2
 const textarea = shallowRef<HTMLTextAreaElement | null>(null)
 const initial = (): string => {
   const el = props.element
-  return isText(el) || isSticky(el) ? el.text : isShape(el) ? el.label : isFrame(el) ? el.name : ''
+  return isText(el) || isSticky(el) ? el.text : isShape(el) || isLinear(el) ? el.label : isFrame(el) ? el.name : ''
 }
 const value = ref(initial())
 /** Between compositionstart and compositionend (IME: Telex / VNI, CJK…). */
@@ -44,7 +45,8 @@ const viewport = computed(() => Object.assign(new Viewport(), props.view))
 
 /**
  * Textarea box in CSS px within the board root (the canvas' positioned parent), plus the rotation origin.
- * Text: the element box refitted to the value as typed. Label: the padded label box, centered in the shape.
+ * Text: the element box refitted to the value as typed. Label: the padded label box, centered in the shape; on a
+ * line / arrow the auto-width label box, centered on the shaft midpoint.
  */
 const layout = computed(() => {
   const el = props.element
@@ -65,6 +67,12 @@ const layout = computed(() => {
     w = l.w
   } else if (props.kind === 'label' && isShape(el)) {
     const b = labelBox(el, value.value)
+    x = el.x + b.x
+    y = el.y + b.y
+    w = b.w
+    h = b.h
+  } else if (props.kind === 'label' && isLinear(el)) {
+    const b = linearLabelBox(el, value.value)
     x = el.x + b.x
     y = el.y + b.y
     w = b.w
@@ -107,7 +115,8 @@ const style = computed(() => {
   const el = props.element
   const { at, w, h, origin, fontSize } = layout.value
   const font = 'fontFamily' in el ? el : null
-  const wraps = props.kind !== 'text' || (isText(el) && !el.autoSize)
+  // a line / arrow label is auto-width (like an auto-sized text): one line per newline, never wrapped
+  const wraps = props.kind === 'text' ? isText(el) && !el.autoSize : !isLinear(el)
   return {
     left: `${at.x}px`,
     top: `${at.y}px`,

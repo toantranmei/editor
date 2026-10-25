@@ -135,7 +135,8 @@ describe('current style', () => {
     expect('endArrowhead' in store.get(r.id)!).toBe(false)
     const aa = store.get(a.id) as LinearElement
     expect(aa).toMatchObject({ endArrowhead: 'dot', strokeWidth: 4, fillStyle: 'hachure' })
-    expect('fontSize' in aa ? aa.fontSize : undefined).toBe(DEFAULT_STYLE.fontSize)
+    // lines and arrows take the text style (for their label)
+    expect(aa.fontSize).toBe(36)
   })
 
   it('new rectangle uses currentStyle', () => {

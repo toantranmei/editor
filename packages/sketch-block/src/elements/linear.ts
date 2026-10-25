@@ -5,6 +5,8 @@ import { type Arrowhead, isLinear, type LinearElement, type LocalPoint, type Ske
 import { displayColor, roughOptions, type Theme } from '../render/shapes'
 import { type ElementKind, hashArray, hashString, shapeKeyOf } from './kind'
 import { escXml } from '../io/xml'
+import { measureText } from '../text/measure'
+import { drawTextBlock, MIN_LOD_TEXT_PX, svgTextBlock, type TextBlock } from './text'
 
 /** Points the shaft actually passes through, in the local frame. */
 export function routePoints(el: LinearElement): LocalPoint[] {
@@ -62,6 +64,51 @@ export function shaftPoints(el: LinearElement): LocalPoint[] {
   const route = routePoints(el)
   return isCurved(el, route) ? curvePoints(route) : route
 }
+
+/** Point at half the length of `pts` (a polyline); the first point when it has no length. */
+export function polylineMidpoint(pts: readonly LocalPoint[]): Point {
+  if (pts.length === 0) return { x: 0, y: 0 }
+  let total = 0
+  for (let i = 1; i < pts.length; i++) total += Math.hypot(pts[i]![0] - pts[i - 1]![0], pts[i]![1] - pts[i - 1]![1])
+  let left = total / 2
+  for (let i = 1; i < pts.length; i++) {
+    const a = pts[i - 1]!
+    const b = pts[i]!
+    const d = Math.hypot(b[0] - a[0], b[1] - a[1])
+    if (d > 0 && left <= d) {
+      const t = left / d
+      return { x: a[0] + (b[0] - a[0]) * t, y: a[1] + (b[1] - a[1]) * t }
+    }
+    left -= d
+  }
+  return { x: pts[0]![0], y: pts[0]![1] }
+}
+
+/** Where a line / arrow label sits (local frame): the midpoint along the drawn shaft (route or sampled curve). */
+export const labelMidpoint = (el: LinearElement): Point => polylineMidpoint(shaftPoints(el))
+
+/** Space kept clear of the shaft around the label text, scene units. */
+export const LABEL_CLEAR = 4
+
+/**
+ * Box of the label `text` in the line's local frame: auto-width (one line per newline, never wrapped), centered on
+ * the shaft midpoint. Shared by drawing, hit-testing and the label editor overlay.
+ */
+export function linearLabelBox(el: LinearElement, text: string): { x: number; y: number; w: number; h: number; lines: string[] } {
+  const { w, h, lines } = measureText(text, el, null)
+  const m = labelMidpoint(el)
+  return { x: m.x - w / 2, y: m.y - h / 2, w, h, lines }
+}
+
+/** The label as a text block (null without a label). */
+function labelBlock(el: LinearElement, theme: Theme): (TextBlock & { h: number }) | null {
+  if (el.label === '') return null
+  const { lines, x, y, w, h } = linearLabelBox(el, el.label)
+  return { lines, style: el, color: displayColor(el.stroke, theme), x, y, w, h }
+}
+
+/** A mask / element id safe inside attributes and `url(#…)`, unique per element id. */
+const labelMaskId = (id: string): string => `me-sketch-label-${id.replace(/[^\w-]/g, '_')}-${hashString(id)}`
 
 export interface ArrowheadShape {
   kind: 'polyline' | 'polygon' | 'circle' | 'line'
@@ -243,16 +290,33 @@ const num = (n: number): string => String(Math.round(n * 100) / 100)
 
 /** line / arrow: a rough shaft along `routePoints` with optional heads at either end. */
 export const linearKind: ElementKind<LinearElement> = {
-  visualPad: el => el.strokeWidth + el.roughness * 4 + (hasHead(el) ? arrowheadLength(el.strokeWidth) : 0),
+  visualPad(el) {
+    const ink = el.strokeWidth + el.roughness * 4 + (hasHead(el) ? arrowheadLength(el.strokeWidth) : 0)
+    if (el.label === '') return ink
+    // the label box may stick out of the line's box (a horizontal line has h = 0); +2 for glyph overshoot
+    const b = linearLabelBox(el, el.label)
+    return Math.max(ink, Math.max(-b.x, -b.y, b.x + b.w - el.w, b.y + b.h - el.h) + 2)
+  },
 
   shapeKey: el => hashString(JSON.stringify([
     el.type, el.routing, el.startArrowhead, el.endArrowhead, el.stroke, el.strokeWidth, el.strokeStyle,
     el.roughness, el.seed, el.w, el.h, hashArray(el.points),
+    // the text style only matters with a label (an unlabeled line keeps its bitmap on a font change)
+    ...(el.label === '' ? [] : [el.label, el.fontFamily, el.fontSize, el.textAlign]),
   ])),
 
   draw(ctx, el, theme) {
     const rc = rough.canvas(ctx.canvas)
     for (const d of linearDrawables(el, theme)) rc.draw(d)
+    const label = labelBlock(el, theme)
+    if (!label) return
+    // the element has its own bitmap: cut the shaft (and heads) under the text out of it, then draw the text
+    ctx.save()
+    ctx.globalCompositeOperation = 'destination-out'
+    ctx.fillStyle = '#000000'
+    ctx.fillRect(label.x - LABEL_CLEAR, label.y - LABEL_CLEAR, label.w + 2 * LABEL_CLEAR, label.h + 2 * LABEL_CLEAR)
+    ctx.restore()
+    drawTextBlock(ctx, label)
   },
 
   drawLod(ctx, el, theme, zoom) {
@@ -265,6 +329,16 @@ export const linearKind: ElementKind<LinearElement> = {
     ctx.lineJoin = 'round'
     ctx.lineCap = 'round'
     const route = routePoints(el)
+    // the label as plain text (layout cached), skipped when too small to read; the shaft is clipped around it
+    const label = el.fontSize * zoom >= MIN_LOD_TEXT_PX ? labelBlock(el, theme) : null
+    if (label) {
+      const pad = linearKind.visualPad(el) + 1
+      ctx.save()
+      ctx.beginPath()
+      ctx.rect(-pad, -pad, el.w + 2 * pad, el.h + 2 * pad)
+      ctx.rect(label.x - LABEL_CLEAR, label.y - LABEL_CLEAR, label.w + 2 * LABEL_CLEAR, label.h + 2 * LABEL_CLEAR)
+      ctx.clip('evenodd')
+    }
     plainPolyline(ctx, isCurved(el, route) ? curvePoints(route) : route)
     ctx.stroke()
     for (const h of heads(el, route)) {
@@ -278,11 +352,15 @@ export const linearKind: ElementKind<LinearElement> = {
         ctx.stroke()
       }
     }
+    if (label) {
+      ctx.restore()
+      drawTextBlock(ctx, label)
+    }
     ctx.restore()
   },
 
   svg(el, theme) {
-    return linearDrawables(el, theme).map((drawable) => {
+    const paths = linearDrawables(el, theme).map((drawable) => {
       const dash = drawable.options.strokeLineDash
       // toPaths yields one path per set, in order; only 'path' sets are dashed (as on canvas)
       return generator.toPaths(drawable).map((p, i) => {
@@ -291,9 +369,27 @@ export const linearKind: ElementKind<LinearElement> = {
         return `<path d="${escXml(p.d)}"${strokeAttr} fill="${escXml(p.fill || 'none')}"${dashAttr}/>`
       }).join('')
     }).join('')
+    const label = labelBlock(el, theme)
+    if (!label) return paths
+    // a mask cuts the shaft under the text: white everywhere the ink can reach, black over the label (+ clearance)
+    const id = labelMaskId(el.id)
+    const pad = linearKind.visualPad(el) + 1
+    const c = LABEL_CLEAR
+    const mask = `<defs><mask id="${escXml(id)}" maskUnits="userSpaceOnUse" x="${num(-pad)}" y="${num(-pad)}"`
+      + ` width="${num(el.w + 2 * pad)}" height="${num(el.h + 2 * pad)}">`
+      + `<rect x="${num(-pad)}" y="${num(-pad)}" width="${num(el.w + 2 * pad)}" height="${num(el.h + 2 * pad)}" fill="#ffffff"/>`
+      + `<rect x="${num(label.x - c)}" y="${num(label.y - c)}" width="${num(label.w + 2 * c)}" height="${num(label.h + 2 * c)}"`
+      + ` fill="#000000"/></mask></defs>`
+    return `${mask}<g mask="url(#${escXml(id)})">${paths}</g>${svgTextBlock(label)}`
   },
 
-  hit: (el, local, tol) => polylineDistance(shaftPoints(el), local) <= tol + el.strokeWidth / 2,
+  hit(el, local, tol) {
+    if (polylineDistance(shaftPoints(el), local) <= tol + el.strokeWidth / 2) return true
+    if (el.label === '') return false
+    // the label counts as part of the line
+    const b = linearLabelBox(el, el.label)
+    return local.x >= b.x - tol && local.x <= b.x + b.w + tol && local.y >= b.y - tol && local.y <= b.y + b.h + tol
+  },
 
   resize: (el, next) => ({
     x: next.x, y: next.y, w: next.w, h: next.h, points: scalePoints(el.points, el, next) as LocalPoint[],

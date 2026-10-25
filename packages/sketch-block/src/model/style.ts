@@ -46,7 +46,7 @@ export const STYLE_SECTIONS: readonly { id: StyleSection; keys: StyleKey[]; type
   { id: 'sloppiness', keys: ['roughness'], types: [...SHAPES, ...LINEAR] },
   { id: 'edges', keys: ['roundness'], types: ['rectangle', 'diamond'] },
   { id: 'arrowheads', keys: ['routing', 'startArrowhead', 'endArrowhead'], types: LINEAR },
-  { id: 'font', keys: ['fontFamily', 'fontSize', 'textAlign'], types: [...SHAPES, 'text', 'sticky'] },
+  { id: 'font', keys: ['fontFamily', 'fontSize', 'textAlign'], types: [...SHAPES, ...LINEAR, 'text', 'sticky'] },
   { id: 'opacity', keys: ['opacity'], types: ALL },
 ]
 

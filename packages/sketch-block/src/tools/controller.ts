@@ -65,7 +65,7 @@ export const CREATOR_TOOLS: ReadonlySet<ToolName> = new Set(Object.keys(TOOL_ELE
 export type { CurrentStyle }
 
 /**
- * The element whose text (a text element or sticky note), label (a shape) or name (a frame) is open in the editor
+ * The element whose text (a text element or sticky note), label (a shape, line or arrow) or name (a frame) is open in the editor
  * overlay.
  */
 export interface EditingTarget {
@@ -856,7 +856,7 @@ export class ToolController implements ToolHost {
     if (!hit || isFrame(hit) || !this.editElement(hit)) this.createText(p)
   }
 
-  /** Opens the editor on an existing text element (`text`) or shape (`label`). */
+  /** Opens the editor on an existing text element (`text`), shape or line / arrow (`label`). */
   startEditing(id: string, kind: EditingTarget['kind']): void {
     if (this.ctx.readonly() || this.editing.value) return
     const el = this.ctx.scene.get(id)
@@ -904,7 +904,7 @@ export class ToolController implements ToolHost {
       if (name.trim() && el.name !== name) store.update(el.id, { name })
       history.endGesture()
       this.setSelection([el.id])
-    } else if (el && target.kind === 'label' && isShape(el)) {
+    } else if (el && target.kind === 'label' && (isShape(el) || isLinear(el))) {
       if (el.label !== value) store.update(el.id, { label: value })
       history.endGesture()
       this.setSelection([el.id])
@@ -1105,9 +1105,12 @@ export class ToolController implements ToolHost {
   }
 }
 
-/** How `el`'s text is edited: its text (text, sticky), its label (shape), its name (frame), or not at all (null). */
+/**
+ * How `el`'s text is edited: its text (text, sticky), its label (shape, line, arrow), its name (frame), or not at all
+ * (null).
+ */
 function kindOfEdit(el: SketchElement): EditingTarget['kind'] | null {
-  return isText(el) ? 'text' : isSticky(el) ? 'sticky' : isShape(el) ? 'label' : isFrame(el) ? 'frame' : null
+  return isText(el) ? 'text' : isSticky(el) ? 'sticky' : isShape(el) || isLinear(el) ? 'label' : isFrame(el) ? 'frame' : null
 }
 
 /** The entries of `next` that differ from `el`, or null when none do. */
