@@ -156,6 +156,31 @@ const api: SketchProvider = {
 sketch.configure({ provider: api })
 ```
 
+### Export and import boards
+
+The document only holds board ids; a **bundle** carries the boards with it (e.g. to move a document between
+backends or keep a full backup):
+
+```ts
+import { collectBoardIds } from '@toantranmei/sketch-block' // pure, no yjs
+import { exportBoards, importBoards } from '@toantranmei/sketch-block/providers'
+
+const doc = editor.getJSON()
+collectBoardIds(doc) // ['bd_…', …] depth-first, each once
+
+const blob = await exportBoards(doc, provider) // JSON Blob
+const { doc: imported, imported: ids, skipped } = await importBoards(file, otherProvider)
+editor.commands.setContent(imported)
+```
+
+- Format: `{ type: 'mei-sketch/bundle', version: 1, doc, boards: { [boardId]: base64 Yjs state }, missing }`.
+  Boards the provider has nothing stored for are left out and listed in `missing`.
+- `importBoards` accepts a `Blob`/`File` or its text. It rejects files over 50 MB, invalid JSON, or a wrong `type`
+  or `version`. A malformed board (bad base64 or Yjs data) is skipped and listed in `skipped`; it never throws for
+  one bad board.
+- Import **merges** into the provider's board with the same id (Yjs updates merge): existing content is kept, and
+  importing twice changes nothing.
+
 ## Storage
 
 - **The document** stores only `{ boardId, preview, height, version }` on the `sketch` node, never the
