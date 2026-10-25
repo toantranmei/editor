@@ -67,6 +67,20 @@ describe('arrow label geometry', () => {
     expect(b.y).toBeCloseTo(100)
   })
 
+  it('label midpoint on a curved route follows the curve, not the chord', () => {
+    const el = ln({ w: 200, h: 100, points: [[0, 100], [100, 0], [200, 100]], routing: 'curved' })
+    const m = labelMidpoint(el)
+    // symmetric curve through (100, 0): the midpoint by length is its apex
+    expect(m.x).toBeCloseTo(100)
+    expect(m.y).toBeCloseTo(0)
+    const straight = labelMidpoint({ ...el, routing: 'straight' })
+    expect(straight.y).toBeCloseTo(0)
+    // asymmetric: by curve length, not the middle route point
+    const skew = ln({ w: 300, h: 100, points: [[0, 100], [50, 0], [300, 100]], routing: 'curved' })
+    const ms = labelMidpoint(skew)
+    expect(ms.x).toBeGreaterThan(50)
+  })
+
   it('label box is auto-width and centered on the midpoint', () => {
     const el = ln({ label: 'hello', fontSize: 20 })
     const box = linearLabelBox(el, el.label)
@@ -197,6 +211,16 @@ describe('arrow label editing', () => {
     expect(s.whiteSpace).toBe('pre')
     expect((w.find('textarea').element as HTMLTextAreaElement).value).toBe('hello')
     w.unmount()
+  })
+
+  it('a text-tool click on a line creates free text instead of editing the label', () => {
+    const { store, c } = setup()
+    const a = store.create(arrowInit())
+    c.setTool('text')
+    c.pointerDown(ptr(100, 0))
+    c.pointerUp(ptr(100, 0))
+    expect(c.editing.value?.kind).toBe('text')
+    expect(c.editing.value?.id).not.toBe(a.id)
   })
 
   it('a locked arrow is not edited', () => {

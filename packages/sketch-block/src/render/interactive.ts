@@ -9,6 +9,7 @@ import { getLoadedImage } from '../io/image-loader'
 import type { Scene } from '../model/scene'
 import type { ImageElement, SketchElement } from '../model/types'
 import { cropHandles } from '../tools/crop'
+import { bitmapPad, bitmapScale, buildBitmap, cacheKey } from './bitmap-cache'
 import { drawFrameLabels } from './frame-labels'
 import { applyViewTransform, type RenderState } from './static'
 
@@ -93,16 +94,44 @@ function elementFrame(ctx: CanvasRenderingContext2D, state: RenderState, cx: num
   if (angle) ctx.rotate(angle)
 }
 
-/** Draws `el` with its kind's full-fidelity draw, in its element frame, at `alpha`. */
+/** Bitmaps of knockout elements drawn on the overlay, by cache key (few: erase-marked elements and the draft). */
+const knockoutBitmaps = new Map<string, HTMLCanvasElement>()
+const MAX_KNOCKOUT_BITMAPS = 16
+
+/** `el`'s own bitmap (as the static layer builds it), memoized in a small LRU. */
+function knockoutBitmap(el: SketchElement, state: RenderState): HTMLCanvasElement {
+  const zoom = state.viewport.zoom
+  const key = cacheKey(el, zoom, state.dpr, state.theme)
+  let bmp = knockoutBitmaps.get(key)
+  if (bmp) knockoutBitmaps.delete(key)
+  else bmp = buildBitmap(el, zoom, state.dpr, state.theme)
+  knockoutBitmaps.set(key, bmp)
+  if (knockoutBitmaps.size > MAX_KNOCKOUT_BITMAPS) knockoutBitmaps.delete(knockoutBitmaps.keys().next().value!)
+  return bmp
+}
+
+/**
+ * Draws `el` with its kind's full-fidelity draw, in its element frame, at `alpha`. A kind that knocks pixels out
+ * (a labeled line) is rasterized onto its own bitmap first and composited, so it never erases overlay ink.
+ */
 function drawElement(
   ctx: CanvasRenderingContext2D, state: RenderState, el: SketchElement, alpha: number,
 ): void {
   ctx.globalAlpha = alpha
   elementFrame(ctx, state, el.x + el.w / 2, el.y + el.h / 2, el.angle)
-  ctx.translate(-el.w / 2, -el.h / 2)
   const multiply = blendsMultiply(el, state.theme)
   if (multiply) ctx.globalCompositeOperation = 'multiply'
-  kindOf(el).draw(ctx, el, state.theme, { dpr: state.dpr })
+  const kind = kindOf(el)
+  if (kind.knockout?.(el)) {
+    // same placement as the static layer's bitmaps (centered frame, padded box, exact scale)
+    const bmp = knockoutBitmap(el, state)
+    const pad = bitmapPad(el)
+    const s = bitmapScale(el, state.viewport.zoom, state.dpr)
+    ctx.drawImage(bmp, -el.w / 2 - pad, -el.h / 2 - pad, bmp.width / s, bmp.height / s)
+  } else {
+    ctx.translate(-el.w / 2, -el.h / 2)
+    kind.draw(ctx, el, state.theme, { dpr: state.dpr })
+  }
   if (multiply) ctx.globalCompositeOperation = 'source-over'
   ctx.globalAlpha = 1
 }

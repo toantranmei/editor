@@ -2,7 +2,7 @@ import { nanoid } from 'nanoid'
 import { type Ref, ref, shallowRef } from 'vue'
 import type { Box, Point } from '../geometry'
 import { boxCenter, elementBounds, elementCorners } from '../geometry/bounds'
-import { boxesIntersect } from '../geometry/math'
+import { boxesIntersect, rotatePoint } from '../geometry/math'
 import { hitElement } from '../geometry/hit'
 import type { History } from '../model/history'
 import type { Scene } from '../model/scene'
@@ -867,8 +867,9 @@ export class ToolController implements ToolHost {
   editAt(p: Point): void {
     if (this.ctx.readonly() || this.editing.value) return
     const hit = this.editableAt(p)
-    // the text tool never renames a frame (its border is thin): text goes there instead
-    if (!hit || isFrame(hit) || !this.editElement(hit)) this.createText(p)
+    // the text tool never renames a frame (its border is thin)
+    // nor a line's label (a dblclick with the select tool edits that): text goes there instead
+    if (!hit || isFrame(hit) || isLinear(hit) || !this.editElement(hit)) this.createText(p)
   }
 
   /** Opens the editor on an existing text element (`text`), shape or line / arrow (`label`). */
@@ -962,7 +963,8 @@ export class ToolController implements ToolHost {
    */
   quickCreate(dir: QuickDirection): boolean {
     const { store, scene, history } = this.ctx
-    if (this.ctx.readonly() || this.isGestureActive() || this.selectedIds.value.size !== 1) return false
+    if (this.ctx.readonly() || this.isGestureActive() || this.editing.value || this.cropping.value) return false
+    if (this.selectedIds.value.size !== 1) return false
     const src = scene.get([...this.selectedIds.value][0]!)
     if (!src || src.locked || !(isShape(src) || isSticky(src))) return false
     const [ux, uy] = QUICK_DIRS[dir]
@@ -985,11 +987,8 @@ export class ToolController implements ToolHost {
     let copy = at(0)
     for (let k = 1; k <= QUICK_SHIFT_TRIES && occupied(copy); k++) copy = at(k)
     // the arrow joins the facing sides' middles, BIND_GAP outside the outlines
-    const side = (el: SketchElement, sx: number, sy: number) => ({
-      x: el.x + el.w * (0.5 + sx / 2), y: el.y + el.h * (0.5 + sy / 2),
-    })
-    const sa = outlineAnchor(src, side(src, ux, uy))
-    const ea = outlineAnchor(copy, side(copy, -ux, -uy))
+    const sa = outlineAnchor(src, facingSide(src, ux, uy))
+    const ea = outlineAnchor(copy, facingSide(copy, -ux, -uy))
     const startBinding: Binding = { id: src.id, ax: sa.ax, ay: sa.ay }
     const endBinding: Binding = { id: copyId, ax: ea.ax, ay: ea.ay }
     const p0 = anchorScenePoint(src, startBinding, BIND_GAP, boxCenter(copy))
@@ -1188,6 +1187,23 @@ export class ToolController implements ToolHost {
  */
 function kindOfEdit(el: SketchElement): EditingTarget['kind'] | null {
   return isText(el) ? 'text' : isSticky(el) ? 'sticky' : isShape(el) || isLinear(el) ? 'label' : isFrame(el) ? 'frame' : null
+}
+
+/**
+ * Scene point at the middle of the side of `el` facing scene direction (dx, dy): picked in the element's local
+ * (unrotated) frame, then rotated with it.
+ */
+function facingSide(el: SketchElement, dx: number, dy: number): Point {
+  const cos = Math.cos(el.angle)
+  const sin = Math.sin(el.angle)
+  // the direction in the local frame (rotated by -angle)
+  const lx = dx * cos + dy * sin
+  const ly = -dx * sin + dy * cos
+  const horizontal = Math.abs(lx) >= Math.abs(ly) - 1e-9
+  const sx = horizontal ? Math.sign(lx) : 0
+  const sy = horizontal ? 0 : Math.sign(ly)
+  const p = { x: el.x + el.w * (0.5 + sx / 2), y: el.y + el.h * (0.5 + sy / 2) }
+  return el.angle ? rotatePoint(p, boxCenter(el), el.angle) : p
 }
 
 /** The entries of `next` that differ from `el`, or null when none do. */

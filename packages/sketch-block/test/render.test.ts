@@ -454,6 +454,22 @@ describe('renderInteractive', () => {
     scene.destroy()
   })
 
+  it('a labeled line drawn on the overlay never knocks out overlay pixels', () => {
+    const store = new BoardStore(new Y.Doc())
+    const other = store.create(init())
+    const line = store.create({ ...lineInit(2), label: 'hello' })
+    const scene = new Scene(store)
+    const { ctx } = newCanvas()
+    // the overlay already holds content (another erase-marked element)
+    renderInteractive(ctx, scene, state(), overlay({ erasing: new Set([other.id, line.id]) }))
+    renderInteractive(ctx, scene, state(), overlay({ draft: { ...scene.get(line.id)!, id: 'draft' } }))
+    expect(ctx.calls.some(c => c.name === 'set:globalCompositeOperation' && c.args[0] === 'destination-out')).toBe(false)
+    // composited from its own bitmap instead
+    expect(count(ctx, 'drawImage')).toBe(2)
+    expect(ctx.calls.some(c => c.name === 'fillText')).toBe(false)
+    scene.destroy()
+  })
+
   it('blends a highlighter draft with multiply in light theme only, then restores', () => {
     vi.stubGlobal('Path2D', class {})
     const { scene } = sceneWith()

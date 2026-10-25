@@ -305,12 +305,14 @@ export const linearKind: ElementKind<LinearElement> = {
     ...(el.label === '' ? [] : [el.label, el.fontFamily, el.fontSize, el.textAlign]),
   ])),
 
+  knockout: el => el.label !== '',
+
   draw(ctx, el, theme) {
     const rc = rough.canvas(ctx.canvas)
     for (const d of linearDrawables(el, theme)) rc.draw(d)
     const label = labelBlock(el, theme)
     if (!label) return
-    // the element has its own bitmap: cut the shaft (and heads) under the text out of it, then draw the text
+    // drawn onto the element's own bitmap (`knockout`): cut the shaft (and heads) under the text out, then the text
     ctx.save()
     ctx.globalCompositeOperation = 'destination-out'
     ctx.fillStyle = '#000000'

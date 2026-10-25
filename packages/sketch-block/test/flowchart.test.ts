@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import * as Y from 'yjs'
 
 import { linearScenePoints } from '../src/elements/linear'
+import { anchorScenePoint, BIND_GAP, outlineAnchor } from '../src/geometry/binding'
+import { boxCenter } from '../src/geometry/bounds'
 import { History } from '../src/model/history'
 import { Scene } from '../src/model/scene'
 import { BoardStore } from '../src/model/store'
@@ -181,6 +183,43 @@ describe('quick flowchart creation', () => {
     history.undo()
     // nothing else was undoable from the gesture: the source stays
     expect(store.get(src.id)).toBeDefined()
+  })
+
+  it('rotated source: anchors on the facing side of the rotated outline', () => {
+    for (const deg of [45, 30]) {
+      const { store, c } = setup()
+      const src = rect(store, 0, 0, 100, 60, { angle: (deg * Math.PI) / 180 })
+      c.setSelection([src.id])
+      expect(c.keyDown(modKey('ArrowRight'))).toBe(true)
+      const copy = store.get([...c.selectedIds.value][0]!)!
+      const [a] = arrows(store)
+      const sb = a!.startBinding!
+      // the anchor maps to a point on the source outline
+      const onOutline = anchorScenePoint(src, sb, 0, boxCenter(copy))
+      expect(outlineAnchor(src, onOutline).distance).toBeCloseTo(0, 6)
+      // and the arrow starts BIND_GAP off it
+      const start = linearScenePoints(a!)[0]!
+      const want = anchorScenePoint(src, sb, BIND_GAP, boxCenter(copy))
+      expect(start.x).toBeCloseTo(want.x, 6)
+      expect(start.y).toBeCloseTo(want.y, 6)
+      if (deg === 30) {
+        // rightwards is the local +x side: the middle of the right edge (both ends: the copy keeps the angle)
+        expect(sb).toMatchObject({ ax: 1, ay: 0.5 })
+        expect(a!.endBinding).toMatchObject({ ax: 0, ay: 0.5 })
+      }
+    }
+  })
+
+  it('ignored while editing or cropping', () => {
+    const { store, c } = setup()
+    const r = rect(store, 0, 0)
+    c.setSelection([r.id])
+    c.startEditing(r.id, 'label')
+    // the editor clears the selection; force it back to isolate the guard
+    c.selectedIds.value = new Set([r.id])
+    expect(c.quickCreate('right')).toBe(false)
+    c.commitEditing('')
+    expect(store.all()).toHaveLength(1)
   })
 
   it('a sticky copies color and size with empty text', () => {

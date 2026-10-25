@@ -20,6 +20,11 @@ export interface ElementKind<E extends SketchElement = SketchElement> {
    * memoize it per element snapshot.
    */
   volatileKey?: boolean
+  /**
+   * `draw` cuts pixels out of its target (`destination-out`, e.g. a line under its label), so it must only draw
+   * onto a canvas of its own (its bitmap), never onto a shared one.
+   */
+  knockout?(el: E): boolean
   /** Local frame, box (0,0)–(w,h), full fidelity. `dpr`: device px per CSS px of the target (default 1). */
   draw(ctx: CanvasRenderingContext2D, el: E, theme: Theme, opts?: { dpr?: number }): void
   /** Centered frame (origin at the box center), cheap plain paths for low zoom. */
