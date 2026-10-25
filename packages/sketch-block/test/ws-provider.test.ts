@@ -165,6 +165,45 @@ describe('websocket provider', () => {
     conn.destroy()
   })
 
+  it('a refusal before the first sync resolves at once with status error', async () => {
+    const cached = await indexeddb().connect('ws-refused')
+    Y.applyUpdate(cached.doc, seed(2))
+    await new Promise(r => setTimeout(r, 20))
+    cached.destroy()
+
+    const started = Date.now()
+    const pending = websocket({ url: 'ws://x', connectTimeoutMs: 60_000 }).connect('ws-refused')
+    const p = await nextProvider()
+    p.emit('closed', { code: 4401, reason: 'unauthorized' }, p)
+    const conn = await pending
+    expect(Date.now() - started).toBeLessThan(5000)
+    expect(conn.status!.get()).toBe('error')
+    expect(conn.doc.getMap('elements').size).toBe(2) // offline IDB content
+    conn.destroy()
+
+    FakeProvider.instances = []
+    const bare = websocket({ url: 'ws://x', connectTimeoutMs: 60_000, offline: false }).connect('ws-refused')
+    const p2 = await nextProvider()
+    p2.emit('closed', { code: 4401, reason: 'unauthorized' }, p2)
+    const c2 = await bare
+    expect(c2.status!.get()).toBe('error')
+    expect(c2.doc.getMap('elements').size).toBe(0)
+    c2.destroy()
+  })
+
+  it('the connect timeout does not overwrite error', async () => {
+    const pending = websocket({ url: 'ws://x', connectTimeoutMs: 300, offline: false }).connect('ws-err-timeout')
+    const p = await nextProvider()
+    const seen: string[] = []
+    p.emit('closed', { code: 4401, reason: 'unauthorized' }, p)
+    const conn = await pending
+    conn.status!.on(s => seen.push(s))
+    await new Promise(r => setTimeout(r, 400)) // past the connect timeout
+    expect(conn.status!.get()).toBe('error')
+    expect(seen).toEqual([])
+    conn.destroy()
+  })
+
   it('awareness exposed', async () => {
     const pending = websocket({ url: 'ws://x', offline: false }).connect('aw')
     const p = await nextProvider()

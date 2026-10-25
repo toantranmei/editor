@@ -69,9 +69,14 @@ export function websocket(opts: WebsocketProviderOptions): SketchProvider {
 
       let synced = false
       let firstSync: () => void = () => {}
+      let refused = false
       const onStatus = ({ status: s }: { status: 'connected' | 'disconnected' | 'connecting' }) => {
-        if (s === 'connected') status.set(synced ? 'online' : 'connecting')
-        else if (s === 'disconnected') status.set('offline')
+        if (s === 'connected') {
+          refused = false
+          status.set(synced ? 'online' : 'connecting')
+        } else if (refused) {
+          // a terminal refusal stays an error until a new connection succeeds
+        } else if (s === 'disconnected') status.set('offline')
         // reconnect attempts while offline keep the dot offline instead of flickering
         else if (status.get() !== 'offline') status.set('connecting')
       }
@@ -89,7 +94,12 @@ export function websocket(opts: WebsocketProviderOptions): SketchProvider {
         if (opts.params) provider.params = opts.params()
       }
       // the server refused for good (shouldReconnect false, e.g. 4401 unauthorized): no more retries
-      const onClosed = () => status.set('error')
+      // before the first sync, stop waiting: connect resolves now (IDB content or an empty doc) with status error
+      const onClosed = () => {
+        refused = true
+        status.set('error')
+        firstSync()
+      }
       provider.on('status', onStatus)
       provider.on('sync', onSync)
       provider.on('connection-close', onClose)
@@ -99,7 +109,7 @@ export function websocket(opts: WebsocketProviderOptions): SketchProvider {
         await new Promise<void>((resolve) => {
           const timer = setTimeout(() => {
             firstSync = () => {}
-            if (!synced) status.set('offline')
+            if (!synced && !refused) status.set('offline')
             resolve()
           }, connectTimeoutMs)
           firstSync = () => {
