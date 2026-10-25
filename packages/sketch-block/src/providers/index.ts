@@ -2,3 +2,4 @@ export type { BoardConnection, ConnectionStatus, ConnectionStatusValue, SketchPr
 export { http, type HttpProviderOptions } from './http'
 export { indexeddb } from './indexeddb'
 export { memory } from './memory'
+export { websocket, type WebsocketProviderOptions } from './websocket'

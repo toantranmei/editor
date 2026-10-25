@@ -60,6 +60,7 @@
     "@toantranmei/editor": ">=0.2.0 <1.0.0",
     "vue": "^3.5.0",
     "y-protocols": "^1.0.6",
+    "y-websocket": "^3.1.0",
     "yjs": "^13.6.0"
   },
   "dependencies": {
@@ -89,6 +90,7 @@
     "vue": "^3.5.0",
     "vue-tsc": "^3.0.0",
     "y-protocols": "^1.0.6",
+    "y-websocket": "3.1.0",
     "yjs": "^13.6.0"
   },
   "publishConfig": {
@@ -99,6 +101,9 @@
   },
   "peerDependenciesMeta": {
     "y-protocols": {
+      "optional": true
+    },
+    "y-websocket": {
       "optional": true
     }
   }
