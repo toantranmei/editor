@@ -324,18 +324,22 @@ editor.commands.setContent(imported)
   preview, and the board opens empty with a "not available on this device" notice. Use `http()`,
   `websocket()` or a custom provider to sync boards between devices.
 - The preview is regenerated 2 s after the last edit and when you leave the board.
-- **Copies get their own board.** When a paste, drop or the block's *Duplicate* creates a block whose
-  `boardId` is already used elsewhere in the document, the copy gets a new id (`bd_…`) and the board is copied
-  into it: `provider.clone(from, to)` when the provider implements it, else the block connects to both boards
-  and copies the Yjs state. The copy keeps the original's preview; it shows "Copying board…" and Interact is
-  disabled until the copy finishes. If the copy fails, an inline error is shown and the new block keeps its new
-  id with an empty board (and the preview). Moving a block (drag, cut + paste) keeps its id. The id change is
-  part of the same editor undo step as the paste or duplicate; undo and redo never copy the board again. Set
-  `sketch.configure({ onPasteClone: false })` to let copies share the board instead.
-- **Copies are per document.** Clone on paste only looks at the document being pasted into: pasting a block into
-  **another** document (or another editor) keeps its id, so both documents show the **same** board, and an edit in
-  one shows in the other. To give the other document its own board, use a [bundle](#export-and-import-boards) or
-  a provider-side copy.
+- **Copies get their own board.** When a paste, drop or the block's *Duplicate* creates a copy of a block, the
+  copy gets a new id (`bd_…`) and the board is copied into it: `provider.clone(from, to)` when the provider
+  implements it, else the block connects to both boards and copies the Yjs state. A copy is a block whose
+  `boardId` is already used elsewhere in the document, and also a block pasted or dropped from **another**
+  document or editor: copies are independent, an edit in one never shows in the other. The copy keeps the
+  original's preview; it shows "Copying board…" and Interact is disabled until the copy finishes. If the copy
+  fails, an inline error is shown and the new block keeps its new id with an empty board (and the preview).
+- **Moves keep the id.** Dragging a block within the document, and cut + paste in the same editor (within
+  10 minutes of the cut), keep its board. The id change is part of the same editor undo step as the paste or
+  duplicate; undo and redo never copy the board again. Set `sketch.configure({ onPasteClone: false })` to let
+  copies share the board instead.
+- **Copying needs the source board.** A block pasted from another document whose board is not stored where this
+  editor can read it (e.g. the default IndexedDB provider, and the other document's board lives in another
+  browser) cannot be copied: the new block keeps its new id and the preview, and says the content could not be
+  copied. A custom `provider.clone` can reject with an error whose `code` is `BOARD_MISSING` (exported from the
+  main entry) to show that message.
 - With a networked provider, a copy fails (and shows the error) when the server does not confirm it and the
   provider has no offline cache to hold it.
 - Preview, board id and version changes are not editor undo steps: `Ctrl/⌘ + Z` in the text only

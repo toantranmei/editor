@@ -13,6 +13,8 @@ export interface SketchMessages {
   /** A pasted / duplicated block while its board is being copied. */
   copying: string
   cloneError: string
+  /** A pasted block whose board is not stored here (another document's board on another device). */
+  cloneSourceMissing: string
   /** Tooltip of the block bar's connection status dot (networked providers only). */
   status: Record<'connecting' | 'online' | 'offline' | 'saving' | 'saved' | 'error', string>
   tools: Record<ToolName | 'lock', string>
@@ -164,6 +166,7 @@ export const messages: Record<'vi' | 'en', SketchMessages> = {
     loadError: 'Không mở được bảng vẽ',
     copying: 'Đang sao chép bảng…',
     cloneError: 'Không sao chép được nội dung bảng vẽ. Bảng mới đang trống.',
+    cloneSourceMissing: 'Không sao chép được nội dung bảng vẽ (bảng gốc không có trên thiết bị này). Ảnh xem trước vẫn được giữ.',
     status: {
       connecting: 'Đang kết nối…',
       online: 'Đã kết nối',
@@ -327,6 +330,7 @@ export const messages: Record<'vi' | 'en', SketchMessages> = {
     loadError: 'Could not open the board',
     copying: 'Copying board…',
     cloneError: 'Could not copy the board. The new board is empty.',
+    cloneSourceMissing: 'The board’s content couldn’t be copied (the original is not on this device). The preview is kept.',
     status: {
       connecting: 'Connecting…',
       online: 'Connected',

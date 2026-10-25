@@ -10,6 +10,21 @@ export function isBoardId(id: unknown): id is string {
   return typeof id === 'string' && BOARD_ID.test(id)
 }
 
+/**
+ * `code` of the error a board copy (clone on paste) rejects with when its source has nothing stored, e.g. a block
+ * pasted from another document whose board lives in another browser. A custom `provider.clone` can throw it too.
+ */
+export const BOARD_MISSING = 'sketch-board-missing'
+
+/** An Error with `code` BOARD_MISSING for board `id`. */
+export function boardMissingError(id: string): Error & { code: string } {
+  return Object.assign(new Error(`sketch-block: board ${id} has nothing to copy`), { code: BOARD_MISSING })
+}
+
+/** Whether `err` says a board copy's source has nothing stored (`BOARD_MISSING`). */
+export const isBoardMissing = (err: unknown): boolean =>
+  typeof err === 'object' && err !== null && (err as { code?: unknown }).code === BOARD_MISSING
+
 /** Throws unless `id` is a valid board id (`isBoardId`). */
 export function assertBoardId(id: unknown): asserts id is string {
   if (!isBoardId(id)) throw new Error(`sketch-block: invalid board id ${JSON.stringify(String(id)).slice(0, 80)}`)

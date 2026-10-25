@@ -33,9 +33,10 @@ export interface SketchOptions {
    */
   user?: UserOption | null
   /**
-   * When a paste, drop or duplicate creates a block whose board is already used elsewhere in the document, give
-   * the copy a new board id and copy the board into it (`provider.clone`, else connect + copy). Default true;
-   * false: copies share the board.
+   * When a paste, drop or duplicate creates a copy of a block, give the copy a new board id and copy the board into
+   * it (`provider.clone`, else connect + copy): a block whose board is already used elsewhere in the document, and
+   * a block pasted or dropped from another document. A block moved (drag, or cut + paste in the same editor) keeps
+   * its id. Default true; false: copies share the board.
    */
   onPasteClone?: boolean
 }
@@ -49,7 +50,9 @@ export interface SketchStorage {
   clones: Map<string, { from: string; promise: Promise<void> | null }>
   /**
    * Starts (once) the copy into board `id` when it is a pending clone and returns it; null when `id` is not
-   * being cloned. A failure is logged; the board then stays empty (the preview is kept).
+   * being cloned. A failure is logged; the board then stays empty (the preview is kept). It rejects with an error
+   * whose `code` is BOARD_MISSING when the source has nothing stored here (e.g. another document's board kept in
+   * another browser).
    */
   ensureClone: (id: string) => Promise<void> | null
 }
@@ -65,6 +68,32 @@ export const SKETCH_CLONE_META = 'sketchClones'
 
 interface Rewrite { pos: number; from: string; to: string }
 
+/** How long a cut block's board id may be pasted back into the same editor without a copy, ms. */
+export const CUT_MEMORY_MS = 10 * 60_000
+
+/** Board ids cut from each editor (id → when), so a cut + paste in the same editor is a move, not a copy. */
+const recentCuts = new WeakMap<object, Map<string, number>>()
+
+function rememberCuts(editor: object, ids: Iterable<string>, now: number): void {
+  let cuts = recentCuts.get(editor)
+  if (!cuts) recentCuts.set(editor, (cuts = new Map()))
+  for (const [id, t] of cuts) if (now - t > CUT_MEMORY_MS) cuts.delete(id)
+  for (const id of ids) cuts.set(id, now)
+}
+
+function wasCut(editor: object, id: string, now: number): boolean {
+  const t = recentCuts.get(editor)?.get(id)
+  return t !== undefined && now - t <= CUT_MEMORY_MS
+}
+
+/** Board ids `oldDoc` had more of than `newDoc` (each once). */
+function removedBoards(oldDoc: PMNode, newDoc: PMNode): string[] {
+  const count = new Map<string, number>()
+  for (const [, id] of boardNodes(oldDoc)) count.set(id, (count.get(id) ?? 0) + 1)
+  for (const [, id] of boardNodes(newDoc)) count.set(id, (count.get(id) ?? 0) - 1)
+  return [...count].filter(([, n]) => n > 0).map(([id]) => id)
+}
+
 /** Sketch nodes of `doc` with a board id: [pos, id], in document order. */
 function boardNodes(doc: PMNode): Array<[number, string]> {
   const out: Array<[number, string]> = []
@@ -77,14 +106,17 @@ function boardNodes(doc: PMNode): Array<[number, string]> {
 }
 
 /**
- * Sketch nodes the change from `oldDoc` to `newDoc` added whose board id was already in use: each gets a new id.
- * A node is "kept" when an old node with the same id maps onto it. For a paste / drop, as many added nodes keep
- * the id as old nodes went away (a paste replacing the original), at least one (duplicates within the slice get
- * new ids). For other changes (duplicate commands, moves, `setContent`), added nodes get new ids only while an
- * old node of the board is kept; a change that removed them all (a move, or loading a document whose blocks
- * already share a board) keeps the ids.
+ * Sketch nodes the change from `oldDoc` to `newDoc` added that are copies: each gets a new id. A node is "kept"
+ * when an old node with the same id maps onto it. For a paste / drop, as many added nodes keep the id as old nodes
+ * went away in the same change (a drag-move, a paste replacing the original), plus one when no node of the board
+ * is kept and `cut(id)` says this editor cut it recently (cut + paste); every other pasted node is a copy, which
+ * includes content from another document (spec: copies are independent). For other changes (duplicate commands,
+ * moves, `setContent`), added nodes get new ids only while an old node of the board is kept; a change that removed
+ * them all (a move, or loading a document whose blocks already share a board) keeps the ids.
  */
-export function findDuplicateBoards(oldDoc: PMNode, newDoc: PMNode, mapping: Mapping, pasteLike: boolean): Rewrite[] {
+export function findDuplicateBoards(
+  oldDoc: PMNode, newDoc: PMNode, mapping: Mapping, pasteLike: boolean, cut: (id: string) => boolean = () => false,
+): Rewrite[] {
   const oldCount = new Map<string, number>()
   const kept = new Set<number>()
   for (const [pos, id] of boardNodes(oldDoc)) {
@@ -105,9 +137,9 @@ export function findDuplicateBoards(oldDoc: PMNode, newDoc: PMNode, mapping: Map
     if (left === undefined) {
       const old = oldCount.get(id) ?? 0
       const stay = keptCount.get(id) ?? 0
-      // a paste brings in content that may already be on the page; any other change that drops every old node
-      // of the board (a move, setContent) is not a copy
-      left = pasteLike ? Math.max(old, 1) - stay : stay === 0 ? Infinity : old - stay
+      // a paste brings in a copy unless it moves the block (removed in the same change, or cut from this editor);
+      // any other change that drops every old node of the board (a move, setContent) is not a copy
+      left = pasteLike ? Math.max(old - stay, stay === 0 && cut(id) ? 1 : 0) : stay === 0 ? Infinity : old - stay
     }
     if (left > 0) allowed.set(id, left - 1)
     else {
@@ -119,6 +151,7 @@ export function findDuplicateBoards(oldDoc: PMNode, newDoc: PMNode, mapping: Map
 }
 
 const isPasteLike = (tr: Transaction) => !!tr.getMeta('paste') || tr.getMeta('uiEvent') === 'paste' || tr.getMeta('uiEvent') === 'drop'
+const isCut = (tr: Transaction) => tr.getMeta('uiEvent') === 'cut'
 /** A change that came from a collaborator (y-prosemirror): their editor already gave copies their own ids. */
 const isRemote = (tr: Transaction) => !!(tr.getMeta('y-sync$') as { isChangeOrigin?: boolean } | undefined)?.isChangeOrigin
 
@@ -171,6 +204,7 @@ export const SketchNode = Node.create<SketchOptions, SketchStorage>({
   // that reach ProseMirror (e.g. focus still in the text) must not edit it.
   addProseMirrorPlugins() {
     const { live, clones, ensureClone } = this.storage
+    const editor = this.editor
     const locked = () => live.size > 0
     const lock = new Plugin({
       key: new PluginKey('sketchLiveLock'),
@@ -193,9 +227,13 @@ export const SketchNode = Node.create<SketchOptions, SketchStorage>({
       appendTransaction(trs, oldState, newState) {
         const changed = trs.filter(tr => tr.docChanged)
         if (!changed.length || changed.some(isRemote) || changed.some(tr => tr.getMeta(SKETCH_CLONE_META))) return null
+        const now = Date.now()
+        // boards this editor cut (or pasted over): pasting them back here is a move
+        if (changed.some(tr => isCut(tr) || isPasteLike(tr))) rememberCuts(editor, removedBoards(oldState.doc, newState.doc), now)
         const mapping = new Mapping()
         for (const tr of changed) mapping.appendMapping(tr.mapping)
-        const rewrites = findDuplicateBoards(oldState.doc, newState.doc, mapping, changed.some(isPasteLike))
+        const pasteLike = changed.some(isPasteLike)
+        const rewrites = findDuplicateBoards(oldState.doc, newState.doc, mapping, pasteLike, id => wasCut(editor, id, now))
         if (!rewrites.length) return null
         const tr = newState.tr
         for (const r of rewrites) {

@@ -1,6 +1,6 @@
 import * as Y from 'yjs'
 import type { BoardConnection, SketchProvider } from './types'
-import { assertBoardId } from '../block/board-ids'
+import { assertBoardId, boardMissingError } from '../block/board-ids'
 
 /** In-memory provider for tests and demos. */
 export function memory(): SketchProvider {
@@ -27,7 +27,7 @@ export function memory(): SketchProvider {
       assertBoardId(from)
       assertBoardId(to)
       const state = store.get(from)
-      if (!state) throw new Error(`sketch-block: board ${from} has nothing to copy`)
+      if (!state) throw boardMissingError(from)
       const doc = new Y.Doc()
       try {
         // merge (never replace) whatever `to` already holds

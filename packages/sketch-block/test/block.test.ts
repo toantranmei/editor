@@ -801,16 +801,16 @@ describe('clone on paste and duplicate', () => {
     expect(await count(provider, ids[2]!)).toBe(1)
     expect(await count(provider, ORIGINAL)).toBe(1)
 
-    // a pasted slice that holds the same board twice also gets distinct ids
+    // a pasted slice that holds the same board twice (into another document) gets two new, distinct ids
     const { editor: other } = await setup({ provider })
     pasteAtEnd(other, html + html)
     const pasted = sketchNodes(other).map(n => n.boardId)
     expect(pasted).toHaveLength(2)
-    expect(pasted[0]).toBe(ORIGINAL)
-    expect(pasted[1]).not.toBe(ORIGINAL)
+    expect(pasted).not.toContain(ORIGINAL)
+    expect(new Set(pasted).size).toBe(2)
   })
 
-  it('paste into an empty doc (no duplicate) keeps id', async () => {
+  it('paste into an empty doc (cross-document) clones: copies are independent', async () => {
     const base = await seeded(1)
     const clone = vi.fn(async () => {})
     const provider: SketchProvider = { ...base, connect: id => base.connect(id), clone }
@@ -818,17 +818,90 @@ describe('clone on paste and duplicate', () => {
     const html = editor.getHTML()
     const { editor: other } = await setup({ provider })
     pasteAtEnd(other, html)
-    expect(sketchNodes(other).map(n => n.boardId)).toEqual([ORIGINAL])
-    // moving the block (delete + insert in one transaction) keeps its id too
+    const [copy] = sketchNodes(other)
+    expect(copy!.boardId).toMatch(/^bd_[\w-]{10}$/)
+    expect(copy!.boardId).not.toBe(ORIGINAL)
+    expect(copy!.preview).toBe(PREVIEW)
+    await vi.waitFor(() => expect(clone).toHaveBeenCalledWith(ORIGINAL, copy!.boardId))
+    // the source document is untouched
+    expect(sketchNodes(editor).map(n => n.boardId)).toEqual([ORIGINAL])
+  })
+
+  it('cut + paste in the same editor keeps the id', async () => {
+    const base = await seeded(1)
+    const clone = vi.fn(async () => {})
+    const provider: SketchProvider = { ...base, connect: id => base.connect(id), clone }
+    const { editor } = await setup({ provider, content: { type: 'doc', content: [{ type: 'sketch', attrs }, { type: 'paragraph' }] } })
+    const html = editor.getHTML()
     const { state } = editor
-    const node = state.doc.firstChild!
-    editor.view.dispatch(state.tr.delete(0, node.nodeSize).insert(0, [state.schema.nodes.paragraph!.create(), node]))
+    // what ProseMirror's cut handler dispatches
+    editor.view.dispatch(state.tr.delete(0, state.doc.firstChild!.nodeSize).setMeta('uiEvent', 'cut'))
+    expect(sketchNodes(editor)).toEqual([])
+    pasteAtEnd(editor, html)
+    expect(sketchNodes(editor).map(n => n.boardId)).toEqual([ORIGINAL])
+    // a cut in one editor does not let another editor keep the id
+    const { editor: other } = await setup({ provider })
+    pasteAtEnd(other, html)
+    expect(sketchNodes(other)[0]!.boardId).not.toBe(ORIGINAL)
+    await settle()
+    expect(clone).toHaveBeenCalledTimes(1)
+  })
+
+  it('a cut is remembered for 10 minutes only', async () => {
+    const base = await seeded(1)
+    const clone = vi.fn(async () => {})
+    const provider: SketchProvider = { ...base, connect: id => base.connect(id), clone }
+    const { editor } = await setup({ provider, content: { type: 'doc', content: [{ type: 'sketch', attrs }, { type: 'paragraph' }] } })
+    const html = editor.getHTML()
+    const now = vi.spyOn(Date, 'now')
+    const t = Date.now()
+    now.mockReturnValue(t)
+    const { state } = editor
+    editor.view.dispatch(state.tr.delete(0, state.doc.firstChild!.nodeSize).setMeta('uiEvent', 'cut'))
+    now.mockReturnValue(t + 10 * 60_000 + 1)
+    pasteAtEnd(editor, html)
+    now.mockRestore()
+    expect(sketchNodes(editor)[0]!.boardId).not.toBe(ORIGINAL)
+  })
+
+  it('moving the block (drag-move, a delete + insert) keeps its id; loading shared boards is not a copy', async () => {
+    const base = await seeded(1)
+    const clone = vi.fn(async () => {})
+    const provider: SketchProvider = { ...base, connect: id => base.connect(id), clone }
+    const { editor } = await setup({ provider, content: { type: 'doc', content: [{ type: 'sketch', attrs }] } })
+    // ProseMirror's drop of a dragged block: one transaction deleting the original and inserting it, uiEvent drop
+    let { state } = editor
+    let node = state.doc.firstChild!
+    editor.view.dispatch(state.tr.delete(0, node.nodeSize)
+      .insert(0, [state.schema.nodes.paragraph!.create(), node]).setMeta('uiEvent', 'drop'))
+    expect(sketchNodes(editor).map(n => n.boardId)).toEqual([ORIGINAL])
+    // a move without a uiEvent too
+    ;({ state } = editor)
+    node = state.doc.lastChild!
+    editor.view.dispatch(state.tr.delete(state.doc.content.size - node.nodeSize, state.doc.content.size).insert(0, node))
     expect(sketchNodes(editor).map(n => n.boardId)).toEqual([ORIGINAL])
     // loading a document that already shares a board between two blocks (M2) does not rewrite it
     editor.commands.setContent({ type: 'doc', content: [{ type: 'sketch', attrs }, { type: 'sketch', attrs }] })
     expect(sketchNodes(editor).map(n => n.boardId)).toEqual([ORIGINAL, ORIGINAL])
     await settle()
     expect(clone).not.toHaveBeenCalled()
+  })
+
+  it('a clone whose source is not on this device shows a friendly message and keeps the preview', async () => {
+    const provider = memory() // another document's board, stored elsewhere: nothing here
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const { editor: source } = await setup({ provider, content: { type: 'doc', content: [{ type: 'sketch', attrs }] } })
+    const html = source.getHTML()
+    const { editor, wrapper } = await setup({ provider })
+    pasteAtEnd(editor, html)
+    await settle()
+    const [copy] = sketchNodes(editor)
+    expect(copy!.boardId).not.toBe(ORIGINAL)
+    expect(copy!.preview).toBe(PREVIEW)
+    await vi.waitFor(() => expect(wrapper.find('.me-sketch-error').text()).toBe(messages.vi.cloneSourceMissing))
+    expect(wrapper.find('.me-sketch-preview').attributes('src')).toBe(PREVIEW)
+    expect(messages.en.cloneSourceMissing).toBeTruthy()
+    warn.mockRestore()
   })
 
   it('duplicating the block (a transaction, not a paste) assigns a new id in the same undo step', async () => {

@@ -12,7 +12,7 @@ import { computed, getCurrentInstance, markRaw, nextTick, onBeforeUnmount, onMou
 import { messages } from '../messages'
 import type { SketchElement } from '../model/types'
 import type { BoardConnection, ConnectionStatusValue, SketchProvider } from '../providers/types'
-import { isBoardId } from './board-ids'
+import { isBoardId, isBoardMissing } from './board-ids'
 import { liveViews } from './live'
 import { newBoardId, SKETCH_MAX_HEIGHT, SKETCH_MIN_HEIGHT, type SketchOptions } from './node'
 
@@ -330,11 +330,12 @@ function followClone(id: string | null) {
     () => {
       if (boardId.value === id) cloning.value = false
     },
-    () => {
+    (err: unknown) => {
       // keep the new id and the preview; the board opens empty (ensureClone logged the cause)
       if (boardId.value !== id || disposed) return
       cloning.value = false
-      error.value = m.value.cloneError
+      // e.g. pasted from another document whose board is not stored on this device
+      error.value = isBoardMissing(err) ? m.value.cloneSourceMissing : m.value.cloneError
     },
   )
 }
