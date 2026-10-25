@@ -5,7 +5,7 @@ import { type Arrowhead, isLinear, type LinearElement, type LocalPoint, type Ske
 import { displayColor, roughOptions, type Theme } from '../render/shapes'
 import { type ElementKind, hashArray, hashString, shapeKeyOf } from './kind'
 import { escXml } from '../io/xml'
-import { measureText } from '../text/measure'
+import { measureText, memoByElement } from '../text/measure'
 import { drawTextBlock, MIN_LOD_TEXT_PX, svgTextBlock, type TextBlock } from './text'
 
 /** Points the shaft actually passes through, in the local frame. */
@@ -100,12 +100,12 @@ export function linearLabelBox(el: LinearElement, text: string): { x: number; y:
   return { x: m.x - w / 2, y: m.y - h / 2, w, h, lines }
 }
 
-/** The label as a text block (null without a label). */
-function labelBlock(el: LinearElement, theme: Theme): (TextBlock & { h: number }) | null {
+/** The label as a text block (null without a label). Memoized per snapshot. */
+const labelBlock = memoByElement((el: LinearElement, theme: Theme): (TextBlock & { h: number }) | null => {
   if (el.label === '') return null
   const { lines, x, y, w, h } = linearLabelBox(el, el.label)
   return { lines, style: el, color: displayColor(el.stroke, theme), x, y, w, h }
-}
+})
 
 /** A mask / element id safe inside attributes and `url(#…)`, unique per element id. */
 const labelMaskId = (id: string): string => `me-sketch-label-${id.replace(/[^\w-]/g, '_')}-${hashString(id)}`

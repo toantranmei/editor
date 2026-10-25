@@ -5,10 +5,13 @@
  * records the post-settle rebuild after zooming ("settle max"). The same runs go over a board of
  * long pen strokes (200 points each), and a drag of a selection of shapes reports the frame time
  * while moving it. A board of sticky notes with bound arrows (n stickies, n/2 arrows each bound to a pair)
- * reports the frame time while dragging some of the bound stickies at zoom 1 (their arrows re-route each move).
+ * reports the frame time while dragging some of the bound stickies at zoom 1 (their arrows re-route each move),
+ * plus the synchronous pointermove handler time (performance.now around each dispatch: not capped by vsync).
+ * The same sticky board is first panned at zoom 0.25 (the LOD path: every sticky's auto-fit text laid out per
+ * frame, memoized per element).
  *
  *   pnpm bench:sketch                     # 1000 and 5000 shapes, 2000 pen strokes, drag 500 shapes,
- *                                         # 1000 stickies + 500 bound arrows: drag 50 bound stickies
+ *                                         # 1000 stickies + 500 bound arrows: LOD pan, drag 50 bound stickies
  *   pnpm bench:sketch -- --sizes=500,10000 --pen=4000 --drag=1000 --sticky=2000 --drag-bound=100 --no-build
  *   pnpm bench:sketch -- --pen=0 --drag=0 --sticky=0  # shapes only
  *
@@ -223,8 +226,12 @@ async function measureBoundDrag(page, count) {
     await frame()
     const STEPS = 60
     const stamps = [await frame()]
+    // synchronous handler time per pointermove (dispatchEvent runs the listeners before returning)
+    const handler = []
     for (let i = 1; i <= STEPS; i++) {
+      const t0 = performance.now()
       ptr('pointermove', i * 3, i * 2)
+      handler.push(performance.now() - t0)
       stamps.push(await frame())
     }
     stamps.push(await frame())
@@ -234,7 +241,11 @@ async function measureBoundDrag(page, count) {
     const avg = deltas.reduce((a, b) => a + b, 0) / deltas.length
     const after = board.getElements()
     const changed = e => before.get(e.id) !== JSON.stringify([e.x, e.y, e.w, e.h, e.points])
+    handler.sort((a, b) => a - b)
     return {
+      handlerAvg: +(handler.reduce((a, b) => a + b, 0) / handler.length).toFixed(2),
+      handlerP95: +handler[Math.floor(handler.length * 0.95)].toFixed(2),
+      handlerMax: +handler[handler.length - 1].toFixed(2),
       avg: +avg.toFixed(1),
       p95: +deltas[Math.floor(deltas.length * 0.95)].toFixed(1),
       fps: +(1000 / avg).toFixed(1),
@@ -284,10 +295,17 @@ if (dragCount > 0) {
   await page.close()
 }
 let boundDrag = null
-if (stickyCount > 0 && boundDragCount > 0) {
+let stickyLod = null
+if (stickyCount > 0) {
   const page = await openBoard(browser, stickyCount, 'sticky', loads)
   await page.waitForTimeout(500)
-  boundDrag = await measureBoundDrag(page, boundDragCount)
+  // LOD pan (zoom 0.25 < LOD_ZOOM 0.3): sticky text drawn as plain text from the per-element layout memo
+  const r = await measure(page, 'pan@0.25')
+  stickyLod = { ...r, avg: +(1000 / r.fps).toFixed(1) }
+  if (boundDragCount > 0) {
+    await page.waitForTimeout(500)
+    boundDrag = await measureBoundDrag(page, boundDragCount)
+  }
   await page.close()
 }
 await browser.close()
@@ -306,12 +324,21 @@ if (drag) {
     process.exitCode = 1
   }
 }
+if (stickyLod) {
+  console.log(`\nSticky LOD pan: ${stickyCount} stickies + ${Math.floor(stickyCount / 2)} bound arrows, panned at zoom 0.25 (LOD path), one wheel event per frame (60 frames).`)
+  console.table([{
+    stickies: stickyCount, 'zoom (shown)': stickyLod.zoom, 'avg frame (ms)': stickyLod.avg, 'p95 (ms)': stickyLod.p95,
+    fps: stickyLod.fps, 'settle max (ms)': stickyLod.settle ?? '–',
+  }])
+}
 if (boundDrag) {
   console.log(`\nBound drag: ${stickyCount} stickies + ${Math.floor(stickyCount / 2)} bound arrows; the ${boundDragCount} stickies nearest the view center selected, dragged at zoom 1, one pointermove per frame (60 frames).`)
   console.table([{
     selected: boundDragCount, 'bound arrows': boundDrag.bound, 'zoom (shown)': boundDrag.zoom, 'avg frame (ms)': boundDrag.avg,
     'p95 (ms)': boundDrag.p95, fps: boundDrag.fps, moved: boundDrag.moved, 'arrows re-routed': boundDrag.rerouted,
   }])
+  console.log('Synchronous pointermove handler time (performance.now around each dispatch; not vsync-capped):')
+  console.table([{ 'avg (ms)': boundDrag.handlerAvg, 'p95 (ms)': boundDrag.handlerP95, 'max (ms)': boundDrag.handlerMax }])
   if (boundDrag.moved !== boundDragCount || boundDrag.rerouted !== boundDrag.bound) {
     console.error(`bound drag moved ${boundDrag.moved} of ${boundDragCount} stickies and re-routed ${boundDrag.rerouted} of ${boundDrag.bound} bound arrows`)
     process.exitCode = 1

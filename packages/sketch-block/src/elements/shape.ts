@@ -4,7 +4,7 @@ import { type Point, polylineDistance } from '../geometry/math'
 import { pointInPolygon } from '../geometry/polygon'
 import type { LocalPoint, ShapeElement, ShapeType } from '../model/types'
 import { cornerRadius, displayColor, hasFill, roughOptions, type Theme } from '../render/shapes'
-import { measureText } from '../text/measure'
+import { measureText, memoByElement } from '../text/measure'
 import { type ElementKind, hashString, shapeKeyOf } from './kind'
 import { outlinePoints, shapeOutline } from './outlines'
 import { drawTextBlock, MIN_LOD_TEXT_PX, svgTextBlock, type TextBlock } from './text'
@@ -23,12 +23,12 @@ export function labelBox(el: ShapeElement, text: string): { x: number; y: number
   return { x: LABEL_PAD, y: (el.h - h) / 2, w, h, lines }
 }
 
-/** Label lines wrapped to the padded box width, the block centered vertically in the box. */
-function labelBlock(el: ShapeElement, theme: Theme): TextBlock | null {
+/** Label lines wrapped to the padded box width, the block centered vertically in the box. Memoized per snapshot. */
+const labelBlock = memoByElement((el: ShapeElement, theme: Theme): TextBlock | null => {
   if (el.label === '') return null
   const { lines, x, y, w } = labelBox(el, el.label)
   return { lines, style: el, color: displayColor(el.stroke, theme), x, y, w }
-}
+})
 
 function roundedRectPath(w: number, h: number, r: number): string {
   return `M ${r} 0 L ${w - r} 0 Q ${w} 0, ${w} ${r} L ${w} ${h - r} Q ${w} ${h}, ${w - r} ${h}`

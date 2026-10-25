@@ -43,9 +43,29 @@ type Layout = { w: number; lines: string[] }
 /** LRU of layouts by (text, font, maxWidth); Map iteration order = recency. */
 const layouts = new Map<string, Layout>()
 
+/** Bumped whenever the cached layouts are dropped: per-element memos (`memoByElement`) check it on read. */
+let generation = 0
+
 /** Drops every cached layout (the font metrics changed: the hand font loaded, or the measurer was swapped). */
 export function clearTextCache(): void {
   layouts.clear()
+  generation++
+}
+
+/**
+ * `fn` memoized per element snapshot (object identity: the scene keeps an element's object until it changes) and
+ * `key` (e.g. the theme), in a WeakMap. A memo is stale once the text cache was cleared (fonts loaded, measurer
+ * swapped). Keeps per-frame text layout off the LRU, which thrashes with more labels than it holds.
+ */
+export function memoByElement<E extends object, K, R>(fn: (el: E, key: K) => R): (el: E, key: K) => R {
+  const memo = new WeakMap<E, { gen: number; key: K; value: R }>()
+  return (el, key) => {
+    const hit = memo.get(el)
+    if (hit && hit.gen === generation && hit.key === key) return hit.value
+    const value = fn(el, key)
+    memo.set(el, { gen: generation, key, value })
+    return value
+  }
 }
 
 // the hand font changes every width measured with the fallback

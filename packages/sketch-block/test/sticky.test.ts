@@ -17,7 +17,7 @@ import {
   DEFAULT_STYLE, type ShapeElement, type SketchElement, STICKY_COLORS, type StickyElement, stickyInit,
 } from '../src/model/types'
 import { memory } from '../src/providers/memory'
-import { setMeasurer } from '../src/text/measure'
+import { clearTextCache, setMeasurer } from '../src/text/measure'
 import { type PointerInput, ToolController } from '../src/tools/controller'
 import StylePanel from '../src/ui/StylePanel.vue'
 import { Viewport } from '../src/viewport'
@@ -144,6 +144,35 @@ describe('text layout cache and tiny LOD text', () => {
     kindOf(rect).drawLod(ctx, rect, 'light', 0.25)
     spy.mockClear()
     kindOf(rect).drawLod(ctx, rect, 'light', 0.25)
+    expect(spy).not.toHaveBeenCalled()
+  })
+
+  it('two LOD frames of the same sticky snapshots lay them out once, even past the layout cache size', () => {
+    const spy = vi.fn((text: string, font: string) => text.length * (Number.parseFloat(font) || 16) * 0.5)
+    setMeasurer(spy)
+    // more stickies (each with its own text) than the 2000-entry text layout LRU holds
+    const els = Array.from({ length: 2500 }, (_, i) => sticky({ id: `s${i}`, text: `note number ${i}` }))
+    const ctx = makeFakeCtx(document.createElement('canvas'))
+    for (const el of els) kindOf(el).drawLod(ctx, el, 'light', 0.5)
+    expect(spy).toHaveBeenCalled()
+    spy.mockClear()
+    for (const el of els) kindOf(el).drawLod(ctx, el, 'light', 0.5)
+    expect(spy).not.toHaveBeenCalled()
+    // a font load (text cache cleared) invalidates the memo: the next frame lays out again
+    clearTextCache()
+    kindOf(els[0]!).drawLod(ctx, els[0]!, 'light', 0.5)
+    expect(spy).toHaveBeenCalled()
+  })
+
+  it('shape and arrow labels are memoized per snapshot too', () => {
+    const spy = vi.fn((text: string, font: string) => text.length * (Number.parseFloat(font) || 16) * 0.5)
+    setMeasurer(spy)
+    const rects = Array.from({ length: 2500 }, (_, i) =>
+      ({ ...sticky(), ...DEFAULT_STYLE, id: `r${i}`, type: 'rectangle', label: `label ${i}` }) as unknown as ShapeElement)
+    const ctx = makeFakeCtx(document.createElement('canvas'))
+    for (const r of rects) kindOf(r).drawLod(ctx, r, 'light', 1)
+    spy.mockClear()
+    for (const r of rects) kindOf(r).drawLod(ctx, r, 'light', 1)
     expect(spy).not.toHaveBeenCalled()
   })
 

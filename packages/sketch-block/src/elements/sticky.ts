@@ -2,7 +2,7 @@ import { escXml } from '../io/xml'
 import type { FontSize, StickyElement, TextStyle } from '../model/types'
 import type { Theme } from '../render/shapes'
 import { LINE_HEIGHT } from '../text/fonts'
-import { measureText } from '../text/measure'
+import { measureText, memoByElement } from '../text/measure'
 import { type ElementKind, hashString } from './kind'
 import { drawTextBlock, MIN_LOD_TEXT_PX, svgTextBlock, type TextBlock } from './text'
 
@@ -48,11 +48,15 @@ export function stickyLayout(el: StickyFit, text: string = el.text) {
   return { style, lines, maxLines, x: STICKY_PAD, y: (el.h - h) / 2, w, h, fontSize }
 }
 
-/** Lines that overflow even at the smallest size are dropped (the editor still shows them). */
-function stickyBlock(el: StickyElement): TextBlock {
+/**
+ * Lines that overflow even at the smallest size are dropped (the editor still shows them). Memoized per element
+ * snapshot (the auto-fit tries up to 5 sizes; LOD frames redraw every sticky).
+ */
+const stickyBlockOf = memoByElement((el: StickyElement, _key: null): TextBlock => {
   const l = stickyLayout(el)
   return { lines: l.lines.slice(0, l.maxLines), style: l.style, color: STICKY_TEXT_COLOR, x: l.x, y: l.y, w: l.w }
-}
+})
+const stickyBlock = (el: StickyElement): TextBlock => stickyBlockOf(el, null)
 
 function roundRectPath(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number): void {
   const r = Math.min(RADIUS, w / 2, h / 2)
