@@ -1,5 +1,6 @@
 // Heavy part of the package (roughjs, rbush, board UI). Loaded lazily by the node view.
 import { type Ref, ref, toRaw, watch } from 'vue'
+import { PresencePublisher, type PresenceUser } from './collab/presence'
 import { installRepair, repair } from './collab/repair'
 import { History } from './model/history'
 import { Scene } from './model/scene'
@@ -37,6 +38,12 @@ export interface BoardSession {
   readonly objectSnap: Ref<boolean>
   /** Shape last chosen from the shapes popover (null = none yet). */
   readonly lastShape: Ref<ShapeType | null>
+  /**
+   * The publisher of our presence on the connection's awareness (null without one), created on first use with
+   * `user`. Owned by the session: boards borrow it, so a remount (inline ↔ fullscreen) never clears our awareness
+   * state (peers following us keep following). Destroyed with the session.
+   */
+  presence(user: PresenceUser): PresencePublisher | null
   destroy(): void
 }
 
@@ -47,6 +54,8 @@ export function createBoardSession(connection: BoardConnection): BoardSession {
   const scene = new Scene(store)
   const history = new History(store)
   const canWrite = ref(true)
+  const awareness = toRaw(toRaw(connection).awareness) ?? null
+  let publisher: PresencePublisher | null = null
   // one repair observer per session (the inline and fullscreen boards share it)
   const uninstallRepair = installRepair(store, scene, { canWrite: () => canWrite.value })
   let destroyed = false
@@ -69,9 +78,15 @@ export function createBoardSession(connection: BoardConnection): BoardSession {
     grid: ref(false),
     objectSnap: ref(true),
     lastShape: ref<ShapeType | null>(null),
+    presence(user) {
+      if (!awareness || destroyed) return null
+      return (publisher ??= new PresencePublisher(awareness, user))
+    },
     destroy() {
       if (destroyed) return
       destroyed = true
+      publisher?.destroy()
+      publisher = null
       stopWritable()
       uninstallRepair()
       history.destroy()

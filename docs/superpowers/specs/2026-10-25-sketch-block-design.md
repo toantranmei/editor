@@ -166,17 +166,17 @@ sketch.configure({ provider: websocket({
 
 ## Các mốc (mỗi mốc là một bản publish 0.x qua changesets)
 
-Cập nhật (M2): M0, M1 và M2 được phát hành cùng nhau trong bản đầu tiên **0.1.0** (package chưa từng publish); các số bản trong bảng dưới chỉ còn là thứ tự dự kiến, M3 trở đi là các bản 0.x tiếp theo.
+Cập nhật (M3): M0, M1, M2 và M3 được phát hành cùng nhau trong bản đầu tiên **0.1.0** (package chưa từng publish; xem README của package); các số bản trong bảng dưới chỉ còn là thứ tự dự kiến, M4 trở đi là các bản 0.x tiếp theo.
 
 Cập nhật 2026-10-25: M0 (0.1.0) đã xong. Danh mục công cụ đã chọn (A1–A8, B1–B12, C1–C5, D1–D10, F1–F4) được xếp theo thứ tự "vẽ trước, Miro sau". Không làm: smart drawing, trình chiếu/comment/voting/timer/reactions, AI.
 
-- **M0 – Nền tảng (đã xong; phát hành trong 0.1.0 cùng M1, M2)**: package, node `sketch` + SketchView, Y store + scene + rbush, renderer 2 lớp + cache + culling + LOD, pan/zoom, select/move/resize/rotate, rect/ellipse/diamond, undo/redo, provider indexeddb/memory, preview SVG.
+- **M0 – Nền tảng (đã xong; phát hành trong 0.1.0 cùng M1, M2, M3)**: package, node `sketch` + SketchView, Y store + scene + rbush, renderer 2 lớp + cache + culling + LOD, pan/zoom, select/move/resize/rotate, rect/ellipse/diamond, undo/redo, provider indexeddb/memory, preview SVG.
 
 | Mốc | Bản | Nội dung |
 |---|---|---|
-| **M1 – Công cụ vẽ** | 0.1.0 (cùng M0, M2) | Pen (A1), highlighter (A2), line (A3), arrow thẳng/gấp khúc/cong (A4), text (A5), eraser (A6), laser (A7), lasso (A8), style panel (D1), hút màu (D2), copy/paste/duplicate và copy style (D3), zen/view mode (D10). Kèm nợ kỹ thuật từ M0 (xem bên dưới). |
-| **M2 – Miro core** | 0.1.0 (cùng M0, M1) | Sticky + tạo nhanh (B1, B2), ảnh + crop (B5), frame (B6), thư viện shape + flowchart (B3, B4), arrow binding (C1), nhãn arrow (C2), flowchart nhanh Ctrl+phím mũi tên (C3), group/lock (D4), align/distribute (D5), lưới + snap (D6). |
-| **M3 – Backend & collab** | 0.4.0 | Như spec gốc (http/websocket provider, awareness, clone-on-paste, exportBoards), thêm tìm kiếm (D7) và link phần tử (D8). |
+| **M1 – Công cụ vẽ** | 0.1.0 (cùng M0, M2, M3) | Pen (A1), highlighter (A2), line (A3), arrow thẳng/gấp khúc/cong (A4), text (A5), eraser (A6), laser (A7), lasso (A8), style panel (D1), hút màu (D2), copy/paste/duplicate và copy style (D3), zen/view mode (D10). Kèm nợ kỹ thuật từ M0 (xem bên dưới). |
+| **M2 – Miro core** | 0.1.0 (cùng M0, M1, M3) | Sticky + tạo nhanh (B1, B2), ảnh + crop (B5), frame (B6), thư viện shape + flowchart (B3, B4), arrow binding (C1), nhãn arrow (C2), flowchart nhanh Ctrl+phím mũi tên (C3), group/lock (D4), align/distribute (D5), lưới + snap (D6). |
+| **M3 – Backend & collab** | 0.1.0 (cùng M0, M1, M2) | Như spec gốc (http/websocket provider, awareness, clone-on-paste, exportBoards), thêm tìm kiếm (D7) và link phần tử (D8). |
 | **M4 – Xuất file & thư viện** | 0.5.0 | Export PNG/SVG/clipboard (F1), library (F2), template (F3), import `.excalidraw` (F4), minimap (D9), tối ưu hiệu năng theo benchmark. |
 | **M5 – Nội dung nâng cao** | 0.6.0 → 1.0 | Embed web (B7), emoji/stamp (B10), code block (B11), table (B8), card/kanban (B9), Mermaid → sketch (B12), mind map (C4), auto layout (C5). |
 

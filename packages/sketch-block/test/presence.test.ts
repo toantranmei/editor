@@ -8,7 +8,7 @@ import {
   defaultUser, GUEST_COLORS, PresencePublisher, PresenceReader, PRESENCE_THROTTLE_MS, RemoteSelectionBoxes,
   sanitizePresence,
 } from '../src/collab/presence'
-import { SketchBoard } from '../src/engine'
+import { createBoardSession, SketchBoard } from '../src/engine'
 import { BoardStore } from '../src/model/store'
 import { Scene } from '../src/model/scene'
 import { DEFAULT_STYLE } from '../src/model/types'
@@ -385,6 +385,55 @@ describe('SketchBoard presence', () => {
     await wrapper.find('.me-sketch-avatar').trigger('click')
     await wrapper.find('.me-sketch-following button').trigger('click')
     expect(wrapper.find('.me-sketch-following').exists()).toBe(false)
+  })
+
+  it('a session owns the presence: a peer following us keeps following across an inline ↔ fullscreen remount', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    // us: a board on a session (what SketchView mounts inline, then fullscreen)
+    const base = await memory().connect('b')
+    const awareness = newAwareness(base.doc)
+    const connection: BoardConnection = { ...base, awareness, destroy: () => base.destroy() }
+    const session = createBoardSession(connection)
+    const mountOurs = () => {
+      const w = mount(SketchBoard, { props: { connection, session, locale: 'en', user: { name: 'Ann Lee', color: '#f08c00' } }, attachTo: document.body })
+      wrappers.push(w)
+      return w
+    }
+    // the peer, following us
+    const peerBase = await memory().connect('b')
+    const peerAwareness = newAwareness(peerBase.doc)
+    relay(peerAwareness, awareness)
+    relay(awareness, peerAwareness)
+    const inline = mountOurs()
+    const peerConn: BoardConnection = { ...peerBase, awareness: peerAwareness, destroy: () => peerBase.destroy() }
+    const peer = mount(SketchBoard, { props: { connection: peerConn, locale: 'en' }, attachTo: document.body })
+    wrappers.push(peer)
+    await nextTick()
+    vi.advanceTimersByTime(PRESENCE_THROTTLE_MS)
+    await peer.find('.me-sketch-avatar').trigger('click')
+    await nextTick()
+    expect(peer.find('.me-sketch-following').text()).toContain('Ann Lee')
+
+    const cleared = vi.fn()
+    awareness.on('change', () => {
+      if (awareness.getLocalState() === null) cleared()
+    })
+    inline.unmount()
+    wrappers.splice(wrappers.indexOf(inline), 1)
+    const full = mountOurs()
+    await nextTick()
+    vi.advanceTimersByTime(PRESENCE_THROTTLE_MS)
+    await nextTick()
+    expect(cleared).not.toHaveBeenCalled()
+    expect(peer.find('.me-sketch-following').exists()).toBe(true)
+    expect((awareness.getLocalState() as Record<string, any>).user.name).toBe('Ann Lee')
+
+    // the session's destroy clears it
+    full.unmount()
+    wrappers.splice(wrappers.indexOf(full), 1)
+    expect(awareness.getLocalState()).not.toBeNull()
+    session.destroy()
+    expect(awareness.getLocalState()).toBeNull()
   })
 
   it('remote state invalidates only the interactive layer and draws the cursor', async () => {

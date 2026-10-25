@@ -114,8 +114,9 @@ async function open(): Promise<boolean> {
     engine.value = markRaw(mod)
     connection.value = markRaw(conn)
     session.value = markRaw(mod.createBoardSession(conn))
-    // The board isn't stored here (another device, cleared storage): say so, keep the preview.
-    notOnDevice.value = !conn.existed && !!preview.value
+    // The board isn't stored here (another device, cleared storage): say so, keep the preview. Never for a
+    // networked board: it lives on the server, not on this device (an empty one is still loading or was cleared).
+    notOnDevice.value = !conn.existed && !!preview.value && !conn.networked
     return true
   }
   catch (err) {

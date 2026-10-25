@@ -467,6 +467,35 @@ describe('SketchBoard', () => {
     expect(messages.en.objectSnap).toBeTruthy()
   })
 
+  it('emits change only for local edits and undo / redo, not for repair, copy or remote writes', async () => {
+    const { COPY_ORIGIN } = await import('../src/block/clone')
+    const { wrapper, store, connection } = await setup()
+    const count = () => wrapper.emitted('change')?.length ?? 0
+    const el = store.create(init())
+    expect(count()).toBe(1)
+    store.updateMany({ [el.id]: { x: 5 } }, REPAIR_ORIGIN)
+    const other = new Y.Doc()
+    Y.applyUpdate(other, Y.encodeStateAsUpdate(connection.doc))
+    new BoardStore(other).update(el.id, { y: 40 })
+    const diff = () => Y.encodeStateAsUpdate(other, Y.encodeStateVector(connection.doc))
+    Y.applyUpdate(connection.doc, diff(), COPY_ORIGIN)
+    new BoardStore(other).update(el.id, { y: 80 })
+    Y.applyUpdate(connection.doc, diff(), 'remote')
+    // a local transaction with another origin (e.g. a provider write) is not a board edit either
+    connection.doc.transact(() => (connection.doc.getMap('elements').get(el.id) as Y.Map<unknown>).set('w', 120), 'provider')
+    expect(count()).toBe(1)
+    const mine = store.create(init({ x: 300 }))
+    expect(count()).toBe(2)
+    await nextTick() // the undo button is enabled
+    await wrapper.find('[data-action="undo"]').trigger('click')
+    expect(store.get(mine.id)).toBeUndefined()
+    expect(count()).toBe(3)
+    await nextTick()
+    await wrapper.find('[data-action="redo"]').trigger('click')
+    expect(store.get(mine.id)).toBeDefined()
+    expect(count()).toBe(4)
+  })
+
   it('undo/redo buttons follow history and emit change', async () => {
     const { wrapper, key, drag, store } = await setup()
     const undo = () => wrapper.find('[data-action="undo"]')

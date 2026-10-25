@@ -138,7 +138,10 @@ sketch.configure({
   provider: http({
     // the stored Yjs state (an update), or null for a new board
     load: async id => {
-      const res = await fetch(`/api/boards/${encodeURIComponent(id)}`, { headers: auth() })
+      const res = await fetch(`/api/boards/${encodeURIComponent(id)}`, {
+        headers: auth(),
+        signal: AbortSignal.timeout(10_000), // a hung server falls back to the offline cache
+      })
       if (res.status === 404) return null
       if (!res.ok) throw new Error(`load ${res.status}`)
       return res.arrayBuffer()
@@ -158,6 +161,11 @@ sketch.configure({
 - Local edits are merged (`Y.mergeUpdates`) and saved 1 s after the last one (at least every 5 s during a long
   burst). A failed save keeps the merged update and retries after 1 s, 2 s, 4 s … up to 30 s. Closing the board
   attempts a final save.
+- **Timeouts:** the provider waits for `load` as long as it takes (the board shows *Loading…*). Give the request
+  a timeout, as above with `AbortSignal.timeout`, so a hung server falls back to the offline cache (or fails).
+- **Corrupt data:** when `load` returns bytes that are not a Yjs update, `connect` rejects (the board shows its
+  load error); during the background retries of an offline start, the status turns to error and loading keeps
+  retrying.
 - **Server side:** store the board as a Yjs state. On `save`, merge the update into it, e.g.
   `Y.mergeUpdates([stored, update])` with the `yjs` package (or apply it to a `Y.Doc`). Updates are idempotent and
   commutative, so a retried or reordered save is harmless. Authenticate `load` / `save` as usual (cookies, a
@@ -196,14 +204,17 @@ sketch.configure({
   [`@y/websocket-server`](https://github.com/yjs/y-websocket-server): `npm i -D @y/websocket-server`, then
   `HOST=localhost PORT=1234 npx y-websocket` serves `ws://localhost:1234`. **Install note:** version 0.1.5
   imports `yjs`, but its `@y/protocols` range resolves to a release built on the renamed `@y/y` package, and the
-  two Yjs copies make the server drop updates. Pin both to the Yjs 13 line the clients use, e.g. with pnpm
-  `overrides: { '@y/websocket-server>yjs': '^13.6.0', '@y/websocket-server>@y/protocols': '1.0.6-2' }` (npm:
-  `overrides` in `package.json`). This monorepo's playground does that, runs the server with `pnpm sync`, and opens
+  two Yjs copies make the server drop updates. Pin both to the Yjs 13 line the clients use. With pnpm
+  (`overrides` in `pnpm-workspace.yaml`, or `pnpm.overrides` in `package.json`):
+  `{ "@y/websocket-server>yjs": "^13.6.0", "@y/websocket-server>@y/protocols": "1.0.6-2" }`. With npm, in
+  `package.json`: `"overrides": { "@y/websocket-server": { "yjs": "^13.6.0", "@y/protocols": "1.0.6-2" } }`.
+  This monorepo's playground does that, runs the server with `pnpm sync`, and opens
   shared boards with `?sync=1` or `/sketch-collab?board=<id>`.
 - **Auth:** `params` become URL query parameters of the WebSocket request (e.g. `?token=…`). Check them in the
   server's `upgrade` handler before accepting the connection, and that the user may open the room (the board id).
   `params` is called again before every reconnect, so a renewed token is picked up. A server that closes the
-  connection for good shows the error status.
+  connection for good shows the error status; when it does so before the first sync, `connect` resolves at once
+  (with the IndexedDB copy or an empty board) instead of waiting for `connectTimeoutMs`.
 - **Persistence:** the reference server keeps rooms in memory only: they are gone when it restarts. For
   production, store each room's Yjs state: with `@y/websocket-server`, embed it and register
   `setPersistence({ bindState, writeState })` (load the stored state into the room's doc, save its updates), or

@@ -242,7 +242,7 @@ export const messages: Record<'vi' | 'en', SketchMessages> = {
       size: 'Ảnh quá lớn (tối đa 4 MB).',
       upload: 'Không tải được ảnh lên.',
     },
-    imageNeedsUpload: 'Ảnh quá lớn để lưu trực tiếp trên bảng dùng chung. Hãy cấu hình tải ảnh lên (uploadImage).',
+    imageNeedsUpload: 'Ảnh quá lớn cho bảng vẽ dùng chung',
     clipboardTooLarge: 'Quá lớn để sao chép hoặc dán (tối đa 24 MB).',
     style: {
       panel: 'Kiểu dáng',
@@ -406,7 +406,7 @@ export const messages: Record<'vi' | 'en', SketchMessages> = {
       size: 'The image is too large (max 4 MB).',
       upload: 'The image could not be uploaded.',
     },
-    imageNeedsUpload: 'This image is too large to store inline on a shared board. Configure an image uploader (uploadImage).',
+    imageNeedsUpload: 'Image too large for a shared board',
     clipboardTooLarge: 'Too large to copy or paste (max 24 MB).',
     style: {
       panel: 'Style',

@@ -37,6 +37,11 @@ export class History {
     this.manager.on('stack-item-updated', this.countEdit)
   }
 
+  /** Whether `origin` is this history's undo / redo (Yjs gives those transactions the UndoManager as origin). */
+  isOwnOrigin(origin: unknown): boolean {
+    return origin === this.manager
+  }
+
   undo(): void {
     this.manager.undo()
     this.sync()

@@ -2,7 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Ship `@toantranmei/sketch-block@0.4.0` with:
+> **Version note:** the package has never been published. M0–M3 ship together in its first release, **0.1.0** (the pending changesets are all minor bumps from `0.0.0`, see the package README); the 0.4.0 below was the original roadmap number.
+
+**Goal:** Ship M3 of `@toantranmei/sketch-block` (in the first release, 0.1.0, together with M0–M2) with:
 - an HTTP provider (persisted Yjs updates, offline cache);
 - a websocket provider (realtime) with presence: cursors, selections, follow, laser broadcast;
 - clone-on-paste of boards in the editor;

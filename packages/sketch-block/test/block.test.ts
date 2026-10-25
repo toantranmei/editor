@@ -211,6 +211,18 @@ describe('sketch block', () => {
     expect(view.stopEvent!(key())).toBe(false)
   })
 
+  it('a networked board never shows "not on this device" (an empty server board is not a device matter)', async () => {
+    const base = memory()
+    const provider: SketchProvider = {
+      async connect(id) {
+        return { ...(await base.connect(id)), networked: true }
+      },
+    }
+    const { wrapper } = await setup({ provider, attrs: { boardId: 'bd_net', preview: 'data:x', height: null, version: 2 } })
+    await enter(wrapper)
+    expect(wrapper.find('.me-sketch-notice').exists()).toBe(false)
+  })
+
   it('does not overwrite preview when board is empty and was never edited', async () => {
     const { provider, connections } = recording()
     const attrs = { boardId: 'bd_x', preview: 'data:x', height: null, version: 2 }

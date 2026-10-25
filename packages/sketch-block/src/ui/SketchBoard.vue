@@ -20,7 +20,7 @@ import {
 import { messages as allMessages } from '../messages'
 import { History } from '../model/history'
 import { Scene } from '../model/scene'
-import { BoardStore } from '../model/store'
+import { BoardStore, LOCAL_ORIGIN } from '../model/store'
 import { isFrame, isImage, isLinear, isShape, isSticky, type ShapeType, type SketchElement } from '../model/types'
 import { type BoardConnection, DEFAULT_MAX_INLINE_IMAGE_BYTES } from '../providers/types'
 import { BitmapCache, bindCacheInvalidation } from '../render/bitmap-cache'
@@ -198,8 +198,11 @@ function syncView(): void {
 const now = (): number => performance.now()
 const awareness = toRaw(toRaw(props.connection).awareness) ?? null
 const hasPresence = !!awareness
+// a session owns the publisher (a remount must not clear our awareness state); a board without one owns its own
 const publisher = awareness
-  ? new PresencePublisher(awareness, resolveUser(props.user, awareness.clientID, props.locale))
+  ? session
+    ? session.presence(resolveUser(props.user, awareness.clientID, props.locale))
+    : new PresencePublisher(awareness, resolveUser(props.user, awareness.clientID, props.locale))
   : null
 const reader = awareness
   ? new PresenceReader(awareness, { now, locale: () => props.locale, onChange: onRemote })
@@ -477,7 +480,8 @@ offs.push(onImageLoaded(src => withImageResolver(resolver(), () => {
 })))
 
 const onAfterTransaction = (tr: Y.Transaction) => {
-  if (tr.local && tr.changed.size > 0) emit('change')
+  // our edits and their undo / redo only: repairs, copies, provider loads and remote updates are not edits here
+  if (tr.changed.size > 0 && (tr.origin === LOCAL_ORIGIN || history.isOwnOrigin(tr.origin))) emit('change')
 }
 doc.on('afterTransaction', onAfterTransaction)
 offs.push(() => doc.off('afterTransaction', onAfterTransaction))
@@ -956,7 +960,13 @@ onBeforeUnmount(() => {
   dprQuery = null
   for (const off of offs.splice(0)) off()
   reader?.destroy()
-  publisher?.destroy()
+  if (session) {
+    // borrowed: keep the state (identity, viewport) for the next mount; this board's pointer and laser are gone
+    publisher?.set({ cursor: null, laser: [] })
+    publisher?.flush()
+  } else {
+    publisher?.destroy()
+  }
   settler.destroy()
   scheduler.destroy()
   controller.destroy()
