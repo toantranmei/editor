@@ -1,6 +1,6 @@
 {
   "name": "@toantranmei/editor",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "description": "Notion-style block editor for Vue 3 and Nuxt, built on Tiptap.",
   "keywords": [
     "vue",
