@@ -34,6 +34,8 @@ export interface SketchMessages {
   exitZen: string
   /** Inline error shown for 4 s when an image cannot be inserted. */
   imageError: Record<'type' | 'size' | 'upload', string>
+  /** Inline error shown for 4 s when a copy / paste is over the clipboard size limit. */
+  clipboardTooLarge: string
   style: StyleMessages
 }
 
@@ -171,6 +173,7 @@ export const messages: Record<'vi' | 'en', SketchMessages> = {
       size: 'Ảnh quá lớn (tối đa 4 MB).',
       upload: 'Không tải được ảnh lên.',
     },
+    clipboardTooLarge: 'Quá lớn để sao chép hoặc dán (tối đa 24 MB).',
     style: {
       panel: 'Kiểu dáng',
       collapse: 'Thu gọn bảng kiểu dáng',
@@ -304,6 +307,7 @@ export const messages: Record<'vi' | 'en', SketchMessages> = {
       size: 'The image is too large (max 4 MB).',
       upload: 'The image could not be uploaded.',
     },
+    clipboardTooLarge: 'Too large to copy or paste (max 24 MB).',
     style: {
       panel: 'Style',
       collapse: 'Collapse style panel',

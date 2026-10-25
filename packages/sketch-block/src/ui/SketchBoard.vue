@@ -5,7 +5,9 @@ import '../styles/sketch.css'
 import type { BoardSession } from '../engine'
 import { shapeKeyOf } from '../elements/kind'
 import type { Point } from '../geometry/math'
-import { clipboardImageFiles, parseClipboard, pastedImageFiles, serializeClipboard } from '../io/clipboard'
+import {
+  clipboardImageFiles, clipboardTooLarge, parseClipboard, pastedImageFiles, serializeClipboard,
+} from '../io/clipboard'
 import { ImageInsertError, type ImageInsertErrorCode, type ImageUploader, prepareImage } from '../io/image-insert'
 import { onImageLoaded, retryFailedImages } from '../io/image-loader'
 import { messages as allMessages } from '../messages'
@@ -539,8 +541,14 @@ function onCopy(e: ClipboardEvent, cut = false): void {
   if (cut && (locked.value || controller.isGestureActive())) return
   const els = controller.selectedElements()
   if (!els.length) return
-  e.clipboardData.setData('text/plain', serializeClipboard(els))
+  const text = serializeClipboard(els)
   e.preventDefault()
+  if (clipboardTooLarge(text)) {
+    // nothing is copied (nor cut): a paste would reject it anyway
+    showError(t.value.clipboardTooLarge)
+    return
+  }
+  e.clipboardData.setData('text/plain', text)
   if (cut) controller.deleteSelection()
 }
 
@@ -560,6 +568,10 @@ function onPaste(e: ClipboardEvent): void {
   const parsed = parseClipboard(e.clipboardData?.getData('text/plain') ?? '')
   if (!parsed) return
   e.preventDefault()
+  if ('tooLarge' in parsed) {
+    showError(t.value.clipboardTooLarge)
+    return
+  }
   const at = lastPointer ? viewport.toScene(lastPointer) : null
   if ('elements' in parsed) controller.pasteElements(parsed.elements, at)
   else controller.pasteText(parsed.text, at ?? viewport.toScene(center()))
@@ -569,12 +581,16 @@ const onDocCopy = (e: ClipboardEvent) => onCopy(e)
 
 // ---------- images ----------
 const fileInput = shallowRef<HTMLInputElement | null>(null)
-/** Inline image error message (null = none); cleared after IMAGE_ERROR_MS. */
+/** Inline error message (image insert, clipboard size; null = none); cleared after IMAGE_ERROR_MS. */
 const imageError = ref<string | null>(null)
 let imageErrorTimer: ReturnType<typeof setTimeout> | null = null
 
 function showImageError(code: ImageInsertErrorCode): void {
-  imageError.value = t.value.imageError[code]
+  showError(t.value.imageError[code])
+}
+
+function showError(message: string): void {
+  imageError.value = message
   if (imageErrorTimer) clearTimeout(imageErrorTimer)
   imageErrorTimer = setTimeout(() => {
     imageErrorTimer = null

@@ -4,8 +4,12 @@ import { isImageFile } from './image-insert'
 
 export const CLIPBOARD_TYPE = 'mei-sketch/clipboard'
 
-/** Clipboard text longer than this is ignored outright (before parsing). */
+/** Foreign / plain clipboard text longer than this is ignored outright (before parsing). */
 const MAX_CLIPBOARD_CHARS = 2_000_000
+/** Our own payloads (data-URL images make them big) may be this long; longer ones are rejected as too large. */
+export const MAX_OWN_CLIPBOARD_CHARS = 24_000_000
+/** How our own payload starts (checked before parsing, to pick the size limit). */
+const OWN_PREFIX_RE = /^\s*\{\s*"type"\s*:\s*"mei-sketch\/clipboard"/
 /** Payloads with more elements than this are ignored. */
 const MAX_ELEMENTS = 5000
 /** Plain text pasted as a text element, and an element's `text` / `label`, are cut to this length. */
@@ -43,13 +47,26 @@ export function serializeClipboard(elements: readonly SketchElement[]): string {
   })
 }
 
+/** Clipboard text that is our payload and too long to copy / paste (the board says so). */
+export interface ClipboardTooLarge { tooLarge: true }
+
+/** Whether `text` (serialized) is too long for the clipboard: copy refuses it, and says so. */
+export const clipboardTooLarge = (text: string): boolean => text.length > MAX_OWN_CLIPBOARD_CHARS
+
 /**
- * Untrusted clipboard text → elements (our payload), plain text, or null (empty / oversized / malformed own
- * payload). Elements are validated and rebuilt from known props only; invalid ones are dropped. Never throws.
+ * Untrusted clipboard text → elements (our payload), plain text, `{ tooLarge }` (our payload over
+ * MAX_OWN_CLIPBOARD_CHARS), or null (empty / oversized foreign text / malformed own payload). Elements are
+ * validated and rebuilt from known props only; invalid ones are dropped. Never throws.
  */
-export function parseClipboard(text: string): { elements: ElementInit[] } | { text: string } | null {
+export function parseClipboard(text: string): { elements: ElementInit[] } | { text: string } | ClipboardTooLarge | null {
   try {
-    if (typeof text !== 'string' || text.length > MAX_CLIPBOARD_CHARS || !text.trim()) return null
+    if (typeof text !== 'string') return null
+    if (text.length > MAX_CLIPBOARD_CHARS) {
+      // only our own payload may be bigger (images as data URLs); foreign text this long is ignored
+      if (!OWN_PREFIX_RE.test(text.slice(0, 100))) return null
+      if (clipboardTooLarge(text)) return { tooLarge: true }
+    }
+    if (!text.trim()) return null
     let data: unknown
     try {
       data = JSON.parse(text)
@@ -66,6 +83,7 @@ export function parseClipboard(text: string): { elements: ElementInit[] } | { te
       }
       return { elements }
     }
+    if (text.length > MAX_CLIPBOARD_CHARS) return null
     return { text: text.slice(0, MAX_TEXT_CHARS) }
   } catch {
     return null

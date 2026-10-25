@@ -49,6 +49,11 @@ function setup(readonly = false) {
   return { doc, store, scene, history, viewport, c }
 }
 
+const imageInit = (src: string, x = 0): ElementInit => ({
+  type: 'image', x, y: 0, w: 100, h: 100, angle: 0, locked: false, ...DEFAULT_STYLE, src, naturalW: 100, naturalH: 100,
+  crop: null,
+} as unknown as ElementInit)
+
 const payload = (elements: unknown[]) => JSON.stringify({ type: CLIPBOARD_TYPE, version: 1, elements })
 
 describe('serializeClipboard / parseClipboard', () => {
@@ -155,15 +160,15 @@ describe('serializeClipboard / parseClipboard', () => {
     expect(Object.prototype.hasOwnProperty.call(el, '__proto__')).toBe(false)
   })
 
-  it('hostile payload: exactly 2 000 000 chars accepted, one more rejected; text and label capped', () => {
+  it('own payloads: exactly 24 000 000 chars accepted, one more is too large; text and label capped', () => {
     const shell = payload([{ ...rectInit(), label: '' }])
-    const exact = payload([{ ...rectInit(), label: 'x'.repeat(2_000_000 - shell.length) }])
-    expect(exact).toHaveLength(2_000_000)
+    const exact = payload([{ ...rectInit(), label: 'x'.repeat(24_000_000 - shell.length) }])
+    expect(exact).toHaveLength(24_000_000)
     const r = parseClipboard(exact) as { elements: ShapeElement[] }
     expect(r.elements).toHaveLength(1)
     expect(r.elements[0]!.label).toHaveLength(10_000)
-    const over = payload([{ ...rectInit(), label: 'x'.repeat(2_000_001 - shell.length) }])
-    expect(parseClipboard(over)).toBeNull()
+    const over = payload([{ ...rectInit(), label: 'x'.repeat(24_000_001 - shell.length) }])
+    expect(parseClipboard(over)).toEqual({ tooLarge: true })
     const t = parseClipboard(payload([{ type: 'text', x: 0, y: 0, w: 10, h: 10, angle: 0, text: 'y'.repeat(50_000) }])) as {
       elements: TextElement[]
     }
@@ -189,10 +194,10 @@ describe('serializeClipboard / parseClipboard', () => {
     expect(r.elements[2]!.pressures).toEqual([0.1, 0.2])
   })
 
-  it('over 2MB ignored', () => {
-    const big = payload([{ ...rectInit(), label: 'x'.repeat(2_000_001) }])
-    expect(parseClipboard(big)).toBeNull()
+  it('foreign or plain text over 2MB ignored; up to 2MB trimmed to 10 000', () => {
     expect(parseClipboard('a'.repeat(2_000_001))).toBeNull()
+    expect(parseClipboard(JSON.stringify({ type: 'other', pad: 'x'.repeat(2_000_001) }))).toBeNull()
+    expect(parseClipboard('a'.repeat(2_000_000))).toEqual({ text: 'a'.repeat(10_000) })
   })
 
   it('over 5000 elements ignored', () => {
@@ -361,6 +366,40 @@ describe('SketchBoard clipboard', () => {
     const { root, store } = await setupBoard()
     root.element.dispatchEvent(clip('paste', 'hello').e)
     expect(store.all()[0]).toMatchObject({ type: 'text', text: 'hello' })
+  })
+
+  it('a 5 MB data-URL image round-trips copy / paste', async () => {
+    const src = `data:image/png;base64,${'A'.repeat(5_000_000)}`
+    const { root, store, selectAll } = await setupBoard({}, s => s.create(imageInit(src)))
+    await selectAll()
+    const copy = clip('copy')
+    root.element.dispatchEvent(copy.e)
+    expect(copy.e.defaultPrevented).toBe(true)
+    const paste = clip('paste', copy.data.get('text/plain'))
+    root.element.dispatchEvent(paste.e)
+    const all = store.all()
+    expect(all).toHaveLength(2)
+    expect(all[1]).toMatchObject({ type: 'image', src })
+  })
+
+  it('a 30 MB payload is rejected with the inline message (paste and copy)', async () => {
+    const big = `data:image/png;base64,${'A'.repeat(5_900_000)}`
+    const { root, store, wrapper, selectAll } = await setupBoard({ locale: 'en' }, s => {
+      for (let i = 0; i < 5; i++) s.create(imageInit(big, i * 500))
+    })
+    // paste: a 30 MB own payload
+    const paste = clip('paste', payload([{ ...imageInit(big), pad: 'x'.repeat(30_000_000) }]))
+    root.element.dispatchEvent(paste.e)
+    expect(paste.e.defaultPrevented).toBe(true)
+    expect(store.all()).toHaveLength(5)
+    await nextTick()
+    expect(wrapper.find('.me-sketch-toast').text()).toBe('Too large to copy or paste (max 24 MB).')
+    // copy: 5 × 5.9 MB images serialize past the limit — nothing is written, the message shows
+    await selectAll()
+    const copy = clip('copy')
+    root.element.dispatchEvent(copy.e)
+    expect(copy.clipboardData.setData).not.toHaveBeenCalled()
+    expect(wrapper.find('.me-sketch-toast').exists()).toBe(true)
   })
 
   it('cut removes', async () => {
