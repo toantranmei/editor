@@ -200,6 +200,14 @@ describe('serializeClipboard / parseClipboard', () => {
     expect(parseClipboard('a'.repeat(2_000_000))).toEqual({ text: 'a'.repeat(10_000) })
   })
 
+  it('an image src over 6 000 000 chars is dropped (it would not render)', () => {
+    const head = 'data:image/png;base64,'
+    const ok = parseClipboard(payload([imageInit(head + 'A'.repeat(6_000_000 - head.length))])) as { elements: ElementInit[] }
+    expect(ok.elements).toHaveLength(1)
+    const over = parseClipboard(payload([imageInit(head + 'A'.repeat(6_000_001 - head.length))])) as { elements: ElementInit[] }
+    expect(over.elements).toHaveLength(0)
+  })
+
   it('over 5000 elements ignored', () => {
     const one = rectInit()
     expect(parseClipboard(payload(Array.from({ length: 5001 }, () => one)))).toBeNull()

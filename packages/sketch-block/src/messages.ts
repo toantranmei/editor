@@ -107,8 +107,8 @@ export interface StyleMessages {
   distributeV: string
   group: string
   ungroup: string
+  /** Lock toggle (a constant name; its pressed state says whether the selection is locked). */
   lock: string
-  unlock: string
 }
 
 export const messages: Record<'vi' | 'en', SketchMessages> = {
@@ -243,7 +243,6 @@ export const messages: Record<'vi' | 'en', SketchMessages> = {
       group: 'Nhóm',
       ungroup: 'Bỏ nhóm',
       lock: 'Khóa',
-      unlock: 'Mở khóa',
     },
   },
   en: {
@@ -377,7 +376,6 @@ export const messages: Record<'vi' | 'en', SketchMessages> = {
       group: 'Group',
       ungroup: 'Ungroup',
       lock: 'Lock',
-      unlock: 'Unlock',
     },
   },
 }

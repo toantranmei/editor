@@ -509,7 +509,7 @@ const allLocked = computed(() => props.elements.length > 0 && props.elements.eve
           <button
             type="button" class="me-tool-btn me-sketch-style-opt" data-arrange="lock"
             :class="{ 'is-active': allLocked }"
-            :title="allLocked ? m.unlock : m.lock" :aria-label="allLocked ? m.unlock : m.lock"
+            :title="m.lock" :aria-label="m.lock"
             :aria-pressed="allLocked"
             @click="emit('lock')"
           >

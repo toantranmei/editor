@@ -409,7 +409,9 @@ describe('StylePanel', () => {
     expect(two.find('[data-arrange="lock"]').attributes('aria-pressed')).toBe('false')
     const locked = panel({ elements: [el({ type: 'rectangle', locked: true })] })
     expect(locked.find('[data-arrange="lock"]').attributes('aria-pressed')).toBe('true')
-    expect(locked.find('[data-arrange="lock"]').attributes('aria-label')).toBe(messages.en.style.unlock)
+    // a toggle: constant name, the state is in aria-pressed
+    expect(locked.find('[data-arrange="lock"]').attributes('aria-label')).toBe(two.find('[data-arrange="lock"]').attributes('aria-label'))
+    expect(locked.find('[data-arrange="lock"]').attributes('aria-label')).toBe(messages.en.style.lock)
   })
 
   it('arrange buttons count units: a single group is one unit, locked elements do not count', () => {

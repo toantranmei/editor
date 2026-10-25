@@ -1,5 +1,7 @@
 import { hasKind } from '../elements/kind'
-import { cleanBinding, ELEMENT_TYPES, type ElementInit, isImageSrc, normalizeElement, type SketchElement } from '../model/types'
+import {
+  cleanBinding, ELEMENT_TYPES, type ElementInit, isImageSrc, MAX_IMAGE_SRC_CHARS, normalizeElement, type SketchElement,
+} from '../model/types'
 import { isImageFile } from './image-insert'
 
 export const CLIPBOARD_TYPE = 'mei-sketch/clipboard'
@@ -219,7 +221,7 @@ function sanitizeElement(raw: unknown): ElementInit | null {
  * [0, 1e5] (0 = unknown) and the crop to the natural image (an empty or invalid crop becomes null).
  */
 function sanitizeImage(raw: Record<string, unknown>, out: Record<string, unknown>): boolean {
-  if (!isImageSrc(raw.src, false)) return false
+  if (!isImageSrc(raw.src, false) || raw.src.length > MAX_IMAGE_SRC_CHARS) return false
   out.src = raw.src
   const nw = finite(raw.naturalW) ? clamp(raw.naturalW, 0, MAX_NATURAL) : 0
   const nh = finite(raw.naturalH) ? clamp(raw.naturalH, 0, MAX_NATURAL) : 0

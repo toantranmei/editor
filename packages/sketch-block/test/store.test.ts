@@ -206,4 +206,59 @@ describe('isRenderable', () => {
     expect(isRenderable({ ...base, type: 'arrow', points: [[0, 0], [1, 1]] })).toBe(true)
     expect(isRenderable({ ...base, type: 'text' })).toBe(true)
   })
+
+  it('sticky color must be a 6-digit hex; image src at most 6 000 000 chars', () => {
+    const sticky = { ...init(), type: 'sticky', text: '', id: 's', index: 'a0', seed: 1, version: 1 }
+    expect(isRenderable({ ...sticky, color: '#FFF3BF' })).toBe(true)
+    for (const color of ['#fff', 'red', '#fff3bfaa', 'url(x)', 3]) expect(isRenderable({ ...sticky, color }), String(color)).toBe(false)
+    const image = { ...init(), type: 'image', id: 'i', index: 'a0', seed: 1, version: 1, naturalW: 1, naturalH: 1, crop: null }
+    const head = 'data:image/png;base64,'
+    expect(isRenderable({ ...image, src: head + 'A'.repeat(6_000_000 - head.length) })).toBe(true)
+    expect(isRenderable({ ...image, src: head + 'A'.repeat(6_000_001 - head.length) })).toBe(false)
+  })
+})
+
+describe('BoardStore patches that change nothing', () => {
+  it('skips unchanged keys and bumps version only when something changed', () => {
+    const doc = new Y.Doc()
+    const s = new BoardStore(doc)
+    const a = s.create(init({ groupIds: ['g1'] }))
+    let updates = 0
+    doc.on('update', () => updates++)
+    s.update(a.id, { x: 0, y: 0, w: 100, groupIds: ['g1'] })
+    expect(updates).toBe(0)
+    expect(s.get(a.id)!.version).toBe(1)
+    s.update(a.id, { x: 5, y: 0 })
+    expect(updates).toBe(1)
+    expect(s.get(a.id)).toMatchObject({ x: 5, y: 0, version: 2 })
+  })
+
+  it('compares points, bindings and crop deeply', () => {
+    const doc = new Y.Doc()
+    const s = new BoardStore(doc)
+    const line = s.create({
+      type: 'arrow', x: 0, y: 0, w: 10, h: 10, angle: 0, locked: false, ...DEFAULT_STYLE, label: '',
+      points: [[0, 0], [10, 10]], routing: 'straight', startArrowhead: 'none', endArrowhead: 'arrow',
+      startBinding: { id: 'q', ax: 0, ay: 0.5 }, endBinding: null,
+    } as never)
+    const img = s.create({
+      type: 'image', x: 0, y: 0, w: 10, h: 10, angle: 0, locked: false, ...DEFAULT_STYLE, src: 'https://x.test/a.png',
+      naturalW: 10, naturalH: 10, crop: { x: 1, y: 1, w: 5, h: 5 },
+    } as never)
+    let updates = 0
+    doc.on('update', () => updates++)
+    s.updateMany({
+      [line.id]: { points: [[0, 0], [10, 10]], startBinding: { id: 'q', ax: 0, ay: 0.5 }, endBinding: null },
+      [img.id]: { crop: { x: 1, y: 1, w: 5, h: 5 } },
+    })
+    expect(updates).toBe(0)
+    s.update(line.id, { points: [[0, 0], [10, 11]] })
+    expect(updates).toBe(1)
+    expect(s.get(line.id)!.version).toBe(2)
+    // long arrays are always written (no compare)
+    const long = Array.from({ length: 2001 }, (_, i) => [i, 0] as [number, number])
+    s.update(line.id, { points: long })
+    s.update(line.id, { points: long.map(p => [...p] as [number, number]) })
+    expect(s.get(line.id)!.version).toBe(4)
+  })
 })

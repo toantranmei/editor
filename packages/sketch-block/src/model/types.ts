@@ -254,6 +254,10 @@ const isCropValue = (v: unknown): boolean =>
 const isStringArray = (v: unknown): boolean => Array.isArray(v) && v.every(s => typeof s === 'string')
 
 /** Optional stored props: when present they must pass the check (absent ones are defaulted on read). */
+/** A stored image's `src` (URL or data URL) longer than this is not rendered. */
+export const MAX_IMAGE_SRC_CHARS = 6_000_000
+const HEX6 = /^#[0-9a-f]{6}$/i
+
 const OPTIONAL_CHECKS: Record<string, (v: unknown) => boolean> = {
   pressures: Array.isArray,
   text: v => typeof v === 'string',
@@ -282,8 +286,10 @@ export function isRenderable(raw: Record<string, unknown>): boolean {
   if (!isFiniteNumber(raw.x) || !isFiniteNumber(raw.y) || !isFiniteNumber(raw.w) || !isFiniteNumber(raw.h)) return false
   if (!isFiniteNumber(raw.angle)) return false
   if (POINTS_TYPES.has(raw.type) && !(Array.isArray(raw.points) && raw.points.every(isFinitePair))) return false
-  // an image needs a src with an allowed scheme (never `javascript:` and the like)
-  if (raw.type === 'image' && !isImageSrc(raw.src)) return false
+  // an image needs a src with an allowed scheme (never `javascript:` and the like), of a sane length
+  if (raw.type === 'image' && !(isImageSrc(raw.src) && raw.src.length <= MAX_IMAGE_SRC_CHARS)) return false
+  // a sticky's fill is a 6-digit hex color (drawn as is, also into SVG)
+  if (raw.type === 'sticky' && raw.color !== undefined && !(typeof raw.color === 'string' && HEX6.test(raw.color))) return false
   for (const [k, ok] of Object.entries(OPTIONAL_CHECKS)) {
     if (raw[k] !== undefined && !ok(raw[k])) return false
   }

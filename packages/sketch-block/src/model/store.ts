@@ -15,6 +15,25 @@ function toPlain(m: Y.Map<unknown>): SketchElement | undefined {
   return isRenderable(raw) && hasKind(raw.type as string) ? normalizeElement(raw) : undefined
 }
 
+/** Arrays longer than this are always written (comparing them would cost more than the write saves). */
+const MAX_COMPARED_ITEMS = 2000
+
+/**
+ * Whether a patch value equals the stored one: primitives by `===`; small arrays (`points`, `groupIds`) and
+ * objects (`crop`, bindings) by their JSON. Long arrays never compare equal (always written).
+ */
+function sameValue(cur: unknown, next: unknown): boolean {
+  if (cur === next) return true
+  if (typeof cur !== 'object' || typeof next !== 'object' || cur === null || next === null) return false
+  if (Array.isArray(next) && next.length > MAX_COMPARED_ITEMS) return false
+  if (Array.isArray(cur) !== Array.isArray(next)) return false
+  try {
+    return JSON.stringify(cur) === JSON.stringify(next)
+  } catch {
+    return false
+  }
+}
+
 export class BoardStore {
   readonly doc: Y.Doc
   private readonly elements: Y.Map<Y.Map<unknown>>
@@ -102,12 +121,20 @@ export class BoardStore {
     }, LOCAL_ORIGIN)
   }
 
+  /**
+   * Writes the keys of `patch` whose value differs from the stored one (see `sameValue`), then bumps `version`;
+   * nothing at all (no Y update, no version bump) when every key is unchanged.
+   */
   private applyPatch(id: string, patch: ElementPatch): void {
     const m = this.elements.get(id)
     if (!m) return
+    let changed = false
     for (const [k, v] of Object.entries(patch)) {
-      if (v !== undefined) m.set(k, v)
+      if (v === undefined || sameValue(m.get(k), v)) continue
+      m.set(k, v)
+      changed = true
     }
+    if (!changed) return
     // Moving above the top raises it; any other index change may lower it, so rescan lazily.
     if (patch.index !== undefined) {
       if (!this.topDirty && this.topIndex !== null && patch.index > this.topIndex) this.topIndex = patch.index
