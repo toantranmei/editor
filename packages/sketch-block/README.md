@@ -254,6 +254,23 @@ arrows. `Esc` closes the popover; clicking the shapes button again closes it too
 - **Data-URL fallback:** the image is scaled down to at most 2048 px on its long edge and re-encoded (JPEG at
   quality 0.85, or PNG when it has transparency). Images still over 4 MB after that are refused with an inline
   message. Set an uploader for large or many images.
+- **Shared boards:** on a board opened through a networked provider (`http()`, `websocket()`) every peer
+  downloads inline images, so without an uploader a data URL larger than `maxInlineImageBytes` (an option of
+  both providers, default `256_000` bytes) is refused with an inline message asking for an uploader.
+- **Allowlist / proxy:** a provider may implement `resolveImageSrc(src): string | null` (also an option of
+  `http()` and `websocket()`). Every image load goes through it first: return the URL to load (e.g. your image
+  proxy), or `null` to block the image (a placeholder is drawn). The board keeps the original `src`; previews
+  use the resolved URL too. It runs on every lookup while drawing, so keep it cheap and pure. Boards with
+  different providers on one page each use their own resolver.
+
+```ts
+http({
+  load, save,
+  resolveImageSrc: src => src.startsWith('https://cdn.example.com/')
+    ? src
+    : src.startsWith('data:') ? src : `https://proxy.example.com/img?u=${encodeURIComponent(src)}`,
+})
+```
 - **Crop:** double-click an image, or select it and press `Enter`. Drag the handles or move the crop rectangle,
   then press `Enter` or double-click to apply (`Esc` cancels). Cropping is one undo step.
 

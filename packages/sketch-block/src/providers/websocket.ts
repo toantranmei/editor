@@ -1,7 +1,7 @@
 import { IndexeddbPersistence } from 'y-indexeddb'
 import * as Y from 'yjs'
 import { createStatus } from './status'
-import type { BoardConnection, SketchProvider } from './types'
+import { type BoardConnection, DEFAULT_MAX_INLINE_IMAGE_BYTES, type SketchProvider } from './types'
 
 export interface WebsocketProviderOptions {
   /** The y-websocket server, e.g. `wss://sync.example.com`. The room is the board id. */
@@ -13,6 +13,12 @@ export interface WebsocketProviderOptions {
   /** `connect` resolves after the first sync or after this long, whichever comes first (default 4000 ms). */
   connectTimeoutMs?: number
   WebSocketPolyfill?: typeof WebSocket
+  /** Uploads inserted images (else they are stored inline as data URLs, see `maxInlineImageBytes`). */
+  uploadImage?(file: File): Promise<string>
+  /** Without an uploader, inline (data URL) images larger than this are refused (default 256 000 bytes). */
+  maxInlineImageBytes?: number
+  /** See `SketchProvider.resolveImageSrc`. */
+  resolveImageSrc?(src: string): string | null
 }
 
 type YWebsocket = typeof import('y-websocket')
@@ -25,7 +31,8 @@ type YWebsocket = typeof import('y-websocket')
 export function websocket(opts: WebsocketProviderOptions): SketchProvider {
   const offline = opts.offline ?? true
   const connectTimeoutMs = opts.connectTimeoutMs ?? 4000
-  return {
+  const maxInlineImageBytes = opts.maxInlineImageBytes ?? DEFAULT_MAX_INLINE_IMAGE_BYTES
+  const provider: SketchProvider = {
     async connect(boardId: string): Promise<BoardConnection> {
       let mod: YWebsocket
       try {
@@ -113,6 +120,7 @@ export function websocket(opts: WebsocketProviderOptions): SketchProvider {
         existed: doc.getMap('elements').size > 0,
         status,
         networked: true,
+        maxInlineImageBytes,
         destroy() {
           if (destroyed) return
           destroyed = true
@@ -132,4 +140,7 @@ export function websocket(opts: WebsocketProviderOptions): SketchProvider {
       }
     },
   }
+  if (opts.uploadImage) provider.uploadImage = opts.uploadImage
+  if (opts.resolveImageSrc) provider.resolveImageSrc = opts.resolveImageSrc
+  return provider
 }

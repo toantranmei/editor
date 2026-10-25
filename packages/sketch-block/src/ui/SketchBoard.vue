@@ -14,13 +14,15 @@ import {
   clipboardImageFiles, clipboardTooLarge, parseClipboard, pastedImageFiles, serializeClipboard,
 } from '../io/clipboard'
 import { ImageInsertError, type ImageInsertErrorCode, type ImageUploader, prepareImage } from '../io/image-insert'
-import { onImageLoaded, retryFailedImages } from '../io/image-loader'
+import {
+  type ImageResolver, onImageLoaded, resolveImageSrc, retryFailedImages, withImageResolver,
+} from '../io/image-loader'
 import { messages as allMessages } from '../messages'
 import { History } from '../model/history'
 import { Scene } from '../model/scene'
 import { BoardStore } from '../model/store'
 import { isFrame, isImage, isLinear, isShape, isSticky, type ShapeType, type SketchElement } from '../model/types'
-import type { BoardConnection } from '../providers/types'
+import { type BoardConnection, DEFAULT_MAX_INLINE_IMAGE_BYTES } from '../providers/types'
 import { BitmapCache, bindCacheInvalidation } from '../render/bitmap-cache'
 import { type RemoteOverlay, renderInteractive, resetAccentCache } from '../render/interactive'
 import { RenderScheduler, ZoomSettler } from '../render/scheduler'
@@ -47,7 +49,11 @@ const props = withDefaults(defineProps<{
   uploadImage?: ImageUploader | null
   /** Identity shown to peers on a networked board (`sketch.configure({ user })`); default: a guest. */
   user?: UserOption | null
-}>(), { readonly: false, locale: 'vi', theme: 'light', session: undefined, uploadImage: null, user: null })
+  /** The provider's `resolveImageSrc` (allowlist / proxy): images load through it; null leaves the placeholder. */
+  resolveImageSrc?: ImageResolver | null
+}>(), {
+  readonly: false, locale: 'vi', theme: 'light', session: undefined, uploadImage: null, user: null, resolveImageSrc: null,
+})
 
 const emit = defineEmits<{
   /** Any local edit (including undo/redo); the caller debounces preview generation. */
@@ -107,7 +113,18 @@ function renderState(): RenderState {
   }
 }
 
+/** Image lookups made while drawing go through this board's resolver (scoped: other boards keep theirs). */
+const resolver = (): ImageResolver | null => props.resolveImageSrc ?? null
+
 function drawStatic(): void {
+  withImageResolver(resolver(), drawStaticNow)
+}
+
+function drawInteractive(): void {
+  withImageResolver(resolver(), drawInteractiveNow)
+}
+
+function drawStaticNow(): void {
   const ctx = staticCanvas.value?.getContext('2d')
   if (!ctx) return
   // the element being edited is drawn by the editor overlay: a text element is hidden, a shape / line its label,
@@ -127,7 +144,7 @@ function drawStatic(): void {
   renderStatic(ctx, scene, renderState(), cache, skip, substitutes)
 }
 
-function drawInteractive(): void {
+function drawInteractiveNow(): void {
   const ctx = interactiveCanvas.value?.getContext('2d')
   const overlay = controller.overlay()
   let remoteLaser = false
@@ -380,20 +397,21 @@ function onDblClick(e: MouseEvent): void {
 }
 
 const offs: Array<() => void> = []
-offs.push(bindCacheInvalidation(scene, cache))
+offs.push(bindCacheInvalidation(scene, cache, resolver))
 offs.push(scene.onChange(invalidateAll))
 offs.push(scene.onChange(refreshEditing))
 offs.push(scene.onChange(() => sceneVersion.value++))
 // an image finished loading: its placeholder bitmaps are stale (the shape key includes the load state)
-offs.push(onImageLoaded(src => {
+offs.push(onImageLoaded(src => withImageResolver(resolver(), () => {
   let hit = false
   for (const el of scene.elements) {
-    if (!isImage(el) || el.src !== src) continue
+    // `src` is the loaded (resolved) URL
+    if (!isImage(el) || resolveImageSrc(el.src) !== src) continue
     hit = true
     cache.pruneElement(el.id, `${el.id}:${shapeKeyOf(el)}:`)
   }
   if (hit) invalidateAll()
-}))
+})))
 
 const onAfterTransaction = (tr: Y.Transaction) => {
   if (tr.local && tr.changed.size > 0) emit('change')
@@ -736,7 +754,16 @@ const imageError = ref<string | null>(null)
 let imageErrorTimer: ReturnType<typeof setTimeout> | null = null
 
 function showImageError(code: ImageInsertErrorCode): void {
-  showError(t.value.imageError[code])
+  showError(code === 'needsUpload' ? t.value.imageNeedsUpload : t.value.imageError[code])
+}
+
+/**
+ * Inline (data URL) image limit: only on a networked board (every peer downloads the bytes); unlimited (beyond the
+ * 4 MB cap) locally.
+ */
+function maxInlineBytes(): number | undefined {
+  const conn = toRaw(props.connection)
+  return conn.networked ? conn.maxInlineImageBytes ?? DEFAULT_MAX_INLINE_IMAGE_BYTES : undefined
 }
 
 function showError(message: string): void {
@@ -756,7 +783,7 @@ async function insertFiles(files: File[], at: Point | null): Promise<void> {
   let offset = 0
   for (const file of files) {
     try {
-      const info = await prepareImage(file, props.uploadImage ?? null)
+      const info = await prepareImage(file, props.uploadImage ?? null, { maxInlineBytes: maxInlineBytes() })
       if (unmounted) return
       const c = at ?? viewport.toScene(center())
       controller.insertImage(info, { x: c.x + offset, y: c.y + offset })

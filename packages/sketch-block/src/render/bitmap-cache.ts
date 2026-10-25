@@ -1,4 +1,5 @@
 import { kindOf, shapeKeyOf } from '../elements/kind'
+import { type ImageResolver, withImageResolver } from '../io/image-loader'
 import type { Scene } from '../model/scene'
 import type { SketchElement } from '../model/types'
 import type { Theme } from './shapes'
@@ -123,12 +124,15 @@ export class BitmapCache {
  * (moves and rotations keep theirs), for removed elements all of them. Keys are content-addressed,
  * so correctness does not depend on this; it only bounds memory.
  */
-export function bindCacheInvalidation(scene: Scene, cache: BitmapCache): () => void {
-  return scene.onChange(ids => {
+export function bindCacheInvalidation(
+  scene: Scene, cache: BitmapCache, resolver: () => ImageResolver | null = () => null,
+): () => void {
+  // an image's shape key reads its load state, looked up through the board's image resolver
+  return scene.onChange(ids => withImageResolver(resolver(), () => {
     for (const id of ids) {
       const el = scene.get(id)
       if (el) cache.pruneElement(id, `${id}:${shapeKeyOf(el)}:`)
       else cache.deleteElement(id)
     }
-  })
+  }))
 }

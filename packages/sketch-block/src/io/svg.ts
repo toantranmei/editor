@@ -4,7 +4,7 @@ import { kindOf } from '../elements/kind'
 import { boxCenter, elementBounds } from '../geometry/bounds'
 import { isFrame, isImage, type SketchElement } from '../model/types'
 import { bitmapPad, bitmapScale, buildBitmap } from '../render/bitmap-cache'
-import { getLoadedImage, isImageTainted, loadImage } from './image-loader'
+import { getLoadedImage, type ImageResolver, isImageTainted, loadImage, withImageResolver } from './image-loader'
 import { escXml } from './xml'
 
 const SVG_PREVIEW_LIMIT = 150_000
@@ -21,6 +21,8 @@ export interface SceneRasterOptions {
   maxWidth: number
   /** false: images are drawn as placeholders (the re-render after a tainted canvas). */
   images: boolean
+  /** The provider's `resolveImageSrc` (allowlist / proxy): images load through it; null draws a placeholder. */
+  resolveImageSrc?: ImageResolver | null
 }
 export interface PreviewOptions {
   /** SVG → PNG for large boards without images (default: draws the SVG onto a canvas). */
@@ -29,6 +31,8 @@ export interface PreviewOptions {
   rasterizeScene?: (elements: readonly SketchElement[], opts: SceneRasterOptions) => Promise<PreviewResult>
   /** Cap on waiting for images to load, ms (default 3000). */
   imageWaitMs?: number
+  /** The provider's `resolveImageSrc`, handed to `rasterizeScene` (and used by the default one). */
+  resolveImageSrc?: ImageResolver | null
 }
 
 const num = (n: number): string => String(Math.round(n * 100) / 100)
@@ -122,20 +126,22 @@ async function encodeLossy(canvas: HTMLCanvasElement): Promise<PreviewResult> {
 }
 
 /** Waits (at most `ms`) for the images' loads; failures are fine (they draw as placeholders). */
-async function awaitImages(srcs: readonly string[], ms: number): Promise<void> {
+async function awaitImages(srcs: readonly string[], ms: number, resolver: ImageResolver | null): Promise<void> {
   if (!srcs.length) return
   let timer: ReturnType<typeof setTimeout> | undefined
   const cap = new Promise<void>(resolve => (timer = setTimeout(resolve, ms)))
-  await Promise.race([Promise.allSettled(srcs.map(src => loadImage(src))), cap])
+  await Promise.race([Promise.allSettled(srcs.map(src => loadImage(src, resolver))), cap])
   clearTimeout(timer)
 }
 
 /** Draws one element in its frame: its kind's `draw` (or a placeholder for an image left out). */
-function drawPreviewElement(ctx: CanvasRenderingContext2D, el: SketchElement, scale: number, images: boolean): void {
+function drawPreviewElement(
+  ctx: CanvasRenderingContext2D, el: SketchElement, scale: number, images: boolean, resolver: ImageResolver | null,
+): void {
   ctx.translate(el.x + el.w / 2, el.y + el.h / 2)
   if (el.angle) ctx.rotate(el.angle)
   const kind = kindOf(el)
-  if (isImage(el) && (!images || isImageTainted(el.src))) {
+  if (isImage(el) && (!images || isImageTainted(el.src, resolver))) {
     ctx.translate(-el.w / 2, -el.h / 2)
     drawImagePlaceholder(ctx, el.w, el.h, 'light')
   } else if (kind.knockout?.(el)) {
@@ -146,7 +152,8 @@ function drawPreviewElement(ctx: CanvasRenderingContext2D, el: SketchElement, sc
     ctx.drawImage(bmp, -el.w / 2 - pad, -el.h / 2 - pad, bmp.width / s, bmp.height / s)
   } else {
     ctx.translate(-el.w / 2, -el.h / 2)
-    kind.draw(ctx, el, 'light', { dpr: scale })
+    // the image kind looks its image up synchronously through the current resolver
+    withImageResolver(resolver, () => kind.draw(ctx, el, 'light', { dpr: scale }))
   }
 }
 
@@ -158,11 +165,12 @@ function drawPreviewElement(ctx: CanvasRenderingContext2D, el: SketchElement, sc
 async function rasterizeSceneInBrowser(
   elements: readonly SketchElement[], opts: SceneRasterOptions, waitMs = IMAGE_WAIT_MS,
 ): Promise<PreviewResult> {
+  const resolver = opts.resolveImageSrc ?? null
   if (opts.images) {
     const srcs = [...new Set(elements.filter(isImage).map(el => el.src))]
-    await awaitImages(srcs.filter(src => !isImageTainted(src)), waitMs)
+    await awaitImages(srcs.filter(src => !isImageTainted(src, resolver)), waitMs, resolver)
     // start lookups for the draw (and for later boards)
-    for (const src of srcs) getLoadedImage(src)
+    for (const src of srcs) getLoadedImage(src, resolver)
   }
   const b = paddedBounds(elements, PADDING)
   const scale = Math.min(1, opts.maxWidth / b.w, PNG_MAX_HEIGHT / b.h)
@@ -188,7 +196,7 @@ async function rasterizeSceneInBrowser(
     }
     ctx.globalAlpha = el.opacity
     try {
-      drawPreviewElement(ctx, el, scale, opts.images)
+      drawPreviewElement(ctx, el, scale, opts.images, resolver)
     } finally {
       ctx.restore()
     }
@@ -214,11 +222,12 @@ export async function makePreview(
   if (elements.some(isImage)) {
     const raster = opts.rasterizeScene
       ?? ((els: readonly SketchElement[], o: SceneRasterOptions) => rasterizeSceneInBrowser(els, o, opts.imageWaitMs))
+    const resolver = opts.resolveImageSrc ? { resolveImageSrc: opts.resolveImageSrc } : {}
     try {
-      return await raster(elements, { maxWidth: PNG_MAX_WIDTH, images: true })
+      return await raster(elements, { maxWidth: PNG_MAX_WIDTH, images: true, ...resolver })
     } catch (err) {
       if (!isSecurityError(err)) throw err
-      return raster(elements, { maxWidth: PNG_MAX_WIDTH, images: false })
+      return raster(elements, { maxWidth: PNG_MAX_WIDTH, images: false, ...resolver })
     }
   }
   const svg = exportSvg(elements)

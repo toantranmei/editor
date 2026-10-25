@@ -9,9 +9,12 @@ export const JPEG_QUALITY = 0.85
 /** Types whose bytes may be stored as-is in a data URL (the `isImageSrc` data types). */
 const DATA_URL_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif'])
 
-export type ImageInsertErrorCode = 'type' | 'size' | 'upload'
+export type ImageInsertErrorCode = 'type' | 'size' | 'upload' | 'needsUpload'
 
-/** Why an image could not be inserted: not a (supported) image, too large, or the upload failed. */
+/**
+ * Why an image could not be inserted: not a (supported) image, too large, the upload failed, or (needsUpload) a
+ * data URL over the networked board's inline limit with no uploader.
+ */
 export class ImageInsertError extends Error {
   constructor(readonly code: ImageInsertErrorCode, options?: { cause?: unknown }) {
     super(`sketch-block: image insert failed (${code})`, options)
@@ -26,6 +29,15 @@ export interface PreparedImage {
 }
 
 export type ImageUploader = (file: File) => Promise<string>
+
+export interface PrepareImageOptions {
+  /**
+   * Largest data URL (decoded bytes) accepted without an uploader; above it 'needsUpload' is thrown. Set for
+   * networked boards (`connection.maxInlineImageBytes`): every peer would download the bytes. Default: no limit
+   * beyond the 4 MB one.
+   */
+  maxInlineBytes?: number
+}
 
 /** (w, h) scaled down (never up) so the long edge is at most `max`, ratio kept, rounded (min 1 px a side). */
 export function fitWithin(w: number, h: number, max: number): { w: number; h: number } {
@@ -101,9 +113,12 @@ function encodeCanvas(img: HTMLImageElement, w: number, h: number, sourceType: s
  * (its URL must pass `isImageSrc` without blob:, and a data URL it returns must be within 4 MB). Without one it becomes a data URL: kept byte for byte when it is a png /
  * jpeg / webp / gif within 2048 px and 4 MB, otherwise downscaled to 2048 px on the long edge and re-encoded
  * (JPEG 0.85, PNG when it has alpha). Throws ImageInsertError: 'type' (not a decodable image), 'size' (over
- * 4 MB after encoding), 'upload' (the uploader failed or returned an unusable URL).
+ * 4 MB after encoding), 'upload' (the uploader failed or returned an unusable URL), 'needsUpload' (no uploader
+ * and the data URL is over `opts.maxInlineBytes`).
  */
-export async function prepareImage(file: File, upload: ImageUploader | null): Promise<PreparedImage> {
+export async function prepareImage(
+  file: File, upload: ImageUploader | null, opts: PrepareImageOptions = {},
+): Promise<PreparedImage> {
   if (!isImageFile(file)) throw new ImageInsertError('type')
   const img = await decodeFile(file)
   const naturalW = img.naturalWidth
@@ -123,15 +138,19 @@ export async function prepareImage(file: File, upload: ImageUploader | null): Pr
     return { src, naturalW, naturalH }
   }
 
+  const inline = (src: string): string => {
+    if (opts.maxInlineBytes !== undefined && dataUrlBytes(src) > opts.maxInlineBytes) throw new ImageInsertError('needsUpload')
+    return src
+  }
   const type = file.type.toLowerCase()
   const fit = fitWithin(naturalW, naturalH, MAX_IMAGE_SIDE)
   const fits = fit.w === naturalW && fit.h === naturalH
   if (fits && DATA_URL_TYPES.has(type) && file.size <= MAX_IMAGE_BYTES) {
     const src = await readAsDataUrl(file)
-    if (isImageSrc(src)) return { src, naturalW, naturalH }
+    if (isImageSrc(src)) return { src: inline(src), naturalW, naturalH }
   }
   const src = encodeCanvas(img, fit.w, fit.h, type)
   if (!isImageSrc(src)) throw new ImageInsertError('type')
   if (dataUrlBytes(src) > MAX_IMAGE_BYTES) throw new ImageInsertError('size')
-  return { src, naturalW: fit.w, naturalH: fit.h }
+  return { src: inline(src), naturalW: fit.w, naturalH: fit.h }
 }

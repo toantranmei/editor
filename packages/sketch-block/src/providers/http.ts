@@ -1,7 +1,7 @@
 import { IndexeddbPersistence } from 'y-indexeddb'
 import * as Y from 'yjs'
 import { createStatus } from './status'
-import type { BoardConnection, SketchProvider } from './types'
+import { type BoardConnection, DEFAULT_MAX_INLINE_IMAGE_BYTES, type SketchProvider } from './types'
 
 export interface HttpProviderOptions {
   /** The board's stored Yjs state (an update), or null when the board doesn't exist yet. */
@@ -14,6 +14,10 @@ export interface HttpProviderOptions {
   debounceMs?: number
   /** Also keep the board in IndexedDB (`mei-sketch:<id>`) and push offline edits after loading (default true). */
   offline?: boolean
+  /** Without `uploadImage`, inline (data URL) images larger than this are refused (default 256 000 bytes). */
+  maxInlineImageBytes?: number
+  /** See `SketchProvider.resolveImageSrc`. */
+  resolveImageSrc?(src: string): string | null
 }
 
 const BACKOFF_START_MS = 1000
@@ -47,6 +51,7 @@ function changesServer(server: Uint8Array | null, diff: Uint8Array): boolean {
 export function http(opts: HttpProviderOptions): SketchProvider {
   const debounceMs = opts.debounceMs ?? 1000
   const offline = opts.offline ?? true
+  const maxInlineImageBytes = opts.maxInlineImageBytes ?? DEFAULT_MAX_INLINE_IMAGE_BYTES
   const provider: SketchProvider = {
     async connect(boardId: string): Promise<BoardConnection> {
       const doc = new Y.Doc()
@@ -212,6 +217,7 @@ export function http(opts: HttpProviderOptions): SketchProvider {
         existed: doc.getMap('elements').size > 0,
         status,
         networked: true,
+        maxInlineImageBytes,
         destroy() {
           if (destroyed) return
           if (timer !== null) clearTimeout(timer)
@@ -238,5 +244,6 @@ export function http(opts: HttpProviderOptions): SketchProvider {
   }
   if (opts.savePreview) provider.savePreview = opts.savePreview
   if (opts.uploadImage) provider.uploadImage = opts.uploadImage
+  if (opts.resolveImageSrc) provider.resolveImageSrc = opts.resolveImageSrc
   return provider
 }

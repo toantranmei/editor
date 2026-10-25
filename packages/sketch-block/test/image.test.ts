@@ -9,6 +9,7 @@ import { SketchBoard } from '../src/engine'
 import { CLIPBOARD_TYPE, clipboardImageFiles, parseClipboard, pastedImageFiles } from '../src/io/clipboard'
 import {
   clearImageCache, getLoadedImage, IMAGE_ERROR_TTL, isImageTainted, loadImage, onImageLoaded, retryFailedImages,
+  withImageResolver,
 } from '../src/io/image-loader'
 import { fitWithin, ImageInsertError, prepareImage } from '../src/io/image-insert'
 import { exportSvg } from '../src/io/svg'
@@ -759,5 +760,139 @@ describe('SketchBoard images', () => {
     expect(prune).toHaveBeenCalledWith(el.id, expect.stringMatching(new RegExp(`^${el.id}:`)))
     expect(frames.pending).toBeGreaterThan(0)
     frames.flush()
+  })
+})
+
+describe('images on collaborative boards', () => {
+  let frames: ReturnType<typeof stubFrames>
+  beforeEach(() => {
+    stubCanvas()
+    frames = stubFrames()
+    vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(800)
+    vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(600)
+  })
+  afterEach(() => {
+    for (const w of wrappers.splice(0)) w.unmount()
+    vi.useRealTimers()
+  })
+
+  async function networkedBoard(limit: number | undefined, props: Record<string, unknown> = {}) {
+    const conn = await memory().connect('net')
+    const connection = { ...conn, networked: true, ...(limit === undefined ? {} : { maxInlineImageBytes: limit }) }
+    const wrapper = mount(SketchBoard, { props: { connection, locale: 'en', ...props }, attachTo: document.body })
+    wrappers.push(wrapper)
+    await nextTick()
+    const root = wrapper.find('.me-sketch-board')
+    ;(root.element as HTMLElement).focus()
+    return { wrapper, root, store: new BoardStore(conn.doc) }
+  }
+
+  it('networked provider rejects oversized data URL without uploader', async () => {
+    FakeImage.size = [300, 200]
+    // prepareImage: the limit applies to data URLs only
+    await expect(prepareImage(file('image/png', 1000), null, { maxInlineBytes: 500 }))
+      .rejects.toMatchObject({ code: 'needsUpload' })
+    expect((await prepareImage(file('image/png', 400), null, { maxInlineBytes: 500 })).src.startsWith('data:')).toBe(true)
+    const upload = vi.fn(async () => 'https://cdn.example/up.png')
+    expect(await prepareImage(file('image/png', 1000), upload, { maxInlineBytes: 500 }))
+      .toMatchObject({ src: 'https://cdn.example/up.png' })
+
+    // the board: networked, no uploader, data URL over the limit → inline error, nothing inserted
+    const big = await networkedBoard(500)
+    big.root.element.dispatchEvent(clip([file('image/png', 1000)]))
+    await vi.waitFor(() => expect(big.wrapper.find('.me-sketch-toast').text()).toBe(messages.en.imageNeedsUpload))
+    expect(big.store.all()).toHaveLength(0)
+    expect(messages.vi.imageNeedsUpload).toBeTruthy()
+
+    // default limit 256 000 bytes: a small image is inserted
+    const small = await networkedBoard(undefined)
+    small.root.element.dispatchEvent(clip([file('image/png', 1000)]))
+    await vi.waitFor(() => expect(small.store.all()).toHaveLength(1))
+    const huge = await networkedBoard(undefined)
+    huge.root.element.dispatchEvent(clip([file('image/png', 300_000)]))
+    await vi.waitFor(() => expect(huge.wrapper.find('.me-sketch-toast').exists()).toBe(true))
+    expect(huge.store.all()).toHaveLength(0)
+
+    // with an uploader, the limit does not apply
+    const up = await networkedBoard(500, { uploadImage: upload })
+    up.root.element.dispatchEvent(clip([file('image/png', 1000)]))
+    await settle()
+    expect(up.store.all()).toHaveLength(1)
+
+    // a local (non-networked) board keeps inlining
+    const { root, store } = await setupBoard()
+    root.element.dispatchEvent(clip([file('image/png', 300_000)]))
+    await vi.waitFor(() => expect(store.all()).toHaveLength(1))
+
+    // http() and websocket() connections expose the limit (default 256 000)
+    const { http } = await import('../src/providers/http')
+    const load = async () => null
+    const save = async () => {}
+    const c1 = await http({ load, save, offline: false }).connect('h1')
+    expect(c1.maxInlineImageBytes).toBe(256_000)
+    c1.destroy()
+    const c2 = await http({ load, save, offline: false, maxInlineImageBytes: 1000 }).connect('h2')
+    expect(c2.maxInlineImageBytes).toBe(1000)
+    c2.destroy()
+    frames.flush()
+  })
+
+  it('resolveImageSrc rewrite and block', async () => {
+    const PROXY = 'https://proxy.example/?u='
+    const rewrite = (src: string) => `${PROXY}${encodeURIComponent(src)}`
+    const block = () => null
+
+    // loader level: the rewritten URL is loaded (and cached under it); null leaves the placeholder
+    await loadImage(SRC, rewrite)
+    expect(FakeImage.created.map(i => i.src)).toEqual([rewrite(SRC)])
+    expect(getLoadedImage(SRC, rewrite)).toBeInstanceOf(FakeImage)
+    expect(getLoadedImage(SRC, block)).toBe('error')
+    await expect(loadImage(SRC, block)).rejects.toThrow()
+    expect(FakeImage.created).toHaveLength(1)
+    // a resolver that throws or returns a disallowed URL also blocks
+    expect(getLoadedImage(SRC, () => { throw new Error('x') })).toBe('error')
+    expect(getLoadedImage(SRC, () => 'javascript:alert(1)')).toBe('error')
+
+    // scoped resolvers: two boards with different resolvers do not interfere
+    const seen: Array<string | 'error' | undefined> = []
+    withImageResolver(block, () => {
+      seen.push(getLoadedImage(SRC) === 'error' ? 'error' : 'img')
+      withImageResolver(rewrite, () => seen.push(getLoadedImage(SRC) instanceof FakeImage ? 'img' : undefined))
+      seen.push(getLoadedImage(SRC) === 'error' ? 'error' : 'img')
+    })
+    expect(seen).toEqual(['error', 'img', 'error'])
+    // outside any scope: no resolver, the original src
+    getLoadedImage(SRC)
+    expect(FakeImage.created.map(i => i.src)).toContain(SRC)
+
+    // board level: board A rewrites, board B blocks; the doc keeps the original src
+    clearImageCache()
+    FakeImage.created = []
+    const a = await setupBoard({ resolveImageSrc: rewrite })
+    const b = await setupBoard({ resolveImageSrc: block })
+    a.store.create(imageInit())
+    b.store.create(imageInit({ src: 'https://cdn.example/b.png' }))
+    await nextTick()
+    frames.flush()
+    await settle()
+    const loaded = FakeImage.created.map(i => i.src)
+    expect(loaded).toContain(rewrite(SRC))
+    expect(loaded).not.toContain(SRC)
+    expect(loaded.some(s => s.includes('b.png'))).toBe(false)
+    expect((a.store.all()[0] as ImageElement).src).toBe(SRC)
+
+    // previews resolve the same way
+    const { makePreview } = await import('../src/io/svg')
+    const rasterized: string[] = []
+    await makePreview([image({ src: 'https://cdn.example/c.png' })], {
+      resolveImageSrc: rewrite,
+      rasterizeScene: async (els, o) => {
+        await loadImage((els[0] as ImageElement).src, o.resolveImageSrc)
+        for (const el of els) rasterized.push(String(getLoadedImage((el as ImageElement).src, o.resolveImageSrc) instanceof FakeImage))
+        return { dataUrl: 'data:,', blob: new Blob([]) }
+      },
+    })
+    expect(rasterized).toEqual(['true'])
+    expect(FakeImage.created.map(i => i.src)).toContain(rewrite('https://cdn.example/c.png'))
   })
 })

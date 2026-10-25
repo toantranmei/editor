@@ -35,6 +35,8 @@ export interface SketchMessages {
   /** Inline error shown for 4 s when an image cannot be inserted. */
   imageError: Record<'type' | 'size' | 'upload', string>
   /** Inline error shown for 4 s when a copy / paste is over the clipboard size limit. */
+  /** A networked board without an uploader refuses large inline images. */
+  imageNeedsUpload: string
   clipboardTooLarge: string
   /** Presence (networked boards); `{name}` / `{n}` are replaced. */
   presence: PresenceMessages
@@ -194,6 +196,7 @@ export const messages: Record<'vi' | 'en', SketchMessages> = {
       size: 'Ảnh quá lớn (tối đa 4 MB).',
       upload: 'Không tải được ảnh lên.',
     },
+    imageNeedsUpload: 'Ảnh quá lớn để lưu trực tiếp trên bảng dùng chung. Hãy cấu hình tải ảnh lên (uploadImage).',
     clipboardTooLarge: 'Quá lớn để sao chép hoặc dán (tối đa 24 MB).',
     style: {
       panel: 'Kiểu dáng',
@@ -334,6 +337,7 @@ export const messages: Record<'vi' | 'en', SketchMessages> = {
       size: 'The image is too large (max 4 MB).',
       upload: 'The image could not be uploaded.',
     },
+    imageNeedsUpload: 'This image is too large to store inline on a shared board. Configure an image uploader (uploadImage).',
     clipboardTooLarge: 'Too large to copy or paste (max 24 MB).',
     style: {
       panel: 'Style',

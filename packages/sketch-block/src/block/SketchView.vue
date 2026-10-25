@@ -77,6 +77,8 @@ let provider: SketchProvider | null = null
 const providerUpload = shallowRef<((file: File) => Promise<string>) | null>(null)
 /** Image uploader for the board: the provider's, else the editor's `uploadImage`, else none (data URLs). */
 const imageUploader = computed(() => providerUpload.value ?? props.editor.storage.meiConfig?.uploadImage ?? null)
+/** The provider's image src resolver (allowlist / proxy), set once the provider is loaded. */
+const imageResolver = shallowRef<((src: string) => string | null) | null>(null)
 let opening: Promise<boolean> | null = null
 let disposed = false
 
@@ -105,6 +107,7 @@ async function open(): Promise<boolean> {
     }
     provider = prov
     providerUpload.value = prov.uploadImage ? markRaw((file: File) => prov.uploadImage!(file)) : null
+    imageResolver.value = prov.resolveImageSrc ? markRaw((src: string) => prov.resolveImageSrc!(src)) : null
     engine.value = markRaw(mod)
     connection.value = markRaw(conn)
     session.value = markRaw(mod.createBoardSession(conn))
@@ -270,7 +273,7 @@ async function save(elements: readonly SketchElement[] | null) {
   // Saves can overlap (debounce, then leave, with a slow savePreview): only the newest lands.
   const seq = ++saveSeq
   try {
-    const result = await engine.value.makePreview(elements)
+    const result = await engine.value.makePreview(elements, { resolveImageSrc: imageResolver.value })
     let next: string | null = null
     if (result) next = provider?.savePreview ? await provider.savePreview(id, result.blob) : result.dataUrl
     if (seq !== saveSeq) return
@@ -385,6 +388,7 @@ onMounted(() => {
           :locale="locale"
           :theme="theme"
           :upload-image="imageUploader"
+          :resolve-image-src="imageResolver"
           :user="options.user ?? null"
           @change="onChange"
           @exit="leave"
@@ -430,6 +434,7 @@ onMounted(() => {
               :locale="locale"
               :theme="theme"
               :upload-image="imageUploader"
+              :resolve-image-src="imageResolver"
               :user="options.user ?? null"
               @change="onChange"
               @exit="leave"
