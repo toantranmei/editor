@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import * as Y from 'yjs'
 
 import { installRepair, REPAIR_ORIGIN } from '../src/collab/repair'
@@ -224,5 +224,82 @@ describe('derived-data repair (relay)', () => {
     await settle()
     expect(store.get(arrow.id)).toEqual(before)
     scene.destroy()
+  })
+
+  it('membership hysteresis: a ±1e-12 flip at a frame edge does not rewrite frameId', async () => {
+    const { A, B } = setup()
+    const f = frame(A.store, 0, 0, 400, 300)
+    const inside = rect(A.store, 300, 0, { frameId: f.id }) // right edge exactly on the frame's
+    const outside = rect(A.store, 300, 150) // bottom edge 250: inside, but kept out of the frame
+    await settle()
+    expect(A.repairs + B.repairs).toBe(0)
+    // a peer's float noise: 1e-12 past the edge / 1e-12 inside
+    B.store.updateMany({ [inside.id]: { x: 300 + 1e-12 }, [outside.id]: { x: 300 - 1e-12 } })
+    await settle()
+    B.store.updateMany({ [inside.id]: { x: 300 - 1e-12 } })
+    await settle()
+    expect(A.repairs + B.repairs).toBe(0)
+    for (const p of [A, B]) {
+      expect(p.store.get(inside.id)).toMatchObject({ frameId: f.id })
+      expect(p.store.get(outside.id)).toMatchObject({ frameId: null })
+    }
+    // beyond the 0.5 band membership still follows
+    B.store.updateMany({ [inside.id]: { x: 301 } })
+    await settle()
+    expect(A.store.get(inside.id)).toMatchObject({ frameId: null })
+  })
+
+  it('circuit breaker: an id repaired 3 times within 2 s is skipped, with one warning', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      const A = peer(new Y.Doc())
+      const { s1, arrow } = arrowBetween(A)
+      const remote = new Y.Doc()
+      Y.applyUpdate(remote, Y.encodeStateAsUpdate(A.store.doc))
+      const rs = new BoardStore(remote)
+      // a misbehaving peer keeps moving s1 without its arrow (each one needs a repair of the arrow)
+      const nudge = async (y: number) => {
+        rs.update(s1.id, { y })
+        Y.applyUpdate(A.store.doc, Y.encodeStateAsUpdate(remote, Y.encodeStateVector(A.store.doc)), 'remote')
+        await settle()
+      }
+      for (let i = 1; i <= 3; i++) await nudge(i * 10)
+      expect(A.repairs).toBe(3)
+      const before = plain(A.store.get(arrow.id))
+      await nudge(40)
+      await nudge(50)
+      expect(A.repairs).toBe(3) // tripped: the arrow is left alone
+      expect(plain(A.store.get(arrow.id))).toEqual(before)
+      expect(warn).toHaveBeenCalledTimes(1)
+    } finally {
+      warn.mockRestore()
+    }
+  })
+
+  it('circuit breaker resets after 2 s', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const now = vi.spyOn(Date, 'now')
+    let t = 1_000_000
+    now.mockImplementation(() => t)
+    try {
+      const A = peer(new Y.Doc())
+      const { s1 } = arrowBetween(A)
+      const remote = new Y.Doc()
+      Y.applyUpdate(remote, Y.encodeStateAsUpdate(A.store.doc))
+      const rs = new BoardStore(remote)
+      const nudge = async (y: number) => {
+        rs.update(s1.id, { y })
+        Y.applyUpdate(A.store.doc, Y.encodeStateAsUpdate(remote, Y.encodeStateVector(A.store.doc)), 'remote')
+        await settle()
+      }
+      for (let i = 1; i <= 4; i++) await nudge(i * 10)
+      expect(A.repairs).toBe(3)
+      t += 2001
+      await nudge(100)
+      expect(A.repairs).toBe(4)
+    } finally {
+      now.mockRestore()
+      warn.mockRestore()
+    }
   })
 })
