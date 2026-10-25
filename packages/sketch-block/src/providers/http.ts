@@ -80,6 +80,7 @@ export function http(opts: HttpProviderOptions): SketchProvider {
       let burstStart: number | null = null
       let loadTimer: ReturnType<typeof setTimeout> | null = null
       let loadAttempt = 0
+      let lastLoadError: unknown = null
       /** false until a server load succeeds; status stays `offline` until then (never a false `saved`). */
       let loaded = false
       let destroyed = false
@@ -143,15 +144,23 @@ export function http(opts: HttpProviderOptions): SketchProvider {
 
       /**
        * Applies the server state, then queues the edits only this client has (offline cache, edits made before
-       * the load), computed by state vector.
+       * the load), computed by state vector. Returns false (and logs) when the data is not a valid Yjs update.
        */
-      const applyServer = (data: ArrayBuffer | Uint8Array | null) => {
+      const applyServer = (data: ArrayBuffer | Uint8Array | null): boolean => {
         let serverState: Uint8Array | null = null
         let serverVector: Uint8Array = new Uint8Array([0])
-        if (data) {
-          serverState = data instanceof Uint8Array ? data : new Uint8Array(data)
-          Y.applyUpdate(doc, serverState, loadOrigin)
-          serverVector = Y.encodeStateVectorFromUpdate(serverState)
+        try {
+          if (data) {
+            serverState = data instanceof Uint8Array ? data : new Uint8Array(data)
+            // validate first: a corrupt update must not leave a half-applied doc
+            Y.decodeUpdate(serverState)
+            serverVector = Y.encodeStateVectorFromUpdate(serverState)
+            Y.applyUpdate(doc, serverState, loadOrigin)
+          }
+        } catch (err) {
+          console.warn(`[sketch] board ${boardId}: the server sent data that is not a Yjs update`, err)
+          lastLoadError = err
+          return false
         }
         loaded = true
         const unsynced = Y.encodeStateAsUpdate(doc, serverVector)
@@ -161,6 +170,7 @@ export function http(opts: HttpProviderOptions): SketchProvider {
         } else {
           status.set(pending || inFlight ? 'saving' : 'saved')
         }
+        return true
       }
 
       const load = () => {
@@ -171,7 +181,10 @@ export function http(opts: HttpProviderOptions): SketchProvider {
         }
       }
 
-      /** Background load retries (cache-only start), same backoff as saves. */
+      /**
+       * Background load retries (cache-only start), same backoff as saves. Corrupt data sets the error status and
+       * keeps retrying.
+       */
       const retryLoad = () => {
         const delay = Math.min(BACKOFF_START_MS * 2 ** loadAttempt, BACKOFF_MAX_MS)
         loadAttempt++
@@ -179,12 +192,14 @@ export function http(opts: HttpProviderOptions): SketchProvider {
           loadTimer = null
           load().then(
             (data) => {
-              if (!destroyed) applyServer(data)
+              if (destroyed || applyServer(data)) return
+              status.set('error')
+              retryLoad()
             },
             () => {
               if (!destroyed) retryLoad()
             },
-          )
+          ).catch(err => console.error(err))
         }, delay)
       }
 
@@ -208,7 +223,14 @@ export function http(opts: HttpProviderOptions): SketchProvider {
       }
       doc.on('update', onUpdate)
       if (reachable) {
-        applyServer(initial)
+        if (!applyServer(initial)) {
+          if (timer !== null) clearTimeout(timer)
+          doc.off('update', onUpdate)
+          status.clear()
+          persistence?.destroy().catch(() => {})
+          doc.destroy()
+          throw new Error(`sketch-block: board ${boardId}: the server sent data that is not a Yjs update`, { cause: lastLoadError })
+        }
       } else {
         status.set('offline')
         retryLoad()

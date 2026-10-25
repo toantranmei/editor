@@ -292,6 +292,64 @@ describe('http provider', () => {
     conn.destroy()
   })
 
+  it('corrupt load data on connect rejects and cleans up (persistence, listeners, doc)', async () => {
+    const corrupt = new Uint8Array([1, 2, 3, 255])
+    const destroy = vi.spyOn(Y.Doc.prototype, 'destroy')
+    const save = vi.fn(async () => {})
+    await expect(http({ load: async () => corrupt, save, offline: false }).connect('corrupt-a')).rejects.toThrow()
+    expect(destroy).toHaveBeenCalledTimes(1)
+
+    // with an offline cache: still rejected (the server answered, with garbage), the cache is released
+    const cached = await indexeddb().connect('corrupt-b')
+    new BoardStore(cached.doc).create(init())
+    await flushMicrotasks()
+    cached.destroy()
+    destroy.mockClear()
+    await expect(http({ load: async () => corrupt.buffer, save, debounceMs: 1 }).connect('corrupt-b')).rejects.toThrow()
+    expect(destroy).toHaveBeenCalledTimes(1)
+    await new Promise(r => setTimeout(r, 20))
+    expect(save).not.toHaveBeenCalled()
+    // the cache can be opened again (its persistence was destroyed)
+    const again = await indexeddb().connect('corrupt-b')
+    expect(again.doc.getMap('elements').size).toBe(1)
+    again.destroy()
+    destroy.mockRestore()
+  })
+
+  it('corrupt data from a background load: status error, retries with backoff, no unhandled rejection', async () => {
+    const server = fakeServer()
+    server.boards.set('corrupt-bg', seed(1))
+    const cached = await indexeddb().connect('corrupt-bg')
+    new BoardStore(cached.doc).create(init(70))
+    await flushMicrotasks()
+    cached.destroy()
+
+    const answers: Array<'down' | 'corrupt' | 'ok'> = ['down', 'corrupt', 'corrupt', 'ok']
+    const load = vi.fn(async (id: string) => {
+      const a = answers.shift() ?? 'ok'
+      if (a === 'down') throw new Error('down')
+      return a === 'corrupt' ? new Uint8Array([1, 2, 3, 255]) : server.boards.get(id) ?? null
+    })
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
+    const conn = await http({ load, save: server.save, debounceMs: 10 }).connect('corrupt-bg')
+    const status = conn.status!
+    expect(status.get()).toBe('offline')
+    await vi.advanceTimersByTimeAsync(1000) // retry 1: corrupt
+    expect(load).toHaveBeenCalledTimes(2)
+    expect(status.get()).toBe('error')
+    await vi.advanceTimersByTimeAsync(1999)
+    expect(load).toHaveBeenCalledTimes(2) // backoff: 2 s
+    await vi.advanceTimersByTimeAsync(1) // retry 2: corrupt
+    expect(load).toHaveBeenCalledTimes(3)
+    expect(status.get()).toBe('error')
+    await vi.advanceTimersByTimeAsync(4000) // retry 3: ok
+    expect(load).toHaveBeenCalledTimes(4)
+    await vi.advanceTimersByTimeAsync(10)
+    expect(conn.doc.getMap('elements').size).toBe(2)
+    expect(status.get()).toBe('saved')
+    conn.destroy()
+  })
+
   it('destroy stops background load retries', async () => {
     const cached = await indexeddb().connect('lf-stop')
     new BoardStore(cached.doc).create(init())
