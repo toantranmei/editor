@@ -85,6 +85,14 @@ export interface StyleMessages {
   sendToBack: string
   bringToFront: string
   arrange: string
+  alignElLeft: string
+  alignElHCenter: string
+  alignElRight: string
+  alignElTop: string
+  alignElVCenter: string
+  alignElBottom: string
+  distributeH: string
+  distributeV: string
   group: string
   ungroup: string
   lock: string
@@ -206,6 +214,14 @@ export const messages: Record<'vi' | 'en', SketchMessages> = {
       sendToBack: 'Đưa xuống dưới cùng',
       bringToFront: 'Đưa lên trên cùng',
       arrange: 'Sắp xếp',
+      alignElLeft: 'Căn trái',
+      alignElHCenter: 'Căn giữa theo chiều ngang',
+      alignElRight: 'Căn phải',
+      alignElTop: 'Căn trên',
+      alignElVCenter: 'Căn giữa theo chiều dọc',
+      alignElBottom: 'Căn dưới',
+      distributeH: 'Phân bố đều theo chiều ngang',
+      distributeV: 'Phân bố đều theo chiều dọc',
       group: 'Nhóm',
       ungroup: 'Bỏ nhóm',
       lock: 'Khóa',
@@ -326,6 +342,14 @@ export const messages: Record<'vi' | 'en', SketchMessages> = {
       sendToBack: 'Send to back',
       bringToFront: 'Bring to front',
       arrange: 'Arrange',
+      alignElLeft: 'Align left',
+      alignElHCenter: 'Center horizontally',
+      alignElRight: 'Align right',
+      alignElTop: 'Align top',
+      alignElVCenter: 'Center vertically',
+      alignElBottom: 'Align bottom',
+      distributeH: 'Distribute horizontally',
+      distributeV: 'Distribute vertically',
       group: 'Group',
       ungroup: 'Ungroup',
       lock: 'Lock',

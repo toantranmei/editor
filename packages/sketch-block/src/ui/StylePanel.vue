@@ -6,8 +6,10 @@ import { type ElementType, type SketchElement, STICKY_COLORS } from '../model/ty
 import { displayColor, type Theme } from '../render/shapes'
 import { FONT_FAMILIES } from '../text/fonts'
 import { TOOL_ELEMENT_TYPES, type ToolName } from '../tools/controller'
+import type { AlignMode, DistributeAxis } from '../geometry/align'
 import {
-  BringToFront, Group, Lock, LockOpen, Palette, SendToBack, TextAlignCenter, TextAlignEnd, TextAlignStart, Ungroup,
+  AlignCenterHorizontal, AlignCenterVertical, AlignEndHorizontal, AlignEndVertical, AlignHorizontalDistributeCenter,
+  AlignStartHorizontal, AlignStartVertical, AlignVerticalDistributeCenter, BringToFront, Group, Lock, LockOpen, Palette, SendToBack, TextAlignCenter, TextAlignEnd, TextAlignStart, Ungroup,
 } from './icons'
 import { BG_COLORS, STROKE_COLORS } from './palette'
 
@@ -26,6 +28,8 @@ const props = withDefaults(defineProps<{
 const emit = defineEmits<{
   apply: [patch: Partial<CurrentStyle>]
   layer: [to: 'front' | 'back']
+  align: [mode: AlignMode]
+  distribute: [axis: DistributeAxis]
   group: []
   ungroup: []
   lock: []
@@ -194,6 +198,19 @@ function onOpacity(e: Event): void {
 
 // ---------- arrange ----------
 const canGroup = computed(() => props.elements.length >= 2)
+// lucide's "vertical" icons align along x (a vertical guide line), the "horizontal" ones along y
+const alignModes = computed(() => [
+  { value: 'left' as const, label: m.value.alignElLeft, icon: AlignStartVertical },
+  { value: 'hcenter' as const, label: m.value.alignElHCenter, icon: AlignCenterVertical },
+  { value: 'right' as const, label: m.value.alignElRight, icon: AlignEndVertical },
+  { value: 'top' as const, label: m.value.alignElTop, icon: AlignStartHorizontal },
+  { value: 'vcenter' as const, label: m.value.alignElVCenter, icon: AlignCenterHorizontal },
+  { value: 'bottom' as const, label: m.value.alignElBottom, icon: AlignEndHorizontal },
+])
+const distributeAxes = computed(() => [
+  { value: 'h' as const, label: m.value.distributeH, icon: AlignHorizontalDistributeCenter },
+  { value: 'v' as const, label: m.value.distributeV, icon: AlignVerticalDistributeCenter },
+])
 const canUngroup = computed(() => props.elements.some(el => el.groupIds.length > 0))
 const allLocked = computed(() => props.elements.length > 0 && props.elements.every(el => el.locked))
 </script>
@@ -446,6 +463,30 @@ const allLocked = computed(() => props.elements.length > 0 && props.elements.eve
         <h3 class="me-sketch-style-label">
           {{ m.arrange }}
         </h3>
+        <div v-if="elements.length >= 2" class="me-sketch-style-row" role="group" :aria-label="m.arrange">
+          <button
+            v-for="o in alignModes"
+            :key="o.value"
+            type="button" class="me-tool-btn me-sketch-style-opt"
+            :data-align-mode="o.value"
+            :title="o.label" :aria-label="o.label"
+            @click="emit('align', o.value)"
+          >
+            <component :is="o.icon" />
+          </button>
+        </div>
+        <div v-if="elements.length >= 3" class="me-sketch-style-row">
+          <button
+            v-for="o in distributeAxes"
+            :key="o.value"
+            type="button" class="me-tool-btn me-sketch-style-opt"
+            :data-distribute="o.value"
+            :title="o.label" :aria-label="o.label"
+            @click="emit('distribute', o.value)"
+          >
+            <component :is="o.icon" />
+          </button>
+        </div>
         <div class="me-sketch-style-row">
           <button
             v-if="canGroup"

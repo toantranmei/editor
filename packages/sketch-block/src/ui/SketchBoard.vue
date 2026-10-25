@@ -745,6 +745,8 @@ defineExpose({
       :hidden="zen || viewMode"
       @apply="applyStyle"
       @layer="reorder"
+      @align="controller.align($event)"
+      @distribute="controller.distribute($event)"
       @group="controller.group()"
       @ungroup="controller.ungroup()"
       @lock="controller.toggleLock()"
