@@ -253,6 +253,50 @@
     margin: 0 var(--me-space-1);
     background: var(--me-toolbar-divider-color);
   }
+  /* Search box (mod+F): top-right, under the tool bar row; presence moves down below it while it is open. */
+  .me-sketch-board .me-sketch-search {
+    position: absolute;
+    top: calc(var(--me-space-4) * 2 + var(--me-toolbar-button-size) + var(--me-space-1) * 2);
+    right: var(--me-space-4);
+    display: flex;
+    align-items: center;
+    gap: var(--me-space-1);
+    max-width: calc(100% - var(--me-space-4) * 2);
+    box-sizing: border-box;
+    padding: var(--me-space-1) var(--me-space-1) var(--me-space-1) var(--me-space-2);
+    border-radius: var(--me-popover-radius);
+    background: var(--me-popover-bg);
+    box-shadow: var(--me-popover-shadow);
+    font-size: var(--me-font-size-sm);
+  }
+  .me-sketch-board .me-sketch-search:focus-within {
+    outline: var(--me-border-width-thick) solid var(--me-input-focus-ring);
+  }
+  .me-sketch-board .me-sketch-search-icon {
+    flex: none;
+    width: var(--me-icon-size);
+    height: var(--me-icon-size);
+    color: var(--me-color-text-muted);
+  }
+  .me-sketch-board .me-sketch-search-input {
+    min-width: 0;
+    width: 12em;
+    border: 0;
+    outline: none;
+    background: transparent;
+    color: var(--me-color-text);
+    font: inherit;
+  }
+  .me-sketch-board .me-sketch-search-status {
+    flex: none;
+    color: var(--me-color-text-muted);
+    font-size: var(--me-font-size-xs);
+    white-space: nowrap;
+  }
+  .me-sketch-board.has-search .me-sketch-presence {
+    top: calc(var(--me-space-4) * 2 + var(--me-toolbar-button-size) * 2 + var(--me-space-1) * 6);
+  }
+
   /* ── Style panel (left; scrolls inside short inline boards) ───── */
   .me-sketch-board .me-sketch-style {
     position: absolute;

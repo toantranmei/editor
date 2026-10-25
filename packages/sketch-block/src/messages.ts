@@ -43,7 +43,21 @@ export interface SketchMessages {
   clipboardTooLarge: string
   /** Presence (networked boards); `{name}` / `{n}` are replaced. */
   presence: PresenceMessages
+  /** Canvas search box (mod+F); `{i}` / `{n}` are replaced. */
+  search: SearchMessages
   style: StyleMessages
+}
+
+export interface SearchMessages {
+  /** Accessible name of the search field. */
+  label: string
+  placeholder: string
+  noMatches: string
+  /** Match position: "{i}/{n}" (i = 0 before the first step). */
+  count: string
+  prev: string
+  next: string
+  close: string
 }
 
 export interface PresenceMessages {
@@ -196,6 +210,15 @@ export const messages: Record<'vi' | 'en', SketchMessages> = {
       stopFollowing: 'Dừng theo dõi',
       more: '{n} người khác',
     },
+    search: {
+      label: 'Tìm trên bảng vẽ',
+      placeholder: 'Tìm văn bản…',
+      noMatches: 'Không tìm thấy',
+      count: '{i}/{n}',
+      prev: 'Kết quả trước (Shift+Enter)',
+      next: 'Kết quả tiếp theo (Enter)',
+      close: 'Đóng tìm kiếm (Esc)',
+    },
     imageError: {
       type: 'Tệp này không phải ảnh được hỗ trợ.',
       size: 'Ảnh quá lớn (tối đa 4 MB).',
@@ -338,6 +361,15 @@ export const messages: Record<'vi' | 'en', SketchMessages> = {
       following: 'Following {name}',
       stopFollowing: 'Stop following',
       more: '{n} more',
+    },
+    search: {
+      label: 'Search the board',
+      placeholder: 'Find text…',
+      noMatches: 'No matches',
+      count: '{i}/{n}',
+      prev: 'Previous match (Shift+Enter)',
+      next: 'Next match (Enter)',
+      close: 'Close search (Esc)',
     },
     imageError: {
       type: 'This file is not a supported image.',

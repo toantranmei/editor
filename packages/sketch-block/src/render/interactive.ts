@@ -52,6 +52,10 @@ export interface Overlay {
   guides: Guide[]
   /** Remote peers (presence): cursors, selections and laser trails in each peer's color. */
   remote?: RemoteOverlay[]
+  /** Search matches (ids): a translucent accent highlight over each one's rotated box. */
+  searchMatches?: readonly string[]
+  /** The search match stepped to last (highlighted more strongly). */
+  activeMatch?: string | null
 }
 
 /** One remote peer on the overlay (scene coords; laser `t` on the `now` clock). */
@@ -75,6 +79,11 @@ const LASER_FADE_MS = 1000
 const LASER_WIDTH_PX = 4
 
 const FALLBACK_ACCENT = '#2383e2'
+/** Fill opacity of a search match's highlight, and of the active match's. */
+export const SEARCH_ALPHA = 0.15
+export const SEARCH_ACTIVE_ALPHA = 0.35
+/** Search highlight margin around the element's box, screen px. */
+const SEARCH_PAD_PX = 4
 const HANDLE_PX = 8
 const SELECTION_GAP_PX = 4
 /** Line width of the bind target's outline, screen px. */
@@ -299,6 +308,26 @@ function drawRemote(ctx: CanvasRenderingContext2D, state: RenderState, remote: R
   ctx.setTransform(state.dpr, 0, 0, state.dpr, 0, 0)
 }
 
+/** Search matches: each rotated box (a little padded) filled with the accent, translucent; the active one stronger. */
+function drawSearchMatches(
+  ctx: CanvasRenderingContext2D, scene: Scene, state: RenderState, overlay: Overlay, accent: string,
+): void {
+  const zoom = state.viewport.zoom
+  const pad = SEARCH_PAD_PX / zoom
+  ctx.fillStyle = accent
+  ctx.setLineDash([])
+  for (const id of overlay.searchMatches!) {
+    const el = scene.get(id)
+    if (!el) continue
+    elementFrame(ctx, state, el.x + el.w / 2, el.y + el.h / 2, el.angle)
+    ctx.globalAlpha = id === overlay.activeMatch ? SEARCH_ACTIVE_ALPHA : SEARCH_ALPHA
+    ctx.beginPath()
+    ctx.rect(-el.w / 2 - pad, -el.h / 2 - pad, el.w + 2 * pad, el.h + 2 * pad)
+    ctx.fill()
+  }
+  ctx.globalAlpha = 1
+}
+
 function outline(ctx: CanvasRenderingContext2D, el: SketchElement, gap: number): void {
   ctx.strokeRect(-el.w / 2 - gap, -el.h / 2 - gap, el.w + 2 * gap, el.h + 2 * gap)
 }
@@ -326,6 +355,8 @@ export function renderInteractive(
       if (overlay.erasing.has(el.id)) drawElement(ctx, state, el, el.opacity * ERASING_ALPHA)
     }
   }
+
+  if (overlay.searchMatches?.length) drawSearchMatches(ctx, scene, state, overlay, accent)
 
   const { draft } = overlay
   if (draft) drawElement(ctx, state, draft, draft.opacity)

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, shallowRef, toRaw, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, toRaw, watch } from 'vue'
 import type * as Y from 'yjs'
 import '../styles/sketch.css'
 import {
@@ -31,8 +31,10 @@ import { loadFonts } from '../text/fonts'
 import { clearTextCache } from '../text/measure'
 import { type CurrentStyle, type PointerInput, ToolController, type ToolName } from '../tools/controller'
 import { LASER_FADE_MS } from '../tools/laser'
+import { focusElement, searchElements } from '../tools/search'
 import { Viewport } from '../viewport'
 import Avatars, { type AvatarPeer } from './Avatars.vue'
+import SearchBox from './SearchBox.vue'
 import StylePanel from './StylePanel.vue'
 import TextEditor from './TextEditor.vue'
 import Toolbar from './Toolbar.vue'
@@ -153,6 +155,10 @@ function drawInteractiveNow(): void {
     if (remote.length) overlay.remote = remote
     remoteLaser = remote.some(r => r.laser.length > 0)
     publishLaser()
+  }
+  if (searchOpen.value && searchMatches.value.length) {
+    overlay.searchMatches = searchMatches.value
+    overlay.activeMatch = searchMatches.value[searchIndex.value] ?? null
   }
   if (ctx) renderInteractive(ctx, scene, renderState(), overlay)
   // laser trails fade on their own: keep drawing frames until they are gone
@@ -357,6 +363,60 @@ function applyStyle(patch: Partial<CurrentStyle>): void {
 
 function reorder(to: 'front' | 'back'): void {
   controller.reorderSelection(to)
+}
+
+// ---------- search (mod+F) ----------
+const searchOpen = ref(false)
+/** Kept across close / reopen. */
+const searchQuery = ref('')
+/** Position of the match stepped to last in `searchMatches` (-1 = none since the query changed). */
+const searchIndex = ref(-1)
+const searchBox = shallowRef<InstanceType<typeof SearchBox> | null>(null)
+const searchMatches = computed<string[]>(() => {
+  void sceneVersion.value
+  return searchOpen.value ? searchElements(scene.elements, searchQuery.value) : []
+})
+
+watch(searchQuery, () => {
+  searchIndex.value = -1
+})
+watch(searchMatches, m => {
+  if (searchIndex.value >= m.length) searchIndex.value = m.length - 1
+  scheduler.invalidateInteractive()
+})
+watch(searchIndex, () => scheduler.invalidateInteractive())
+
+function openSearch(): void {
+  if (searchOpen.value) {
+    searchBox.value?.focus()
+    return
+  }
+  searchOpen.value = true
+}
+
+function closeSearch(): void {
+  searchOpen.value = false
+  void nextTick(() => root.value?.focus({ preventScroll: true }))
+}
+
+/** Pans / zooms so element `id` is centered (keeping the zoom when it fits) and selects it; false when gone. */
+function focusOn(id: string): boolean {
+  const el = scene.get(id)
+  if (!el) return false
+  focusElement(viewport, el, widthCss, heightCss)
+  syncView()
+  controller.setSelection([id])
+  return true
+}
+
+/** Enter (+1) / Shift+Enter (-1): the next / previous match, wrapping around. */
+function stepSearch(dir: 1 | -1): void {
+  const m = searchMatches.value
+  if (!m.length) return
+  const i = searchIndex.value
+  const next = i < 0 ? (dir > 0 ? 0 : m.length - 1) : (i + dir + m.length) % m.length
+  searchIndex.value = next
+  focusOn(m[next]!)
 }
 
 // ---------- text editing ----------
@@ -663,6 +723,12 @@ function onKeyDown(e: KeyboardEvent): void {
     return
   }
   const input = { key: e.key, code: e.code, mod: e.ctrlKey || e.metaKey, shift: e.shiftKey, alt: e.altKey }
+  // mod+F: the board's search (never the browser's find); before the controller's mod / alt guards
+  if (input.mod && !e.altKey && !e.shiftKey && (e.code === 'KeyF' || e.key.toLowerCase() === 'f')) {
+    e.preventDefault()
+    openSearch()
+    return
+  }
   if (e.key === 'Escape') {
     onEscape(input)
     // always consumed by the board (the block view leaves only on an unprevented Escape it did not handle)
@@ -916,7 +982,7 @@ defineExpose({
   <div
     ref="root"
     class="me-sketch-board"
-    :class="{ 'is-readonly': locked, 'is-zen': zen }"
+    :class="{ 'is-readonly': locked, 'is-zen': zen, 'has-search': searchOpen }"
     :data-theme="theme"
     tabindex="0"
     @keydown="onKeyDown"
@@ -1019,6 +1085,17 @@ defineExpose({
       :messages="t.presence"
       @follow="follow"
       @stop="stopFollowing"
+    />
+    <SearchBox
+      v-if="searchOpen"
+      ref="searchBox"
+      v-model:query="searchQuery"
+      :index="searchIndex"
+      :total="searchMatches.length"
+      :messages="t.search"
+      @next="stepSearch(1)"
+      @prev="stepSearch(-1)"
+      @close="closeSearch"
     />
     <ZoomControls
       v-if="!zen"
