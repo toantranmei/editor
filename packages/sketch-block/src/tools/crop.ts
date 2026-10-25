@@ -1,7 +1,7 @@
 import { effectiveCrop } from '../elements/image'
 import { boxCenter } from '../geometry/bounds'
 import { type Point, rotatePoint } from '../geometry/math'
-import type { ElementPatch, ImageElement } from '../model/types'
+import type { ElementPatch, ImageCrop, ImageElement } from '../model/types'
 import type { CropBox, CropOverlay } from '../render/interactive'
 import type { PointerInput, Tool, ToolHost } from './controller'
 
@@ -36,12 +36,10 @@ export function cropFrame(el: ImageElement): { full: CropBox; rect: CropBox } | 
 }
 
 /**
- * The patch that makes `el` show `rect` (local frame, within the full image): the new crop in natural px, and
- * the box moved / resized to `rect` so the image keeps its scale (rotation kept about the new center). A crop
- * covering the whole image is stored as null. Null when nothing changes.
+ * The crop (natural px) that makes `el` show `rect` (its local frame, within the full image), clamped to the
+ * natural image; null when it covers the whole image.
  */
-export function cropPatch(el: ImageElement, rect: CropBox): ElementPatch | null {
-  if (rect.x === 0 && rect.y === 0 && rect.w === el.w && rect.h === el.h) return null
+export function rectToCrop(el: ImageElement, rect: CropBox): ImageCrop | null {
   const c = effectiveCrop(el)
   const sx = el.w / c.w
   const sy = el.h / c.h
@@ -52,14 +50,36 @@ export function cropPatch(el: ImageElement, rect: CropBox): ElementPatch | null 
   const crop = { x, y, w: clamp(rect.w / sx, 0, nw - x), h: clamp(rect.h / sy, 0, nh - y) }
   const eps = 1e-6
   const whole = crop.x < eps && crop.y < eps && Math.abs(crop.w - nw) < eps && Math.abs(crop.h - nh) < eps
-  const center = rotatePoint({ x: el.x + rect.x + rect.w / 2, y: el.y + rect.y + rect.h / 2 }, boxCenter(el), el.angle)
-  return {
-    x: center.x - rect.w / 2,
-    y: center.y - rect.h / 2,
-    w: rect.w,
-    h: rect.h,
-    crop: whole ? null : crop,
-  }
+  return whole ? null : crop
+}
+
+/**
+ * The patch giving the current element `cur` the crop `crop` (null = whole image): the box moves / resizes so
+ * the image keeps `cur`'s scale and position (rotation kept about the new center). Null when `cur` cannot take
+ * it (unknown natural size, empty box).
+ */
+export function applyCrop(cur: ImageElement, crop: ImageCrop | null): ElementPatch | null {
+  const c0 = effectiveCrop(cur)
+  const c = crop ?? { x: 0, y: 0, w: cur.naturalW, h: cur.naturalH }
+  if (!(c0.w > 0 && c0.h > 0 && c.w > 0 && c.h > 0)) return null
+  const sx = cur.w / c0.w
+  const sy = cur.h / c0.h
+  const w = c.w * sx
+  const h = c.h * sy
+  const dx = (c.x - c0.x) * sx
+  const dy = (c.y - c0.y) * sy
+  const center = rotatePoint({ x: cur.x + dx + w / 2, y: cur.y + dy + h / 2 }, boxCenter(cur), cur.angle)
+  return { x: center.x - w / 2, y: center.y - h / 2, w, h, crop: crop ? { ...crop } : null }
+}
+
+/**
+ * The patch that makes the image show `rect` (in the local frame of `el`, the snapshot crop mode started
+ * from), applied to `cur` (the element now, default `el`): the crop is taken from the snapshot, the box from
+ * the current element, so a concurrent remote move / resize is kept. Null when nothing changes.
+ */
+export function cropPatch(el: ImageElement, rect: CropBox, cur: ImageElement = el): ElementPatch | null {
+  if (rect.x === 0 && rect.y === 0 && rect.w === el.w && rect.h === el.h) return null
+  return applyCrop(cur, rectToCrop(el, rect))
 }
 
 /** The 8 handle positions of `rect` (local frame). */
@@ -105,9 +125,9 @@ export class CropTool implements Tool {
     this.drag = null
   }
 
-  /** The patch for the current crop rect (null = unchanged / not cropping). */
-  patch(): ElementPatch | null {
-    return this.el ? cropPatch(this.el, this.rect) : null
+  /** The patch for the current crop rect applied to `cur` (the element now); null = unchanged / not cropping. */
+  patch(cur?: ImageElement): ElementPatch | null {
+    return this.el ? cropPatch(this.el, this.rect, cur ?? this.el) : null
   }
 
   overlay(): CropOverlay | null {

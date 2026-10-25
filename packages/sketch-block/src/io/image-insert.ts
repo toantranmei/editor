@@ -98,7 +98,7 @@ function encodeCanvas(img: HTMLImageElement, w: number, h: number, sourceType: s
 
 /**
  * Turns a picked / pasted / dropped file into an image source. With an uploader the file is uploaded as-is
- * (its URL must pass `isImageSrc`). Without one it becomes a data URL: kept byte for byte when it is a png /
+ * (its URL must pass `isImageSrc` without blob:, and a data URL it returns must be within 4 MB). Without one it becomes a data URL: kept byte for byte when it is a png /
  * jpeg / webp / gif within 2048 px and 4 MB, otherwise downscaled to 2048 px on the long edge and re-encoded
  * (JPEG 0.85, PNG when it has alpha). Throws ImageInsertError: 'type' (not a decodable image), 'size' (over
  * 4 MB after encoding), 'upload' (the uploader failed or returned an unusable URL).
@@ -117,7 +117,9 @@ export async function prepareImage(file: File, upload: ImageUploader | null): Pr
     } catch (err) {
       throw new ImageInsertError('upload', { cause: err })
     }
-    if (!isImageSrc(src)) throw new ImageInsertError('upload')
+    // blob: URLs die with the page that made them: an uploader must return a lasting URL
+    if (!isImageSrc(src, false)) throw new ImageInsertError('upload')
+    if (src.startsWith('data:') && dataUrlBytes(src) > MAX_IMAGE_BYTES) throw new ImageInsertError('size')
     return { src, naturalW, naturalH }
   }
 

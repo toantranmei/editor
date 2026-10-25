@@ -210,6 +210,19 @@ export interface FileSource {
 }
 
 /**
+ * Image files a paste should insert: those in `files` always win; an image only offered as an `item` (e.g. a
+ * browser copying a web page offers text plus a rendered image) is used only when there is no `text/plain`
+ * (so our own payload or text is pasted instead).
+ */
+export function pastedImageFiles(data: (FileSource & { getData?(type: string): string }) | null | undefined): File[] {
+  if (!data) return []
+  const files = clipboardImageFiles({ files: data.files })
+  if (files.length) return files
+  const text = data.getData?.('text/plain') ?? ''
+  return text.trim() ? [] : clipboardImageFiles({ items: data.items })
+}
+
+/**
  * Image files on a paste / drop payload: from `files`, else from file `items`. Non-image files (and SVG) are
  * left out; the caller ignores them.
  */

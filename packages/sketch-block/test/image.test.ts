@@ -3,11 +3,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
 import * as Y from 'yjs'
 
-import { imageKind } from '../src/elements/image'
+import { imageKind, srcHashCount } from '../src/elements/image'
 import { kindOf, shapeKeyOf } from '../src/elements/kind'
 import { SketchBoard } from '../src/engine'
-import { CLIPBOARD_TYPE, clipboardImageFiles, parseClipboard } from '../src/io/clipboard'
-import { clearImageCache, getLoadedImage, loadImage, onImageLoaded } from '../src/io/image-loader'
+import { CLIPBOARD_TYPE, clipboardImageFiles, parseClipboard, pastedImageFiles } from '../src/io/clipboard'
+import {
+  clearImageCache, getLoadedImage, IMAGE_ERROR_TTL, isImageTainted, loadImage, onImageLoaded, retryFailedImages,
+} from '../src/io/image-loader'
 import { fitWithin, ImageInsertError, prepareImage } from '../src/io/image-insert'
 import { exportSvg } from '../src/io/svg'
 import { messages } from '../src/messages'
@@ -16,7 +18,7 @@ import { Scene } from '../src/model/scene'
 import { relevantStyleKeys } from '../src/model/style'
 import { BitmapCache } from '../src/render/bitmap-cache'
 import { CROP_DIM_ALPHA, renderInteractive } from '../src/render/interactive'
-import { BoardStore } from '../src/model/store'
+import { BoardStore, LOCAL_ORIGIN } from '../src/model/store'
 import { DEFAULT_STYLE, type ElementInit, type ImageElement, isImageSrc, isRenderable } from '../src/model/types'
 import { memory } from '../src/providers/memory'
 import { type PointerInput, ToolController } from '../src/tools/controller'
@@ -30,6 +32,8 @@ class FakeImage {
   static mode: 'auto' | 'manual' = 'auto'
   static size: [number, number] = [800, 600]
   static failing = new Set<string>()
+  /** srcs whose host sends no CORS headers: they fail when crossOrigin is set. */
+  static corsless = new Set<string>()
   static created: FakeImage[] = []
   naturalWidth = 0
   naturalHeight = 0
@@ -48,7 +52,9 @@ class FakeImage {
     this._src = v
     FakeImage.created.push(this)
     if (FakeImage.mode === 'auto') {
-      queueMicrotask(() => (FakeImage.failing.has(v) ? this.fail() : this.load(...FakeImage.size)))
+      queueMicrotask(() => (FakeImage.failing.has(v) || (FakeImage.corsless.has(v) && this.crossOrigin)
+        ? this.fail()
+        : this.load(...FakeImage.size)))
     }
   }
 
@@ -67,6 +73,7 @@ beforeEach(() => {
   FakeImage.mode = 'auto'
   FakeImage.size = [800, 600]
   FakeImage.failing = new Set()
+  FakeImage.corsless = new Set()
   FakeImage.created = []
   vi.stubGlobal('Image', FakeImage)
   vi.stubGlobal('requestAnimationFrame', () => 0)
@@ -159,6 +166,55 @@ describe('image loader', () => {
     off()
   })
 
+  it('retries once without CORS for a host without CORS headers; the image is then tainted', async () => {
+    const plain = 'https://cors.example/ok.png'
+    expect(await loadImage(plain)).toBeDefined()
+    expect(isImageTainted(plain)).toBe(false)
+
+    FakeImage.corsless.add(SRC)
+    const img = await loadImage(SRC)
+    expect(getLoadedImage(SRC)).toBe(img)
+    expect(isImageTainted(SRC)).toBe(true)
+    const tries = FakeImage.created.filter(i => i.src === SRC)
+    expect(tries.map(i => i.crossOrigin)).toEqual(['anonymous', null])
+    // data URLs are never retried (CORS does not apply)
+    const data = 'data:image/png;base64,AA'
+    FakeImage.failing.add(data)
+    await expect(loadImage(data)).rejects.toThrow()
+    expect(FakeImage.created.filter(i => i.src === data)).toHaveLength(1)
+  })
+
+  it('a failed load is retried after 30 s, or at once after retryFailedImages()', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    try {
+      FakeImage.failing.add(SRC)
+      await expect(loadImage(SRC)).rejects.toThrow()
+      const n = FakeImage.created.length
+      expect(getLoadedImage(SRC)).toBe('error')
+      vi.advanceTimersByTime(IMAGE_ERROR_TTL - 1)
+      expect(getLoadedImage(SRC)).toBe('error')
+      expect(FakeImage.created).toHaveLength(n)
+      vi.advanceTimersByTime(1)
+      FakeImage.failing.delete(SRC)
+      // expired: this access starts a new load
+      expect(getLoadedImage(SRC)).toBeUndefined()
+      expect(FakeImage.created.length).toBeGreaterThan(n)
+      await flushPromises()
+      expect(getLoadedImage(SRC)).toBeInstanceOf(FakeImage)
+
+      const other = 'https://cdn.example/b.png'
+      FakeImage.failing.add(other)
+      await expect(loadImage(other)).rejects.toThrow()
+      FakeImage.failing.delete(other)
+      retryFailedImages()
+      expect(getLoadedImage(other)).toBeUndefined()
+      await flushPromises()
+      expect(getLoadedImage(other)).toBeInstanceOf(FakeImage)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('rejects disallowed schemes without creating an image', async () => {
     await expect(loadImage('javascript:alert(1)')).rejects.toThrow()
     expect(getLoadedImage('javascript:alert(1)')).toBe('error')
@@ -225,6 +281,12 @@ describe('prepareImage', () => {
     expect(info).toEqual({ src: 'https://cdn.example/up.png', naturalW: 5000, naturalH: 4000 })
     await expect(prepareImage(f, async () => { throw new Error('offline') })).rejects.toMatchObject({ code: 'upload' })
     await expect(prepareImage(f, async () => 'javascript:alert(1)')).rejects.toMatchObject({ code: 'upload' })
+    // blob: URLs die with the page: refused
+    await expect(prepareImage(f, async () => 'blob:https://x/1')).rejects.toMatchObject({ code: 'upload' })
+    // an uploader returning a data URL still obeys the 4 MB limit
+    const big = `data:image/png;base64,${'A'.repeat(Math.ceil((4 * 1024 * 1024 + 10) * 4 / 3))}`
+    await expect(prepareImage(f, async () => big)).rejects.toMatchObject({ code: 'size' })
+    expect(await prepareImage(f, async () => 'data:image/png;base64,AAAA')).toMatchObject({ src: 'data:image/png;base64,AAAA' })
   })
 })
 
@@ -248,10 +310,44 @@ describe('ToolController.insertImage', () => {
   it('rejects disallowed src and read-only', () => {
     const { c, store } = setup()
     c.insertImage({ src: 'javascript:alert(1)', naturalW: 10, naturalH: 10 }, null)
+    c.insertImage({ src: 'blob:https://x/1', naturalW: 10, naturalH: 10 }, null)
     expect(store.all()).toHaveLength(0)
     const ro = setup(true)
     ro.c.insertImage({ src: SRC, naturalW: 10, naturalH: 10 }, null)
     expect(ro.store.all()).toHaveLength(0)
+  })
+
+  it('an insert during a gesture is queued and lands when it ends, as its own undo step', () => {
+    const { c, store, history } = setup()
+    const el = store.create(imageInit())
+    history.stopCapturing()
+    c.setSelection([el.id])
+    c.keyDown(key('Enter'))
+    expect(c.cropping.value).toBe(el.id)
+    c.insertImage({ src: 'https://cdn.example/q.png', naturalW: 100, naturalH: 50 }, { x: 500, y: 500 })
+    expect(store.all()).toHaveLength(1)
+    c.pointerDown(ptr(0, 0))
+    c.pointerMove(ptr(50, 20))
+    c.pointerUp(ptr(50, 20))
+    // the pointer gesture ended but crop mode is still a gesture
+    expect(store.all()).toHaveLength(1)
+    c.keyDown(key('Enter'))
+    const all = store.all() as ImageElement[]
+    expect(all).toHaveLength(2)
+    expect(all[1]).toMatchObject({ src: 'https://cdn.example/q.png', x: 450, y: 475 })
+    expect([...c.selectedIds.value]).toEqual([all[1]!.id])
+    history.undo()
+    expect(store.all()).toHaveLength(1)
+    expect(store.get(el.id)).toMatchObject({ crop: { x: 100, y: 40, w: 300, h: 160 } })
+    history.undo()
+    expect(store.get(el.id)).toMatchObject({ crop: null })
+
+    // queued during a drag: lands on pointerup; dropped when the board turned read-only meanwhile
+    c.pointerDown(ptr(1000, 1000))
+    c.insertImage({ src: 'https://cdn.example/r.png', naturalW: 10, naturalH: 10 }, null)
+    expect(store.all()).toHaveLength(1)
+    c.pointerUp(ptr(1000, 1000))
+    expect(store.all()).toHaveLength(2)
   })
 
   it('resize keeps the aspect ratio by default; Shift frees it', () => {
@@ -285,6 +381,10 @@ describe('image kind', () => {
 
     const pending = loadImage(SRC)
     FakeImage.created[0]!.fail()
+    await flushPromises()
+    // the retry without CORS fails too
+    expect(FakeImage.created).toHaveLength(2)
+    FakeImage.created[1]!.fail()
     await expect(pending).rejects.toThrow()
     expect(getLoadedImage(SRC)).toBe('error')
     ctx.calls.length = 0
@@ -313,6 +413,18 @@ describe('image kind', () => {
     const call = ctx.calls.find(c => c.name === 'drawImage')!
     expect(call.args.slice(1)).toEqual([10, 20, 100, 50, 0, 0, 200, 100])
     off()
+  })
+
+  it('the src hash is computed once across snapshots (no re-hash of a data URL while dragging)', () => {
+    const src = `data:image/png;base64,${'A'.repeat(100_000)}`
+    const before = srcHashCount()
+    const a = image({ src, x: 0 })
+    const b = image({ src: `${src}`, x: 50, w: 300 })
+    imageKind.shapeKey(a)
+    imageKind.shapeKey(b)
+    imageKind.shapeKey({ ...b, x: 70 })
+    expect(srcHashCount() - before).toBe(1)
+    expect(imageKind.shapeKey(a)).not.toBe(imageKind.shapeKey(b))
   })
 
   it('svg uses clipPath when cropped', () => {
@@ -363,6 +475,29 @@ describe('crop mode', () => {
     expect(store.get(el.id)).toMatchObject({ x: 50, y: 20, w: 150, h: 80, crop: { x: 100, y: 40, w: 300, h: 160 } })
     history.undo()
     expect(store.get(el.id)).toMatchObject({ x: 0, y: 0, w: 200, h: 100, crop: null })
+  })
+
+  it('the crop commit applies to the current element: a concurrent remote move is kept', () => {
+    const { c, store, history } = setup()
+    const el = store.create(imageInit())
+    history.stopCapturing()
+    c.setSelection([el.id])
+    c.keyDown(key('Enter'))
+    c.pointerDown(ptr(0, 0))
+    c.pointerMove(ptr(50, 20))
+    c.pointerUp(ptr(50, 20))
+    // a peer moves (and scales up) the image meanwhile
+    const m = (store.doc.getMap('elements') as Y.Map<Y.Map<unknown>>).get(el.id)!
+    store.doc.transact(() => {
+      m.set('x', 1000)
+      m.set('y', 500)
+      m.set('w', 400)
+      m.set('h', 200)
+    }, 'remote')
+    expect(LOCAL_ORIGIN).not.toBe('remote')
+    c.keyDown(key('Enter'))
+    // same natural crop; offset and size at the peer's scale (1 unit/px) from the peer's position
+    expect(store.get(el.id)).toMatchObject({ x: 1100, y: 540, w: 300, h: 160, crop: { x: 100, y: 40, w: 300, h: 160 } })
   })
 
   it('re-cropping can widen back out to the full image (crop null)', () => {
@@ -470,6 +605,19 @@ describe('clipboard (images)', () => {
     expect(r.crop).toEqual({ x: 0, y: 150, w: 400, h: 50 })
     expect((paste({ ...raw(), crop: { x: 1, y: 1, w: Number.NaN, h: 1 } }).elements[0] as unknown as ImageElement).crop).toBeNull()
     expect((paste({ ...raw(), naturalW: -3 }).elements[0] as unknown as ImageElement).naturalW).toBe(0)
+  })
+
+  it('paste prefers text / our payload over an image that only comes from items', () => {
+    const png = file('image/png')
+    const items = [{ kind: 'file', type: 'image/png', getAsFile: () => png }]
+    const data = (text: string, files: File[] = []) =>
+      ({ files: files as unknown as FileList, items: items as never, getData: () => text })
+    expect(pastedImageFiles(data(''))).toEqual([png])
+    expect(pastedImageFiles(data('hello'))).toEqual([])
+    expect(pastedImageFiles(data(JSON.stringify({ type: CLIPBOARD_TYPE, version: 1, elements: [] })))).toEqual([])
+    // a real file wins over text
+    expect(pastedImageFiles(data('hello', [png]))).toEqual([png])
+    expect(pastedImageFiles(null)).toEqual([])
   })
 
   it('clipboardImageFiles picks image files from files, else items', () => {
@@ -584,6 +732,15 @@ describe('SketchBoard images', () => {
     await nextTick()
     expect(upload).toHaveBeenCalled()
     expect(wrapper.find('.me-sketch-toast').text()).toBe(messages.vi.imageError.upload)
+  })
+
+  it('mounting a board retries failed images', async () => {
+    FakeImage.failing.add(SRC)
+    await expect(loadImage(SRC)).rejects.toThrow()
+    expect(getLoadedImage(SRC)).toBe('error')
+    FakeImage.failing.delete(SRC)
+    await setupBoard()
+    expect(getLoadedImage(SRC)).toBeUndefined()
   })
 
   it('an image load invalidates the board and prunes stale bitmaps', async () => {

@@ -189,6 +189,8 @@ export class ToolController implements ToolHost {
    * for a text element).
    */
   private editCreated = false
+  /** Images prepared while a gesture was active: inserted (one undo step each) once it ends. */
+  private readonly queuedImages: Array<{ info: PreparedImage; at: Point | null }> = []
   /** Tool to return to when the eyedropper is done. */
   private prevTool: ToolName = 'select'
   /** Style taken by "copy style" (props relevant to the source element's type). */
@@ -279,6 +281,7 @@ export class ToolController implements ToolHost {
     this.hoverId = null
     this.resetCursor()
     this.ctx.invalidate()
+    this.afterGesture()
   }
 
   restoreTool(): void {
@@ -337,6 +340,7 @@ export class ToolController implements ToolHost {
     if (!tool) return
     this.active = null
     tool.up(e, this.toScene(e))
+    this.afterGesture()
   }
 
   /**
@@ -374,6 +378,18 @@ export class ToolController implements ToolHost {
     if (pending && pending !== tool) pending.cancel?.()
     this.resetCursor()
     this.ctx.invalidate()
+    this.afterGesture()
+  }
+
+  /**
+   * Called wherever a gesture may have ended (pointerup, cancel, editor close, crop end, line finish, tool
+   * switch): inserts the images queued meanwhile, unless another gesture is still open.
+   */
+  private afterGesture(): void {
+    if (!this.queuedImages.length || this.isGestureActive()) return
+    const queued = this.queuedImages.splice(0)
+    if (this.ctx.readonly()) return
+    for (const q of queued) this.placeImage(q.info, q.at)
   }
 
   /** The current tool when it holds a multi-click gesture open. */
@@ -411,6 +427,7 @@ export class ToolController implements ToolHost {
       pending.finish?.()
       this.resetCursor()
       this.ctx.invalidate()
+      this.afterGesture()
       return true
     }
     if (this.isGestureActive() && k !== ' ') {
@@ -550,12 +567,24 @@ export class ToolController implements ToolHost {
 
   /**
    * Creates an image element from a prepared image: scaled down to fit IMAGE_INSERT_BOX (ratio kept), centered
-   * at `at`, else at the view center. One undo step; selects it. Ignored for a src with a disallowed scheme.
+   * at `at`, else at the view center. One undo step; selects it. Ignored for a src with a disallowed scheme
+   * (blob: included). During a gesture it is queued and inserted when the gesture ends.
    */
   insertImage(info: PreparedImage, at: Point | null): void {
-    if (this.ctx.readonly() || this.isGestureActive()) return
+    if (this.ctx.readonly()) return
     const { src, naturalW, naturalH } = info
-    if (!isImageSrc(src) || !(naturalW > 0 && naturalH > 0)) return
+    // blob: URLs die with the page: never stored
+    if (!isImageSrc(src, false) || !(naturalW > 0 && naturalH > 0)) return
+    // an upload can finish mid-gesture (drag, crop, text editing): insert it once the gesture ends
+    if (this.isGestureActive()) {
+      this.queuedImages.push({ info: { src, naturalW, naturalH }, at: at && { x: at.x, y: at.y } })
+      return
+    }
+    this.placeImage(info, at)
+  }
+
+  private placeImage(info: PreparedImage, at: Point | null): void {
+    const { src, naturalW, naturalH } = info
     const { w, h } = fitWithin(naturalW, naturalH, IMAGE_INSERT_BOX)
     const c = at ?? this.ctx.viewCenter?.() ?? (() => {
       const p = this.ctx.viewport.toScene({ x: PASTE_OFFSET, y: PASTE_OFFSET })
@@ -694,17 +723,19 @@ export class ToolController implements ToolHost {
   commitCrop(): void {
     const id = this.cropping.value
     if (!id) return
-    const patch = this.crop.patch()
-    this.endCrop()
     const { store, scene, history } = this.ctx
-    // the board may have turned read-only meanwhile: then nothing is written
-    if (patch && scene.get(id) && !this.ctx.readonly()) {
+    // applied to the element as it is now (a peer may have moved it); nothing when it is gone or read-only
+    const cur = scene.get(id)
+    const patch = cur && isImage(cur) && !this.ctx.readonly() ? this.crop.patch(cur) : null
+    this.endCrop()
+    if (patch) {
       store.update(id, patch)
       history.endGesture()
     } else {
       history.discardGesture()
     }
     this.ctx.invalidate()
+    this.afterGesture()
   }
 
   /** Leaves crop mode without writing. */
@@ -713,6 +744,7 @@ export class ToolController implements ToolHost {
     this.endCrop()
     this.ctx.history.discardGesture()
     this.ctx.invalidate()
+    this.afterGesture()
   }
 
   private endCrop(): void {
@@ -882,9 +914,12 @@ export class ToolController implements ToolHost {
     const t = this.tool.value
     if ((t === 'text' || t === 'sticky') && !this.toolLocked.value) this.setTool('select')
     this.ctx.invalidate()
+    this.afterGesture()
   }
 
   destroy(): void {
+    // nothing queued lands while tearing down
+    this.queuedImages.length = 0
     this.cancelEditing()
     this.cancelCrop()
     const pending = this.pendingTool()
@@ -920,6 +955,7 @@ export class ToolController implements ToolHost {
       // deleted remotely while open: close the editor, keeping whatever undo step the edit made
       this.closeEditor()
       this.ctx.history.endGesture()
+      this.afterGesture()
       this.ctx.invalidate()
     }
     // the image being cropped was deleted remotely: leave crop mode (nothing was written)

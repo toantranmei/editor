@@ -5,9 +5,9 @@ import '../styles/sketch.css'
 import type { BoardSession } from '../engine'
 import { shapeKeyOf } from '../elements/kind'
 import type { Point } from '../geometry/math'
-import { clipboardImageFiles, parseClipboard, serializeClipboard } from '../io/clipboard'
+import { clipboardImageFiles, parseClipboard, pastedImageFiles, serializeClipboard } from '../io/clipboard'
 import { ImageInsertError, type ImageInsertErrorCode, type ImageUploader, prepareImage } from '../io/image-insert'
-import { onImageLoaded } from '../io/image-loader'
+import { onImageLoaded, retryFailedImages } from '../io/image-loader'
 import { messages as allMessages } from '../messages'
 import { History } from '../model/history'
 import { Scene } from '../model/scene'
@@ -522,7 +522,7 @@ function onCut(e: ClipboardEvent): void {
 /** Pastes image files, sketch elements, or plain text as a text element, at the last pointer position. */
 function onPaste(e: ClipboardEvent): void {
   if (!boardClipboardTarget(e) || editing.value || locked.value || controller.isGestureActive()) return
-  const files = clipboardImageFiles(e.clipboardData)
+  const files = pastedImageFiles(e.clipboardData)
   if (files.length) {
     e.preventDefault()
     void insertFiles(files, lastPointer ? viewport.toScene(lastPointer) : null)
@@ -622,6 +622,8 @@ function onKeyUp(e: KeyboardEvent): void {
 let unmounted = false
 
 onMounted(() => {
+  // images that failed earlier on this page (offline, a flaky host) get another chance
+  retryFailedImages()
   // the hand font changes text metrics and glyphs: drop cached bitmaps and redraw once it is in
   void loadFonts().then(() => {
     if (unmounted) return

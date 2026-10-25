@@ -82,12 +82,34 @@ function drawImageEl(ctx: CanvasRenderingContext2D, el: ImageElement, theme: The
   drawImagePlaceholder(ctx, el.w, el.h, theme)
 }
 
-/** Static (per-element) part of the shape key, memoized per element snapshot: hashing a data URL is O(size). */
+/** Max srcs whose hash is remembered (LRU). */
+const SRC_HASH_LIMIT = 500
+/** src → hash, most recently used last: hashing a multi-MB data URL is O(size), so do it once per src. */
+const srcHashes = new Map<string, string>()
+let srcHashComputed = 0
+
+function srcHash(src: string): string {
+  let h = srcHashes.get(src)
+  if (h !== undefined) {
+    srcHashes.delete(src)
+  } else {
+    h = hashString(src)
+    srcHashComputed++
+    if (srcHashes.size >= SRC_HASH_LIMIT) srcHashes.delete(srcHashes.keys().next().value!)
+  }
+  srcHashes.set(src, h)
+  return h
+}
+
+/** How many src hashes were computed so far (tests: the LRU spares re-hashing). */
+export const srcHashCount = (): number => srcHashComputed
+
+/** Static (per-element) part of the shape key, memoized per element snapshot. */
 const staticKeys = new WeakMap<ImageElement, string>()
 
 function staticKey(el: ImageElement): string {
   let k = staticKeys.get(el)
-  if (k === undefined) staticKeys.set(el, (k = hashString(JSON.stringify(['image', el.src, el.crop, el.w, el.h]))))
+  if (k === undefined) staticKeys.set(el, (k = hashString(JSON.stringify(['image', srcHash(el.src), el.crop, el.w, el.h]))))
   return k
 }
 
