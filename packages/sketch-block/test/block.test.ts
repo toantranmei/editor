@@ -11,7 +11,7 @@ import { BoardStore } from '../src/model/store'
 import { DEFAULT_STYLE } from '../src/model/types'
 import { memory } from '../src/providers/memory'
 import type { SketchOptions } from '../src/block/node'
-import type { BoardConnection } from '../src/providers/types'
+import type { BoardConnection, ConnectionStatusValue } from '../src/providers/types'
 import { stubCanvas, stubFrames } from './helpers/canvas'
 
 // the real loader warns (no FontFace in happy-dom)
@@ -319,6 +319,52 @@ describe('sketch block', () => {
     expect(wrapper.find('.me-error').exists()).toBe(true)
     expect(wrapper.find('.me-sketch-cover').exists()).toBe(true)
     expect(document.querySelector('.me-sketch-board')).toBeNull()
+  })
+
+  it('status dot: follows a networked connection, none for local providers', async () => {
+    // a local provider has no status: no dot
+    const local = await setup({ attrs: { boardId: 'bd_local', preview: null, height: null, version: 0 } })
+    await enter(local.wrapper)
+    expect(local.wrapper.find('.me-sketch-status').exists()).toBe(false)
+    local.editor.destroy()
+    await settle()
+
+    const base = memory()
+    let value: ConnectionStatusValue = 'connecting'
+    const listeners = new Set<(s: ConnectionStatusValue) => void>()
+    const set = (s: ConnectionStatusValue) => {
+      value = s
+      for (const cb of listeners) cb(s)
+    }
+    const provider: SketchProvider = {
+      async connect(id) {
+        const conn = await base.connect(id)
+        return {
+          ...conn,
+          networked: true,
+          status: { get: () => value, on: (cb) => { listeners.add(cb); return () => listeners.delete(cb) } },
+        }
+      },
+    }
+    const { editor, wrapper } = await setup({ provider, attrs: { boardId: 'bd_net', preview: null, height: null, version: 0 } })
+    expect(wrapper.find('.me-sketch-status').exists()).toBe(false) // not connected yet
+    await enter(wrapper)
+    const dot = () => wrapper.find('.me-sketch-status')
+    expect(dot().classes()).toContain('is-connecting')
+    expect(dot().attributes('title')).toBe(messages.vi.status.connecting)
+    set('online')
+    await nextTick()
+    expect(dot().classes()).toContain('is-online')
+    expect(dot().attributes('title')).toBe(messages.vi.status.online)
+    set('error')
+    await nextTick()
+    expect(dot().classes()).toContain('is-error')
+    expect(dot().attributes('aria-label')).toBe(messages.vi.status.error)
+    // unmounting the block unsubscribes
+    expect(listeners.size).toBe(1)
+    editor.destroy()
+    await settle()
+    expect(listeners.size).toBe(0)
   })
 
   it('fullscreen opens a modal sharing the connection; Esc closes it', async () => {

@@ -11,7 +11,10 @@ Excalidraw / Miro-style whiteboard block for [`@toantranmei/editor`](https://www
 - Eraser, laser pointer, lasso, eyedropper; a style panel with an Excalidraw-like palette
 - Select, move, resize, rotate, marquee selection, nudge with arrow keys; pan and zoom (10% – 3000%)
 - Copy / paste (also between boards), duplicate, copy / paste style; zen and view mode
-- Local undo / redo; boards are [Yjs](https://yjs.dev) documents, ready for collaboration
+- Local undo / redo; boards are [Yjs](https://yjs.dev) documents
+- Backends and live collaboration: `http()` and `websocket()` providers with an offline cache, live cursors,
+  selections and laser trails, follow a collaborator's view, and a connection status dot
+- Search inside a board, element links, board export / import (bundles), and pasted blocks get their own board
 - The document keeps only a board id and a preview image: pages stay light, and the board
   engine loads only when someone clicks "Edit"
 - Inline board with drag-to-resize height, or full-screen view
@@ -28,7 +31,8 @@ Requires `@toantranmei/editor` `^0.2.0` (and its peers: Vue `^3.5`, Tiptap, `@lu
 Apps that don't install this package get no extra code in the editor bundle.
 
 The package has not been published yet. Its first release, **0.1.0**, ships M0 (foundation), M1
-(drawing tools) and M2 (Miro core) together: the pending M0, M1 and M2 changesets are all minor bumps from `0.0.0`.
+(drawing tools), M2 (Miro core) and M3 (backend and collaboration) together: the pending changesets are all minor
+bumps from `0.0.0`.
 
 ### Vite
 
@@ -72,6 +76,8 @@ Options:
 sketch.configure({
   provider: myProvider, // where boards live; default: IndexedDB in this browser
   defaultHeight: 480,   // px, for boards without a stored height (users drag 240–1600)
+  user: { name: 'Minh Anh', color: '#1971c2' }, // or () => …; who you are to collaborators (default: a guest)
+  onPasteClone: true,   // a pasted / duplicated block gets its own copy of the board (see Storage)
 })
 ```
 
@@ -109,6 +115,8 @@ A provider opens a board (a `Y.Doc`) by id. The built-in ones live in `@toantran
 | --- | --- |
 | `indexeddb({ prefix? })` | **Default.** One IndexedDB database per board (`mei-sketch:<boardId>`), via `y-indexeddb`. Loaded lazily |
 | `memory()` | Keeps boards in memory for the page's lifetime. For tests and demos |
+| `http({ load, save, … })` | Your HTTP backend: loads the board's Yjs state, saves local edits as merged, debounced Yjs updates. See [http()](#http) |
+| `websocket({ url, … })` | Live collaboration through a [y-websocket](https://github.com/yjs/y-websocket) server, with presence. See [websocket()](#websocket) |
 
 ```ts
 import { sketch } from '@toantranmei/sketch-block'
@@ -120,6 +128,119 @@ sketch.configure({ provider: indexeddb({ prefix: 'my-app' }) })
 `websocket()` loads the optional peer dependency `y-websocket` only when a board connects. Some bundlers still
 resolve that dynamic import at build time, so install `y-websocket` (or mark it external) even if you don't use
 `websocket()`.
+
+### http()
+
+```ts
+import { http } from '@toantranmei/sketch-block/providers'
+
+sketch.configure({
+  provider: http({
+    // the stored Yjs state (an update), or null for a new board
+    load: async id => {
+      const res = await fetch(`/api/boards/${id}`, { headers: auth() })
+      if (res.status === 404) return null
+      if (!res.ok) throw new Error(`load ${res.status}`)
+      return res.arrayBuffer()
+    },
+    // a Yjs update to merge into the stored state
+    save: async (id, update) => {
+      const res = await fetch(`/api/boards/${id}`, { method: 'POST', body: update, headers: auth() })
+      if (!res.ok) throw new Error(`save ${res.status}`)
+    },
+    uploadImage: file => uploadFile(file), // optional, see Images
+    debounceMs: 1000, // default
+    offline: true,    // default: also keep the board in IndexedDB
+  }),
+})
+```
+
+- Local edits are merged (`Y.mergeUpdates`) and saved 1 s after the last one (at least every 5 s during a long
+  burst). A failed save keeps the merged update and retries after 1 s, 2 s, 4 s … up to 30 s. Closing the board
+  attempts a final save.
+- **Server side:** store the board as a Yjs state. On `save`, merge the update into it, e.g.
+  `Y.mergeUpdates([stored, update])` with the `yjs` package (or apply it to a `Y.Doc`). Updates are idempotent and
+  commutative, so a retried or reordered save is harmless. Authenticate `load` / `save` as usual (cookies, a
+  header): the provider only calls your functions.
+- **Offline cache** (`offline: true`): the board is also kept in IndexedDB (`mei-sketch:<id>`). When the server
+  cannot be reached it opens from the cache (status *offline*) and keeps retrying; after a successful load,
+  edits only this browser has are sent to the server (computed by state vector). Without a cache, `connect`
+  rejects while the server is down.
+- `http()` has no presence: there is no live channel. Peers see each other's edits the next time they open the
+  board.
+
+### websocket()
+
+```ts
+import { websocket } from '@toantranmei/sketch-block/providers'
+
+sketch.configure({
+  provider: websocket({
+    url: 'wss://sync.example.com', // the room is the board id
+    params: () => ({ token: getToken() }), // query parameters, read on every (re)connect
+    offline: true,          // default: also keep the board in IndexedDB
+    connectTimeoutMs: 4000, // default
+    uploadImage: file => uploadFile(file), // optional, see Images
+  }),
+  user: () => ({ name: currentUser.name, color: currentUser.color }),
+})
+```
+
+- Install the optional peer dependency: `npm i y-websocket` (see the note above the [http()](#http) section).
+- `connect` resolves after the first sync with the server, or after `connectTimeoutMs`: then with the IndexedDB
+  copy (`offline: true`) or an empty board, while it keeps reconnecting in the background.
+- **Server:** any y-websocket compatible server. The reference one is
+  [`@y/websocket-server`](https://github.com/yjs/y-websocket-server): `npm i -D @y/websocket-server`, then
+  `HOST=localhost PORT=1234 npx y-websocket` serves `ws://localhost:1234`. **Install note:** version 0.1.5
+  imports `yjs`, but its `@y/protocols` range resolves to a release built on the renamed `@y/y` package, and the
+  two Yjs copies make the server drop updates. Pin both to the Yjs 13 line the clients use, e.g. with pnpm
+  `overrides: { '@y/websocket-server>yjs': '^13.6.0', '@y/websocket-server>@y/protocols': '1.0.6-2' }` (npm:
+  `overrides` in `package.json`). This monorepo's playground does that, runs the server with `pnpm sync`, and opens
+  shared boards with `?sync=1` or `/sketch-collab?board=<id>`.
+- **Auth:** `params` become URL query parameters of the WebSocket request (e.g. `?token=…`). Check them in the
+  server's `upgrade` handler before accepting the connection, and that the user may open the room (the board id).
+  `params` is called again before every reconnect, so a renewed token is picked up. A server that closes the
+  connection for good shows the error status.
+- **Persistence:** the reference server keeps rooms in memory only: they are gone when it restarts. For
+  production, store each room's Yjs state: with `@y/websocket-server`, embed it and register
+  `setPersistence({ bindState, writeState })` (load the stored state into the room's doc, save its updates), or
+  use a server with storage built in (e.g. Hocuspocus, y-sweet). With `offline: true` clients also keep a copy
+  in IndexedDB and send what the server lacks when they reconnect.
+- **Images:** inline images are sent to every peer, so set an uploader for anything but small images, and serve
+  uploaded images with CORS headers (see [Images](#images)).
+
+### Connection status
+
+For networked providers (`http()`, `websocket()`), the block bar shows a small status dot while the board is open,
+with a tooltip: green when online / saved, amber while connecting / saving, grey when offline, red on an error
+(e.g. the server refused the connection, or a save keeps failing). Local providers (`indexeddb()`, `memory()`) have
+no status and show no dot. A custom provider can report one through `BoardConnection.status`
+(`{ get(), on(cb) }`).
+
+### Presence and follow
+
+On a `websocket()` board (or any connection with an `awareness`), collaborators see each other live:
+
+- **Cursors** with the collaborator's name, their **selection** outlined in their color, and their **laser**
+  trail. Updates are sent at most every 50 ms.
+- **Avatars** of the people on the board (top right, up to 5 plus a count). Click one to **follow** their view:
+  your board pans and zooms with theirs. A pan, zoom or click of your own, `Esc` or the pill's close button stops
+  following.
+- **Identity:** `sketch.configure({ user })` takes `{ name, color }` or a function returning it. Without one,
+  each client is a guest ("Khách N" / "Guest N") with a color picked from its Yjs client id.
+
+### Concurrent edits
+
+Boards are Yjs documents, so concurrent edits merge without conflicts. A few things to know:
+
+- **Each element property is last-writer-wins.** Two people changing the same property (say, the color of one
+  shape) keep one value. Arrays such as `groupIds` are one value too: if two people group or ungroup the same
+  element at the same time, one side's grouping is kept.
+- **Derived data is repaired.** An arrow's geometry follows the shapes it is bound to, and an element's frame follows
+  where it is. When concurrent edits merge into a state nobody wrote (an arrow bound to a shape a peer moved, a
+  child of a frame a peer deleted), every client recomputes it the same way, so all peers converge. Repairs are not
+  undo steps.
+- **Undo is local:** `Ctrl/⌘ + Z` undoes only your own edits, never a collaborator's.
 
 ### Custom provider
 
@@ -178,6 +299,8 @@ editor.commands.setContent(imported)
 - `importBoards` accepts a `Blob`/`File` or its text. It rejects files over 50 MB, invalid JSON, or a wrong `type`
   or `version`. A malformed board (bad base64 or Yjs data) is skipped and listed in `skipped`; it never throws for
   one bad board.
+- Only boards the bundled document references (`collectBoardIds(doc)`) are imported; other entries in `boards`
+  are listed in `skipped`, so a crafted bundle cannot write to unrelated boards.
 - Import **merges** into the provider's board with the same id (Yjs updates merge): existing content is kept, and
   importing twice changes nothing.
 
@@ -193,8 +316,8 @@ editor.commands.setContent(imported)
     inverted, so photos keep their colors).
 - **The board** lives in the provider. With the default IndexedDB provider it is stored **per browser
   and device**: the same document opened on another device (or after clearing site data) shows the
-  preview, and the board opens empty with a "not available on this device" notice. Use a custom
-  provider to sync boards between devices.
+  preview, and the board opens empty with a "not available on this device" notice. Use `http()`,
+  `websocket()` or a custom provider to sync boards between devices.
 - The preview is regenerated 2 s after the last edit and when you leave the board.
 - **Copies get their own board.** When a paste, drop or the block's *Duplicate* creates a block whose
   `boardId` is already used elsewhere in the document, the copy gets a new id (`bd_…`) and the board is copied
@@ -202,8 +325,14 @@ editor.commands.setContent(imported)
   and copies the Yjs state. The copy keeps the original's preview; it shows "Copying board…" and Interact is
   disabled until the copy finishes. If the copy fails, an inline error is shown and the new block keeps its new
   id with an empty board (and the preview). Moving a block (drag, cut + paste) keeps its id. The id change is
-  part of the same editor undo step as the paste or duplicate. Set `sketch.configure({ onPasteClone: false })`
-  to let copies share the board instead.
+  part of the same editor undo step as the paste or duplicate; undo and redo never copy the board again. Set
+  `sketch.configure({ onPasteClone: false })` to let copies share the board instead.
+- **Copies are per document.** Clone on paste only looks at the document being pasted into: pasting a block into
+  **another** document (or another editor) keeps its id, so both documents show the **same** board, and an edit in
+  one shows in the other. To give the other document its own board, use a [bundle](#export-and-import-boards) or
+  a provider-side copy.
+- With a networked provider, a copy fails (and shows the error) when the server does not confirm it and the
+  provider has no offline cache to hold it.
 - Preview, board id and version changes are not editor undo steps: `Ctrl/⌘ + Z` in the text only
   undoes inserting or deleting the block.
 
@@ -444,7 +573,7 @@ In view mode (`Alt + R`) step 2 is skipped, so the hand tool stays active.
 - **M0 – Foundation (done):** the `sketch` block, Yjs board store, two-layer canvas renderer with caching and level of detail, pan/zoom, select/move/resize/rotate, rectangle/ellipse/diamond, undo/redo, IndexedDB and memory providers, SVG preview.
 - **M1 – Drawing tools (done):** pen, highlighter, line, arrow (straight/elbow/curved), text and shape labels, eraser, laser, lasso, style panel, eyedropper, copy/paste/duplicate and copy style, zen and view mode.
 - **M2 – Miro core (done):** sticky notes, images with crop, frames, shape library and flowchart shapes, arrows bound to shapes, arrow labels, quick flowchart (`Ctrl/⌘ + arrow`), group/lock, align/distribute, grid and snapping.
-- **M3 – Backend & collaboration:** `http()` and `websocket()` providers with live cursors, cloning boards on paste and duplicate, board export, search, element links.
+- **M3 – Backend & collaboration (done):** `http()` and `websocket()` providers with an offline cache and a status dot, live cursors / selections / laser and follow mode, convergence repair of derived data, cloning boards on paste and duplicate, board bundles (export / import), search, element links.
 - **M4 – Export & library:** PNG/SVG/clipboard export, library, templates, `.excalidraw` import, minimap, performance work.
 - **M5 – Rich content (→ 1.0):** web embeds, emoji/stamps, code blocks, tables, cards/kanban, Mermaid → sketch, mind maps, auto layout.
 

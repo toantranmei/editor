@@ -13,6 +13,8 @@ export interface SketchMessages {
   /** A pasted / duplicated block while its board is being copied. */
   copying: string
   cloneError: string
+  /** Tooltip of the block bar's connection status dot (networked providers only). */
+  status: Record<'connecting' | 'online' | 'offline' | 'saving' | 'saved' | 'error', string>
   tools: Record<ToolName | 'lock', string>
   /** Tool bar button (and popover title) for the other shapes. */
   shapes: string
@@ -162,6 +164,14 @@ export const messages: Record<'vi' | 'en', SketchMessages> = {
     loadError: 'Không mở được bảng vẽ',
     copying: 'Đang sao chép bảng…',
     cloneError: 'Không sao chép được nội dung bảng vẽ. Bảng mới đang trống.',
+    status: {
+      connecting: 'Đang kết nối…',
+      online: 'Đã kết nối',
+      offline: 'Mất kết nối, đang thử lại…',
+      saving: 'Đang lưu…',
+      saved: 'Đã lưu',
+      error: 'Lỗi đồng bộ: chưa lưu được thay đổi',
+    },
     tools: {
       hand: 'Kéo (H)',
       select: 'Chọn (V)',
@@ -317,6 +327,14 @@ export const messages: Record<'vi' | 'en', SketchMessages> = {
     loadError: 'Could not open the board',
     copying: 'Copying board…',
     cloneError: 'Could not copy the board. The new board is empty.',
+    status: {
+      connecting: 'Connecting…',
+      online: 'Connected',
+      offline: 'Offline, reconnecting…',
+      saving: 'Saving…',
+      saved: 'Saved',
+      error: 'Sync error: changes are not saved yet',
+    },
     tools: {
       hand: 'Hand (H)',
       select: 'Select (V)',

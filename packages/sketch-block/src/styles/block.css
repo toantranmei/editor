@@ -11,6 +11,18 @@
   }
   .me-sketch-bar { padding-bottom: var(--me-space-2); }
   .me-sketch-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* Connection status dot (networked providers): green online / saved, amber connecting / saving, grey offline,
+     red error. */
+  .me-sketch-status {
+    flex: none;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #868e96;
+  }
+  .me-sketch-status.is-online, .me-sketch-status.is-saved { background: #2f9e44; }
+  .me-sketch-status.is-connecting, .me-sketch-status.is-saving { background: #f08c00; }
+  .me-sketch-status.is-error { background: var(--me-color-danger, #e03131); }
   .me-sketch-loading { font-size: var(--me-font-size-xs); color: var(--me-color-text-muted); }
   .me-sketch-error { padding: 0 var(--me-space-5) var(--me-space-2); }
   .me-sketch-notice {

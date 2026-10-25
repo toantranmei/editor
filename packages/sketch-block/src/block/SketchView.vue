@@ -11,7 +11,7 @@ import { useClickOutside, useEditable, useScope } from '@toantranmei/editor'
 import { computed, getCurrentInstance, markRaw, nextTick, onBeforeUnmount, onMounted, onUnmounted, ref, shallowRef, watch } from 'vue'
 import { messages } from '../messages'
 import type { SketchElement } from '../model/types'
-import type { BoardConnection, SketchProvider } from '../providers/types'
+import type { BoardConnection, ConnectionStatusValue, SketchProvider } from '../providers/types'
 import { liveViews } from './live'
 import { newBoardId, SKETCH_MAX_HEIGHT, SKETCH_MIN_HEIGHT, type SketchOptions } from './node'
 
@@ -126,6 +126,17 @@ async function open(): Promise<boolean> {
     loading.value = false
   }
 }
+
+// --- Connection status dot (networked providers only: local ones have no `status`) --
+const connStatus = ref<ConnectionStatusValue | null>(null)
+let offStatus: (() => void) | null = null
+watch(connection, (conn) => {
+  offStatus?.()
+  offStatus = null
+  const status = conn?.status
+  connStatus.value = status ? status.get() : null
+  if (status) offStatus = status.on(s => (connStatus.value = s))
+})
 
 function closeConnection() {
   const conn = connection.value
@@ -364,6 +375,8 @@ onBeforeUnmount(() => {
   clearTimeout(timer)
 })
 onUnmounted(() => {
+  offStatus?.()
+  offStatus = null
   const conn = connection.value
   const sess = session.value
   connection.value = null
@@ -386,6 +399,14 @@ onMounted(() => {
       <div class="me-block-bar me-sketch-bar">
         <PenTool />
         <span class="me-sketch-name">{{ m.title }}</span>
+        <span
+          v-if="connStatus"
+          class="me-sketch-status"
+          :class="`is-${connStatus}`"
+          role="img"
+          :title="m.status[connStatus]"
+          :aria-label="m.status[connStatus]"
+        />
         <span v-if="loading" class="me-sketch-loading" role="status">{{ m.loading }}</span>
         <span v-else-if="cloning" class="me-sketch-loading" role="status">{{ m.copying }}</span>
         <button type="button" class="me-tool-btn me-sketch-expand" :title="m.expand" :disabled="loading || cloning" @click="openFullscreen">
@@ -440,6 +461,14 @@ onMounted(() => {
           <div class="me-block-bar me-sketch-bar">
             <PenTool />
             <span class="me-sketch-name">{{ m.title }}</span>
+            <span
+              v-if="connStatus"
+              class="me-sketch-status"
+              :class="`is-${connStatus}`"
+              role="img"
+              :title="m.status[connStatus]"
+              :aria-label="m.status[connStatus]"
+            />
             <button type="button" class="me-tool-btn" :title="m.close" @click="leave">
               <X />
             </button>

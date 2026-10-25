@@ -4,6 +4,10 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+overrides:
+  '@y/websocket-server>yjs': ^13.6.0
+  '@y/websocket-server>@y/protocols': 1.0.6-2
+
 importers:
 
   .:
@@ -45,6 +49,9 @@ importers:
       '@tailwindcss/vite':
         specifier: ^4.3.3
         version: 4.3.3(vite@8.3.5(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.1))
+      '@y/websocket-server':
+        specifier: 0.1.5
+        version: 0.1.5
       tailwindcss:
         specifier: ^4.3.3
         version: 4.3.3
@@ -1829,6 +1836,17 @@ packages:
       '@vue/server-renderer':
         optional: true
 
+  '@y/protocols@1.0.6-2':
+    resolution: {integrity: sha512-6wbprSZB95xUb45q75u+apctrBM3hUB6ICOeMskhr+N8p7P3u34menF7a4MRpzgA3Mfxes15XkZhFc/h8Gy2Ig==}
+    engines: {node: '>=16.0.0', npm: '>=8.0.0'}
+    peerDependencies:
+      yjs: ^14.0.0-1 || ^14 || ^13
+
+  '@y/websocket-server@0.1.5':
+    resolution: {integrity: sha512-ue1zENKxwj66AV8QoTwk0MPEH6veUhgvw+Gn84iX6Tco4lN9DHuF9k8oEKObJSPWoKBsOjeUk/ZYJcSK7iGc1w==}
+    engines: {node: '>=16.0.0', npm: '>=8.0.0'}
+    hasBin: true
+
   abbrev@3.0.1:
     resolution: {integrity: sha512-AO2ac6pjRB3SJmGJo+v5/aK6Omggp6fsLrs6wN9bd35ulu4cCwaAU9+7ZhXjeqHVkaHThLuzH0nZr0YpCDhygg==}
     engines: {node: ^18.17.0 || >=20.5.0}
@@ -1908,6 +1926,9 @@ packages:
   ast-walker-scope@0.10.0:
     resolution: {integrity: sha512-KzvoxDfXNz2Gm8KYLh47K3qcY3Zza3WKOuh2xoqa7LBu6MDKWAZLovJtU9DuAd/Er+rhQHCRn619lHS5U+qmhw==}
     engines: {node: ^22.18.0 || >=24.11.0}
+
+  async-limiter@1.0.1:
+    resolution: {integrity: sha512-csOlWGAcRFJaI6m+F2WKdnMKr4HhdhFVBk0H/QbJFMCr+uO2kwohwXQPxw/9OCxp05r5ghVBFSyioixx3gfkNQ==}
 
   async-sema@3.1.1:
     resolution: {integrity: sha512-tLRNUXati5MFePdAk8dw7Qt7DpxPB60ofAgn8WRhW6a2rcimZnYBP9oxHiv0OHy+Wz7kPMG+t4LGdt31+4EmGg==}
@@ -4328,6 +4349,17 @@ packages:
     resolution: {integrity: sha512-42AtmgqjV+X1VpdOfyTGOYRi0/zsoLqtXQckTmqTeybT+BDIbM/Guxo7x3pE2vtpr1ok6xRqM9OpBe+Jyoqyww==}
     engines: {node: '>=18'}
 
+  ws@6.2.6:
+    resolution: {integrity: sha512-XTrf1gv7kXoVf1hbC3PAyAiPgR8Wz1blcrYIjEsUmr08BLksT41R8KbjmS9408C2ERx7v1JDLD/BkpLEttjfKA==}
+    peerDependencies:
+      bufferutil: ^4.0.1
+      utf-8-validate: ^5.0.2
+    peerDependenciesMeta:
+      bufferutil:
+        optional: true
+      utf-8-validate:
+        optional: true
+
   ws@8.22.0:
     resolution: {integrity: sha512-Ydggc987+RO0AnWtZ/7Wq9FtNvcrL1b/RO0ud9mWjUPgDrsAAwQSF51sm2hm1XofbU/4jkpGEsLFsZZxU+1DOg==}
     engines: {node: '>=10.0.0'}
@@ -6236,6 +6268,21 @@ snapshots:
     optionalDependencies:
       '@vue/server-renderer': 3.5.44
 
+  '@y/protocols@1.0.6-2(yjs@13.6.33)':
+    dependencies:
+      lib0: 0.2.119
+      yjs: 13.6.33
+
+  '@y/websocket-server@0.1.5':
+    dependencies:
+      '@y/protocols': 1.0.6-2(yjs@13.6.33)
+      lib0: 0.2.119
+      ws: 6.2.6
+      yjs: 13.6.33
+    transitivePeerDependencies:
+      - bufferutil
+      - utf-8-validate
+
   abbrev@3.0.1: {}
 
   abbrev@5.0.0: {}
@@ -6315,6 +6362,8 @@ snapshots:
       '@babel/parser': 8.0.8
       '@babel/types': 8.0.8
       ast-kit: 3.0.0
+
+  async-limiter@1.0.1: {}
 
   async-sema@3.1.1: {}
 
@@ -8817,6 +8866,10 @@ snapshots:
       ansi-styles: 6.2.3
       string-width: 7.2.0
       strip-ansi: 7.2.0
+
+  ws@6.2.6:
+    dependencies:
+      async-limiter: 1.0.1
 
   ws@8.22.0: {}
 

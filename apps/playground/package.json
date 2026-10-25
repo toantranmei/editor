@@ -21,6 +21,7 @@
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.3",
+    "@y/websocket-server": "0.1.5",
     "tailwindcss": "^4.3.3",
     "typescript": "~5.9.3",
     "vue-tsc": "^3.0.0"

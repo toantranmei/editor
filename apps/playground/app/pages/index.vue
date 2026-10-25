@@ -2,6 +2,7 @@
 import type { Editor, LocaleName, MentionItem, ThemeMode, ThemeTokens } from '@toantranmei/editor'
 import { defaultBlocks, emoji, file, html, math, mention, mermaid, toc } from '@toantranmei/editor'
 import { sketch } from '@toantranmei/sketch-block'
+import { websocket } from '@toantranmei/sketch-block/providers'
 
 // Demo people/pages for @mentions (a real app would query its API).
 const PEOPLE: MentionItem[] = [
@@ -21,8 +22,9 @@ const blocks = [
   html,
   emoji,
   file.configure({ maxSize: 2 }),
-  // Whiteboard; boards are kept in this browser's IndexedDB (the default provider).
-  sketch,
+  // Whiteboard; boards are kept in this browser's IndexedDB (the default provider). With `?sync=1` they are shared
+  // through the playground sync server (`pnpm sync`, ws://localhost:1234) instead.
+  useRoute().query.sync === '1' ? sketch.configure({ provider: websocket({ url: 'ws://localhost:1234' }) }) : sketch,
   mention.configure({
     search: q => PEOPLE.filter(p => normalize(p.label).includes(normalize(q))),
     reminderHelpUrl: 'https://www.notion.com/help/reminders',

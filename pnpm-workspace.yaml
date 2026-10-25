@@ -5,3 +5,10 @@ packages:
 onlyBuiltDependencies:
   - '@parcel/watcher'
   - esbuild
+
+# @y/websocket-server 0.1.5 (the playground sync server) imports `yjs`, but its `@y/protocols` range now resolves
+# to a release built on `@y/y`: two Yjs copies, and the server cannot apply updates. Pin both to the Yjs 13 line
+# the clients use.
+overrides:
+  '@y/websocket-server>yjs': ^13.6.0
+  '@y/websocket-server>@y/protocols': 1.0.6-2
