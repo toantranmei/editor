@@ -11,6 +11,12 @@ export interface SketchMessages {
   loading: string
   loadError: string
   tools: Record<ToolName | 'lock', string>
+  /** Tool bar button (and popover title) for the other shapes. */
+  shapes: string
+  /** Tool bar button that opens the image file picker. */
+  insertImage: string
+  /** Accessible name of the frame name editor. */
+  frameName: string
   undo: string
   redo: string
   zoomIn: string
@@ -145,6 +151,9 @@ export const messages: Record<'vi' | 'en', SketchMessages> = {
       eyedropper: 'Lấy màu (I)',
       lock: 'Giữ công cụ sau khi vẽ (Q)',
     },
+    shapes: 'Hình khác',
+    insertImage: 'Chèn ảnh',
+    frameName: 'Tên khung',
     undo: 'Hoàn tác',
     redo: 'Làm lại',
     zoomIn: 'Phóng to',
@@ -275,6 +284,9 @@ export const messages: Record<'vi' | 'en', SketchMessages> = {
       eyedropper: 'Eyedropper (I)',
       lock: 'Keep tool active after drawing (Q)',
     },
+    shapes: 'More shapes',
+    insertImage: 'Insert image',
+    frameName: 'Frame name',
     undo: 'Undo',
     redo: 'Redo',
     zoomIn: 'Zoom in',

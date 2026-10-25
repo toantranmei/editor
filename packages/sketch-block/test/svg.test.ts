@@ -122,3 +122,42 @@ describe('svg export: M1 kinds', () => {
     expect(hy! + hh!).toBeGreaterThan(Math.sin((25 * Math.PI) / 180) * 16)
   })
 })
+
+describe('svg export: M2 kinds', () => {
+  const base = { angle: 0, version: 1, locked: false, ...DEFAULT_STYLE, groupIds: [], frameId: null }
+
+  it('svg exports sticky, frame, image, labeled arrow', () => {
+    const sticky = {
+      ...base, id: 's', type: 'sticky', x: 0, y: 0, w: 200, h: 200, index: 'a0', seed: 1, text: 'Ghi chú', color: '#ffe3e3',
+    } as SketchElement
+    const frame = {
+      ...base, id: 'f', type: 'frame', x: 300, y: 0, w: 400, h: 300, index: 'a1', seed: 2, name: 'Khung <1>',
+    } as SketchElement
+    const image = {
+      ...base, id: 'i', type: 'image', x: 320, y: 20, w: 100, h: 80, index: 'a2', seed: 3, frameId: 'f',
+      src: 'https://example.com/a.png?x=1&y=2', naturalW: 200, naturalH: 160, crop: null,
+    } as SketchElement
+    const arrow = {
+      ...base, id: 'r', type: 'arrow', x: 0, y: 400, w: 200, h: 0, index: 'a3', seed: 4,
+      points: [[0, 0], [200, 0]], label: 'Có', startBinding: null, endBinding: null, routing: 'straight',
+      startArrowhead: 'none', endArrowhead: 'arrow',
+    } as SketchElement
+    const svg = exportSvg([frame, sticky, image, arrow])
+    // sticky: its color as the fill, and its text
+    expect(svg).toContain('#ffe3e3')
+    expect(svg).toContain('>Ghi chú</tspan>')
+    // frame: its (escaped) name above the box
+    expect(svg).toContain('>Khung &lt;1&gt;</text>')
+    // image: an escaped href
+    expect(svg).toContain('<image href="https://example.com/a.png?x=1&amp;y=2"')
+    // labeled arrow: the shaft is masked under the label, and the label is drawn
+    expect(svg).toContain('mask="url(#')
+    expect(svg).toContain('>Có</tspan>')
+    const doc = new DOMParser().parseFromString(svg, 'image/svg+xml')
+    expect(doc.querySelector('parsererror')).toBeNull()
+    // the viewBox covers the frame name above the frame and the arrow below everything
+    const [, vy, , vh] = svg.match(/viewBox="([^"]+)"/)![1]!.split(' ').map(Number)
+    expect(vy!).toBeLessThan(0)
+    expect(vy! + vh!).toBeGreaterThan(400)
+  })
+})

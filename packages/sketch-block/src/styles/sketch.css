@@ -56,10 +56,63 @@
     box-shadow: var(--me-popover-shadow);
     font-size: var(--me-font-size-sm);
   }
-  .me-sketch-board .me-sketch-toolbar {
+  /* Tool bar: centered at the top; scrolls sideways (never wraps) when the board is narrower than it. The shapes
+     popover hangs below it, outside the scroller so it is not clipped. */
+  .me-sketch-board .me-sketch-toolbar-wrap {
+    position: absolute;
     top: var(--me-space-4);
     left: 50%;
     transform: translateX(-50%);
+    max-width: calc(100% - var(--me-space-4) * 2);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  .me-sketch-board .me-sketch-toolbar {
+    position: static;
+    max-width: 100%;
+    box-sizing: border-box;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: thin;
+  }
+  .me-sketch-board .me-sketch-toolbar > * { flex: none; }
+  .me-sketch-board .me-sketch-shapes {
+    margin-top: var(--me-space-1);
+    padding: var(--me-space-2);
+    border-radius: var(--me-popover-radius);
+    background: var(--me-popover-bg);
+    box-shadow: var(--me-popover-shadow);
+    font-size: var(--me-font-size-xs);
+  }
+  .me-sketch-board .me-sketch-shapes-title {
+    margin: 0 0 var(--me-space-1);
+    color: var(--me-color-text-muted);
+  }
+  .me-sketch-board .me-sketch-shapes-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: var(--me-space-1);
+  }
+  .me-sketch-board .me-sketch-shape-cell {
+    flex-direction: column;
+    height: auto;
+    padding: var(--me-space-1);
+  }
+  .me-sketch-board .me-sketch-shape-name {
+    max-width: calc(var(--me-toolbar-button-size) * 2);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .me-sketch-board .me-sketch-shape-icon {
+    width: var(--me-icon-size);
+    height: var(--me-icon-size);
+    fill: none;
+    stroke: currentColor;
+    stroke-width: var(--me-icon-stroke);
+    stroke-linejoin: round;
   }
   .me-sketch-board .me-sketch-zoom {
     right: var(--me-space-4);

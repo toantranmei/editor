@@ -88,29 +88,121 @@ describe('SketchBoard', () => {
     expect(wrapper.find('.me-sketch-zoom-pct').text()).toBe('100%')
   })
 
-  it('toolbar renders 17 tools in order with letter badges', async () => {
+  it('toolbar shows M2 tools', async () => {
     const { wrapper } = await setup()
     const toolbar = wrapper.find('.me-sketch-toolbar')
     const buttons = toolbar.findAll('button')
     const order = [
-      'lock', 'hand', 'select', 'lasso', 'rectangle', 'diamond', 'ellipse', 'arrow', 'line',
-      'pen', 'highlighter', 'text', 'sticky', 'frame', 'eraser', 'laser', 'eyedropper',
+      'lock', 'hand', 'select', 'lasso', 'rectangle', 'diamond', 'ellipse', 'shapes', 'arrow', 'line',
+      'pen', 'highlighter', 'text', 'sticky', 'frame', 'image', 'eraser', 'laser', 'eyedropper',
     ] as const
-    expect(buttons).toHaveLength(17)
+    const title = (n: typeof order[number]) =>
+      n === 'shapes' ? messages.vi.shapes : n === 'image' ? messages.vi.insertImage : messages.vi.tools[n]
+    expect(buttons).toHaveLength(19)
     expect(buttons.map(b => b.attributes('data-tool'))).toEqual([...order])
-    expect(buttons.map(b => b.attributes('title'))).toEqual(order.map(n => messages.vi.tools[n]))
+    expect(buttons.map(b => b.attributes('title'))).toEqual(order.map(title))
     const badges = buttons.map(b => b.find('.me-sketch-badge').exists() ? b.find('.me-sketch-badge').text() : '')
-    expect(badges).toEqual(['Q', 'H', 'V', '', 'R', 'D', 'O', 'A', 'L', 'P', 'M', 'T', 'S', 'F', 'E', 'K', 'I'])
+    expect(badges).toEqual(['Q', 'H', 'V', '', 'R', 'D', 'O', '', 'A', 'L', 'P', 'M', 'T', 'S', 'F', '', 'E', 'K', 'I'])
     // every badge is the letter the tooltip names
     for (const [i, b] of buttons.entries()) {
       const key = /\(([A-Z])\)$/.exec(b.attributes('title')!)?.[1] ?? ''
       expect(badges[i]).toBe(key)
     }
-    // groups: lock | hand select lasso | shapes & lines | pen highlighter text sticky frame | eraser laser eyedropper
+    // groups: lock | hand select lasso | shapes & lines | pen highlighter text sticky frame image | eraser laser eyedropper
     const kids = [...toolbar.element.children].map(c => (c.classList.contains('me-toolbar-divider') ? '|' : c.getAttribute('data-tool')))
     expect(kids.join(' ')).toBe(
-      'lock | hand select lasso | rectangle diamond ellipse arrow line | pen highlighter text sticky frame | eraser laser eyedropper',
+      'lock | hand select lasso | rectangle diamond ellipse shapes arrow line | pen highlighter text sticky frame image | eraser laser eyedropper',
     )
+    // the image button opens the file picker
+    const click = vi.spyOn(HTMLInputElement.prototype, 'click').mockImplementation(() => {})
+    await wrapper.find('[data-tool="image"]').trigger('click')
+    expect(click).toHaveBeenCalledTimes(1)
+    // en strings exist for the new buttons
+    expect(messages.en.shapes).toBeTruthy()
+    expect(messages.en.insertImage).toBeTruthy()
+  })
+
+  it('shapes popover sets tool to chosen shape', async () => {
+    const { SHAPE_TYPES } = await import('../src/model/types')
+    const { wrapper, key, drag, store } = await setup({ locale: 'en' })
+    const popover = () => wrapper.find('.me-sketch-shapes')
+    const shapesBtn = () => wrapper.find('[data-tool="shapes"]')
+    expect(popover().exists()).toBe(false)
+    await shapesBtn().trigger('click')
+    expect(popover().exists()).toBe(true)
+    expect(popover().attributes('aria-label')).toBe(messages.en.shapes)
+    const cells = popover().findAll('button[data-shape]')
+    expect(cells.map(c => c.attributes('data-shape'))).toEqual([...SHAPE_TYPES])
+    // each cell: a tiny outline preview and the shape's name
+    for (const c of cells) {
+      expect(c.find('svg path, svg polygon').exists()).toBe(true)
+      expect(c.text()).toBe(messages.en.tools[c.attributes('data-shape') as typeof SHAPE_TYPES[number]].replace(/ \([A-Z]\)$/, ''))
+    }
+    await popover().find('[data-shape="star"]').trigger('click')
+    expect(popover().exists()).toBe(false)
+    // the shapes button stands for the chosen shape: active while it is the tool, its preview as the icon
+    expect(shapesBtn().classes()).toContain('is-active')
+    expect(shapesBtn().attributes('data-shape')).toBe('star')
+    drag(100, 100, 200, 160)
+    expect(store.all().map(e => e.type)).toEqual(['star'])
+    // another tool: the button is no longer active but keeps the last shape
+    await key('r')
+    expect(shapesBtn().classes()).not.toContain('is-active')
+    expect(shapesBtn().attributes('data-shape')).toBe('star')
+    // Escape closes the popover without choosing (and without leaving the board)
+    await shapesBtn().trigger('click')
+    await popover().trigger('keydown', { key: 'Escape' })
+    expect(popover().exists()).toBe(false)
+    expect(wrapper.emitted('exit')).toBeUndefined()
+    expect(wrapper.find('[data-tool="rectangle"]').classes()).toContain('is-active')
+  })
+
+  it('read-only Escape treats readonly like view mode: the hand tool does not switch to select', async () => {
+    const { wrapper, key } = await setup({ readonly: true })
+    await key('h')
+    expect(wrapper.find('[data-tool="hand"]').classes()).toContain('is-active')
+    await key('Escape')
+    expect(wrapper.emitted('exit')).toHaveLength(1)
+  })
+
+  it('zen, view mode, grid, snap and the last shape live in the session (survive remounts)', async () => {
+    const connection = await connect()
+    const session = createBoardSession(connection)
+    const mountBoard = async () => {
+      const w = mount(SketchBoard, { props: { connection, session }, attachTo: document.body })
+      wrappers.push(w)
+      await nextTick()
+      return w
+    }
+    const first = await mountBoard()
+    const k = (key: string, init: KeyboardEventInit = {}) => first.find('.me-sketch-board').trigger('keydown', { key, ...init })
+    await first.find('[data-action="grid"]').trigger('click')
+    await first.find('[data-action="snap"]').trigger('click')
+    await first.find('[data-tool="shapes"]').trigger('click')
+    await first.find('[data-shape="cloud"]').trigger('click')
+    await k('®', { code: 'KeyR', altKey: true })
+    await k('Ω', { code: 'KeyZ', altKey: true })
+    expect(session.zen.value).toBe(true)
+    expect(session.viewMode.value).toBe(true)
+    first.unmount()
+    wrappers.splice(wrappers.indexOf(first), 1)
+
+    const second = await mountBoard()
+    expect(second.find('.me-sketch-exit-zen').exists()).toBe(true)
+    expect(second.find('.me-sketch-toolbar').exists()).toBe(false)
+    await second.find('.me-sketch-exit-zen').trigger('click')
+    // still in view mode: hand only
+    expect(second.findAll('.me-sketch-toolbar button').map(b => b.attributes('data-tool'))).toEqual(['hand'])
+    expect(second.find('[data-tool="hand"]').classes()).toContain('is-active')
+    await second.find('.me-sketch-view-mode').trigger('click')
+    expect(second.find('[data-tool="shapes"]').attributes('data-shape')).toBe('cloud')
+    expect(second.find('[data-action="grid"]').attributes('aria-pressed')).toBe('true')
+    expect(second.find('[data-action="snap"]').attributes('aria-pressed')).toBe('false')
+    // without a session each board starts fresh
+    const { wrapper: fresh } = await setup()
+    expect(fresh.find('[data-action="grid"]').attributes('aria-pressed')).toBe('false')
+    expect(fresh.find('[data-tool="shapes"]').attributes('data-shape')).toBeUndefined()
+    session.destroy()
   })
 
   it('pressing r then dragging creates an element and emits change', async () => {
@@ -578,7 +670,7 @@ describe('SketchBoard', () => {
     expect(store.all()).toHaveLength(0)
     // Alt+R again: drawing works again
     await key('®', { code: 'KeyR', altKey: true })
-    expect(wrapper.findAll('.me-sketch-toolbar button')).toHaveLength(17)
+    expect(wrapper.findAll('.me-sketch-toolbar button')).toHaveLength(19)
     await key('r')
     drag(100, 100, 200, 160)
     expect(store.all()).toHaveLength(1)

@@ -103,6 +103,10 @@ export interface ToolControllerContext {
   viewCenter?: () => Point
   /** Visible scene box (object snap candidates come from it); defaults to the whole content. */
   viewBox?: () => Box
+  /** Grid toggle to use (e.g. a board session's, so it outlives the board); defaults to a new one (off). */
+  grid?: Ref<boolean>
+  /** Object snap toggle to use (e.g. a board session's); defaults to a new one (on). */
+  objectSnap?: Ref<boolean>
 }
 
 /** Shared state the individual tools act on. */
@@ -233,8 +237,8 @@ export class ToolController implements ToolHost {
   readonly selectedIds: Ref<Set<string>> = ref(new Set())
   readonly cursor: Ref<string> = ref('default')
   readonly currentStyle: Ref<CurrentStyle> = ref({ ...INITIAL_STYLE })
-  readonly grid: Ref<boolean> = ref(false)
-  readonly objectSnap: Ref<boolean> = ref(true)
+  readonly grid: Ref<boolean>
+  readonly objectSnap: Ref<boolean>
   guides: Guide[] = []
   marquee: Box | null = null
   hoverId: string | null = null
@@ -271,6 +275,8 @@ export class ToolController implements ToolHost {
   private readonly off: () => void
 
   constructor(readonly ctx: ToolControllerContext) {
+    this.grid = ctx.grid ?? ref(false)
+    this.objectSnap = ctx.objectSnap ?? ref(true)
     this.hand = new HandTool(this)
     this.crop = new CropTool(this)
     const select = new SelectTool(this)

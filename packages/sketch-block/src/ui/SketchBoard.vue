@@ -12,7 +12,7 @@ import { messages as allMessages } from '../messages'
 import { History } from '../model/history'
 import { Scene } from '../model/scene'
 import { BoardStore } from '../model/store'
-import { isFrame, isImage, isLinear, isShape, isSticky, type SketchElement } from '../model/types'
+import { isFrame, isImage, isLinear, isShape, isSticky, type ShapeType, type SketchElement } from '../model/types'
 import type { BoardConnection } from '../providers/types'
 import { BitmapCache, bindCacheInvalidation } from '../render/bitmap-cache'
 import { renderInteractive, resetAccentCache } from '../render/interactive'
@@ -146,9 +146,12 @@ function syncView(): void {
 // ---------- tools ----------
 /** Eraser marks the static layer last skipped (the controller replaces the Set whenever marks change). */
 let drawnErasing: Set<string> = new Set()
-// ---------- zen / view mode (local UI state, not persisted) ----------
-const zen = ref(false)
-const viewMode = ref(false)
+// ---------- zen / view mode, snapping, last shape: the session's (so they survive inline ↔ fullscreen), else
+// local to this board; never persisted ----------
+const zen = session ? session.zen : ref(false)
+const viewMode = session ? session.viewMode : ref(false)
+/** Shape last chosen from the shapes popover. */
+const lastShape = session ? session.lastShape : ref<ShapeType | null>(null)
 /** Read-only for editing: the `readonly` prop or view mode. */
 const locked = computed(() => props.readonly || viewMode.value)
 
@@ -157,6 +160,8 @@ const controller = new ToolController({
   readonly: () => locked.value,
   viewCenter: () => viewport.toScene(center()),
   viewBox: () => viewport.visibleBox(widthCss, heightCss),
+  grid: session?.grid,
+  objectSnap: session?.objectSnap,
   invalidate: () => {
     scheduler.invalidateInteractive()
     if (controller.erasing !== drawnErasing) scheduler.invalidateStatic()
@@ -165,7 +170,7 @@ const controller = new ToolController({
 })
 const tool = controller.tool
 const toolLocked = controller.toolLocked
-// snapping toggles: board-local, never persisted (grid off, object snap on)
+// snapping toggles (grid off, object snap on by default)
 const grid = controller.grid
 const objectSnap = controller.objectSnap
 watch(grid, () => scheduler.invalidateStatic())
@@ -268,13 +273,14 @@ watch(() => props.readonly, ro => {
   if (tool.value !== 'hand' && tool.value !== 'select') controller.setTool(viewMode.value ? 'hand' : 'select')
 })
 
+// immediate: a session may already be in view mode when this board mounts
 watch(viewMode, on => {
   if (!on) return
   editor.value?.commit()
   controller.cancelGesture()
   toolLocked.value = false
   controller.setTool('hand')
-})
+}, { immediate: true })
 
 function toggleZen(): void {
   zen.value = !zen.value
@@ -318,6 +324,11 @@ function redo(): void {
 
 function selectTool(name: ToolName): void {
   controller.setTool(name)
+}
+
+function pickShape(shape: ShapeType): void {
+  lastShape.value = shape
+  controller.setTool(shape)
 }
 
 function toggleLock(): void {
@@ -484,12 +495,13 @@ function onKeyDown(e: KeyboardEvent): void {
 
 /**
  * Escape, most specific first: a gesture (incl. an open multi-point line and text editing) → the controller
- * finishes / cancels it; a non-select tool → select; a selection → clear it; zen → leave zen; else exit.
+ * finishes / cancels it; a non-select tool → select (not when locked: read-only or view mode keep the hand);
+ * a selection → clear it; zen → leave zen; else exit.
  */
 function onEscape(input: Parameters<ToolController['keyDown']>[0]): void {
   if (activePointer !== null || controller.isGestureActive()) {
     controller.keyDown(input)
-  } else if (tool.value !== 'select' && !viewMode.value) {
+  } else if (tool.value !== 'select' && !locked.value) {
     controller.setTool('select')
   } else if (controller.selectedIds.value.size > 0) {
     controller.setSelection([])
@@ -736,7 +748,7 @@ defineExpose({
       :kind="editing.kind"
       :view="view"
       :theme="theme"
-      :label="editing.kind === 'frame' ? t.tools.frame : t.tools.text"
+      :label="editing.kind === 'frame' ? t.frameName : t.tools.text"
       @commit="onEditorCommit"
       @tab="onEditorTab"
     />
@@ -762,9 +774,12 @@ defineExpose({
       :locked="toolLocked"
       :readonly="readonly"
       :view-mode="viewMode"
+      :last-shape="lastShape"
       :messages="t"
       @select="selectTool"
       @toggle-lock="toggleLock"
+      @pick-shape="pickShape"
+      @insert-image="insertImage"
     />
     <button
       v-if="zen"
