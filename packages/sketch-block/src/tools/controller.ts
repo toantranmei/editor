@@ -1,7 +1,8 @@
 import { nanoid } from 'nanoid'
 import { type Ref, ref, shallowRef } from 'vue'
 import type { Box, Point } from '../geometry'
-import { elementCorners } from '../geometry/bounds'
+import { boxCenter, elementBounds, elementCorners } from '../geometry/bounds'
+import { boxesIntersect } from '../geometry/math'
 import { hitElement } from '../geometry/hit'
 import type { History } from '../model/history'
 import type { Scene } from '../model/scene'
@@ -14,8 +15,8 @@ import type {
 import {
   cleanFrameName, membershipPatches, withFrameChildren,
 } from '../elements/frame'
-import { linearScenePoints } from '../elements/linear'
-import { deletePatches, withFollowers } from '../geometry/binding'
+import { boxFromPoints, linearScenePoints } from '../elements/linear'
+import { anchorScenePoint, BIND_GAP, deletePatches, outlineAnchor, withFollowers } from '../geometry/binding'
 import { editedTextBox } from '../elements/text'
 import {
   DEFAULT_STYLE, isFrame, isImage, isImageSrc, isLinear, isShape, isSticky, isText, LINEAR_TYPES, SHAPE_TYPES,
@@ -186,6 +187,17 @@ export const IMAGE_INSERT_BOX = 600
 const NUDGE: Record<string, [number, number]> = {
   ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1],
 }
+
+export type QuickDirection = 'left' | 'right' | 'up' | 'down'
+const QUICK_KEYS: Record<string, QuickDirection> = {
+  ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down',
+}
+const QUICK_DIRS: Record<QuickDirection, [number, number]> = { left: [-1, 0], right: [1, 0], up: [0, -1], down: [0, 1] }
+/** Quick create (mod+Arrow): gap between the source and the copy, scene units. */
+const QUICK_GAP = 80
+/** Quick create: perpendicular shift (beyond the size) when the slot is occupied, and how many times to try. */
+const QUICK_SHIFT_GAP = 40
+const QUICK_SHIFT_TRIES = 10
 
 /** One shape tool per shape type. */
 function shapeTools(host: ToolHost): Record<ShapeType, Tool> {
@@ -483,6 +495,9 @@ export class ToolController implements ToolHost {
     if ((k === 'Tab' && !e.mod && !e.alt && !e.shift) || (k === 'Enter' && e.mod && !e.alt && !e.shift)) {
       if (!ro && this.quickCreateSticky()) return true
     }
+    // quick flowchart (before the mod guard): mod+Arrow → a bound copy of the single selected shape / sticky
+    const quick = e.mod && !e.alt && !e.shift ? QUICK_KEYS[k] : undefined
+    if (quick) return !ro && this.quickCreate(quick)
     if (e.mod) {
       if (e.alt && e.code === 'KeyC') {
         return this.copyStyle()
@@ -935,6 +950,68 @@ export class ToolController implements ToolHost {
     if (!src || src.locked || !isSticky(src)) return false
     const { color, fontFamily, textAlign, opacity, w, h } = src
     this.beginSticky(stickyInit(src.x + w + STICKY_GAP, src.y, { w, h, color, fontFamily, textAlign, opacity }))
+    return true
+  }
+
+  /**
+   * Quick flowchart (mod+Arrow): with exactly one unlocked shape or sticky selected and no gesture active, creates
+   * an empty copy (type, size, style; label / text '') `size + 80` away in `dir`, shifted perpendicular by
+   * `size + 40` while that slot overlaps another element (up to 10 times; frames do not count, the copy joins
+   * them), plus an arrow in the current style bound to both. One undo step; selects the copy. False when it does
+   * not apply.
+   */
+  quickCreate(dir: QuickDirection): boolean {
+    const { store, scene, history } = this.ctx
+    if (this.ctx.readonly() || this.isGestureActive() || this.selectedIds.value.size !== 1) return false
+    const src = scene.get([...this.selectedIds.value][0]!)
+    if (!src || src.locked || !(isShape(src) || isSticky(src))) return false
+    const [ux, uy] = QUICK_DIRS[dir]
+    const along = ux ? src.w : src.h
+    const step = (ux ? src.h : src.w) + QUICK_SHIFT_GAP
+    const copyId = nanoid(10)
+    // patch by type: a sticky's text, a shape's label (never a cross-type prop)
+    const base: SketchElement = isSticky(src)
+      ? { ...src, id: copyId, groupIds: [], frameId: null, locked: false, text: '' }
+      : { ...src, id: copyId, groupIds: [], frameId: null, locked: false, label: '' }
+    const at = (k: number): SketchElement => ({
+      ...base,
+      x: src.x + ux * (along + QUICK_GAP) + (ux ? 0 : k * step),
+      y: src.y + uy * (along + QUICK_GAP) + (ux ? k * step : 0),
+    })
+    const occupied = (el: SketchElement): boolean => {
+      const b = elementBounds(el)
+      return scene.queryBox(b).some(o => !isFrame(o) && boxesIntersect(elementBounds(o), b))
+    }
+    let copy = at(0)
+    for (let k = 1; k <= QUICK_SHIFT_TRIES && occupied(copy); k++) copy = at(k)
+    // the arrow joins the facing sides' middles, BIND_GAP outside the outlines
+    const side = (el: SketchElement, sx: number, sy: number) => ({
+      x: el.x + el.w * (0.5 + sx / 2), y: el.y + el.h * (0.5 + sy / 2),
+    })
+    const sa = outlineAnchor(src, side(src, ux, uy))
+    const ea = outlineAnchor(copy, side(copy, -ux, -uy))
+    const startBinding: Binding = { id: src.id, ax: sa.ax, ay: sa.ay }
+    const endBinding: Binding = { id: copyId, ax: ea.ax, ay: ea.ay }
+    const p0 = anchorScenePoint(src, startBinding, BIND_GAP, boxCenter(copy))
+    const p1 = anchorScenePoint(copy, endBinding, BIND_GAP, boxCenter(src))
+    const style = this.currentStyle.value
+    const { stroke, strokeWidth, strokeStyle, roughness, roundness, opacity, fontFamily, fontSize, textAlign } = style
+    const { fill, fillStyle } = DEFAULT_STYLE
+    const arrow: ElementInit = {
+      stroke, fill, fillStyle, strokeWidth, strokeStyle, roughness, roundness, opacity, fontFamily, fontSize, textAlign,
+      type: 'arrow', label: '', groupIds: [], frameId: null, angle: 0, locked: false,
+      routing: style.routing, startArrowhead: style.startArrowhead, endArrowhead: style.endArrowhead,
+      startBinding, endBinding,
+      ...boxFromPoints([[p0.x, p0.y], [p1.x, p1.y]]),
+    }
+    // the store assigns index and version; a fresh seed
+    const { index: _index, version: _version, seed: _seed, ...copyInit } = copy
+    history.gesture(() => {
+      const created = store.createMany([copyInit as ElementInit, arrow])
+      this.created(created.map(el => el.id))
+    })
+    this.setSelection([copyId])
+    this.ctx.invalidate()
     return true
   }
 
