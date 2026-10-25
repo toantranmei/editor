@@ -1,11 +1,13 @@
 import * as Y from 'yjs'
 import type { BoardConnection, SketchProvider } from './types'
+import { assertBoardId } from '../block/board-ids'
 
 /** In-memory provider for tests and demos. */
 export function memory(): SketchProvider {
   const store = new Map<string, Uint8Array>()
   return {
     async connect(boardId: string): Promise<BoardConnection> {
+      assertBoardId(boardId)
       const doc = new Y.Doc()
       const stored = store.get(boardId)
       if (stored) Y.applyUpdate(doc, stored)
@@ -22,6 +24,8 @@ export function memory(): SketchProvider {
       }
     },
     async clone(from: string, to: string): Promise<void> {
+      assertBoardId(from)
+      assertBoardId(to)
       const state = store.get(from)
       if (!state) throw new Error(`sketch-block: board ${from} has nothing to copy`)
       const doc = new Y.Doc()

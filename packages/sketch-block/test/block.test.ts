@@ -536,6 +536,17 @@ describe('sketch block', () => {
     expect(undoDepth(editor.state)).toBe(0)
   })
 
+  it('an invalid board id is treated as missing: a fresh id on open, not an undo step', async () => {
+    const { provider, connections } = recording()
+    const connect = vi.spyOn(provider, 'connect')
+    const { editor, wrapper } = await setup({ provider, attrs: { boardId: '../x?y=', preview: null, height: null, version: 0 } })
+    await enter(wrapper)
+    expect(sketchNode(editor).attrs.boardId).toMatch(/^bd_[\w-]{10}$/)
+    expect(connect.mock.calls.map(c => c[0])).toEqual([sketchNode(editor).attrs.boardId])
+    expect(connections).toHaveLength(1)
+    expect(undoDepth(editor.state)).toBe(0)
+  })
+
   it('a slow save finishing after a newer one does not overwrite the newer preview', async () => {
     const base = memory()
     const { pending, savePreview } = deferredSaves()

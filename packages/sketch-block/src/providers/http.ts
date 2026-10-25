@@ -2,6 +2,7 @@ import { IndexeddbPersistence } from 'y-indexeddb'
 import * as Y from 'yjs'
 import { createStatus } from './status'
 import { type BoardConnection, DEFAULT_MAX_INLINE_IMAGE_BYTES, type SketchProvider } from './types'
+import { assertBoardId } from '../block/board-ids'
 
 export interface HttpProviderOptions {
   /** The board's stored Yjs state (an update), or null when the board doesn't exist yet. */
@@ -54,6 +55,7 @@ export function http(opts: HttpProviderOptions): SketchProvider {
   const maxInlineImageBytes = opts.maxInlineImageBytes ?? DEFAULT_MAX_INLINE_IMAGE_BYTES
   const provider: SketchProvider = {
     async connect(boardId: string): Promise<BoardConnection> {
+      assertBoardId(boardId)
       const doc = new Y.Doc()
       /** Origin of the server load; such updates are never saved back. Never the store's LOCAL_ORIGIN. */
       const loadOrigin = Symbol('sketch-http-load')

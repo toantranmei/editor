@@ -1,5 +1,6 @@
 import * as Y from 'yjs'
 import type { BoardConnection, SketchProvider } from '../providers/types'
+import { assertBoardId } from './board-ids'
 
 /**
  * Board copies (clone on paste / duplicate) and bundle imports. Imports yjs: load it lazily from the block
@@ -84,6 +85,8 @@ export async function copyBoardState(provider: SketchProvider, from: string, to:
 
 /** Clone on paste: the provider's own `clone` when it has one, else `copyBoardState`. */
 export async function cloneBoard(provider: SketchProvider, from: string, to: string): Promise<void> {
+  assertBoardId(from)
+  assertBoardId(to)
   if (provider.clone) await provider.clone(from, to)
   else await copyBoardState(provider, from, to)
 }

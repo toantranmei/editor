@@ -6,6 +6,7 @@ import { blockNodeView } from '@toantranmei/editor'
 import { nanoid } from 'nanoid'
 import type { UserOption } from '../collab/presence'
 import type { SketchProvider } from '../providers/types'
+import { isBoardId } from './board-ids'
 import { liveViews } from './live'
 import SketchView from './SketchView.vue'
 
@@ -68,7 +69,7 @@ interface Rewrite { pos: number; from: string; to: string }
 function boardNodes(doc: PMNode): Array<[number, string]> {
   const out: Array<[number, string]> = []
   doc.descendants((node, pos) => {
-    if (node.type.name === 'sketch' && typeof node.attrs.boardId === 'string' && node.attrs.boardId) {
+    if (node.type.name === 'sketch' && isBoardId(node.attrs.boardId)) {
       out.push([pos, node.attrs.boardId])
     }
   })
@@ -234,7 +235,8 @@ export const SketchNode = Node.create<SketchOptions, SketchStorage>({
     return [{
       tag: 'div[data-type="sketch"]',
       getAttrs: el => ({
-        boardId: el.getAttribute('data-board-id'),
+        // untrusted (pasted HTML): an invalid id becomes null, and the block gets a fresh one when opened
+        boardId: isBoardId(el.getAttribute('data-board-id')) ? el.getAttribute('data-board-id') : null,
         preview: el.querySelector('img')?.getAttribute('src') || null,
         height: Number(el.getAttribute('data-height')) || null,
         version: Number(el.getAttribute('data-version')) || 0,
@@ -245,7 +247,7 @@ export const SketchNode = Node.create<SketchOptions, SketchStorage>({
   renderHTML({ node }) {
     const attrs = {
       'data-type': 'sketch',
-      ...(node.attrs.boardId ? { 'data-board-id': node.attrs.boardId } : {}),
+      ...(isBoardId(node.attrs.boardId) ? { 'data-board-id': node.attrs.boardId } : {}),
       ...(node.attrs.height ? { 'data-height': node.attrs.height } : {}),
       'data-version': node.attrs.version ?? 0,
     }

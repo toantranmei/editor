@@ -1,6 +1,6 @@
 import type { JSONContent } from '@tiptap/core'
 import { applyBoardUpdate, readBoardState } from '../block/clone'
-import { collectBoardIds } from '../block/board-ids'
+import { collectBoardIds, isBoardId } from '../block/board-ids'
 import type { SketchProvider } from './types'
 
 export { collectBoardIds }
@@ -28,8 +28,8 @@ export interface ImportResult {
   /** Boards merged into the provider. */
   imported: string[]
   /**
-   * Boards not imported: ones the bundled document does not reference, malformed ones (bad base64 or Yjs data)
-   * and ones the provider failed to write.
+   * Boards not imported: ones the bundled document does not reference, invalid ids (`isBoardId`), malformed ones
+   * (bad base64 or Yjs data) and ones the provider failed to write.
    */
   skipped: string[]
 }
@@ -129,11 +129,12 @@ export async function importBoards(input: Blob | string, provider: SketchProvide
   // only boards the bundled document shows: a crafted bundle must not write to other boards of the provider
   const referenced = new Set(collectBoardIds(data.doc as JSONContent))
   for (const [id, b64] of Object.entries(boards)) {
-    if (!referenced.has(id)) {
+    // invalid ids (`isBoardId`) never reach the provider (they end up in URLs and storage keys)
+    if (!isBoardId(id) || !referenced.has(id)) {
       skipped.push(id)
       continue
     }
-    const bytes = typeof b64 === 'string' && id ? fromBase64(b64) : null
+    const bytes = typeof b64 === 'string' ? fromBase64(b64) : null
     if (!bytes) {
       skipped.push(id)
       continue

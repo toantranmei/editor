@@ -1,5 +1,6 @@
 import { IndexeddbPersistence } from 'y-indexeddb'
 import * as Y from 'yjs'
+import { assertBoardId } from '../block/board-ids'
 import { createStatus } from './status'
 import { type BoardConnection, DEFAULT_MAX_INLINE_IMAGE_BYTES, type SketchProvider } from './types'
 
@@ -34,6 +35,7 @@ export function websocket(opts: WebsocketProviderOptions): SketchProvider {
   const maxInlineImageBytes = opts.maxInlineImageBytes ?? DEFAULT_MAX_INLINE_IMAGE_BYTES
   const provider: SketchProvider = {
     async connect(boardId: string): Promise<BoardConnection> {
+      assertBoardId(boardId)
       let mod: YWebsocket
       try {
         mod = await import('y-websocket')

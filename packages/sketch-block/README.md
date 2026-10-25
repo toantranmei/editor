@@ -138,14 +138,14 @@ sketch.configure({
   provider: http({
     // the stored Yjs state (an update), or null for a new board
     load: async id => {
-      const res = await fetch(`/api/boards/${id}`, { headers: auth() })
+      const res = await fetch(`/api/boards/${encodeURIComponent(id)}`, { headers: auth() })
       if (res.status === 404) return null
       if (!res.ok) throw new Error(`load ${res.status}`)
       return res.arrayBuffer()
     },
     // a Yjs update to merge into the stored state
     save: async (id, update) => {
-      const res = await fetch(`/api/boards/${id}`, { method: 'POST', body: update, headers: auth() })
+      const res = await fetch(`/api/boards/${encodeURIComponent(id)}`, { method: 'POST', body: update, headers: auth() })
       if (!res.ok) throw new Error(`save ${res.status}`)
     },
     uploadImage: file => uploadFile(file), // optional, see Images
@@ -166,6 +166,9 @@ sketch.configure({
   cannot be reached it opens from the cache (status *offline*) and keeps retrying; after a successful load,
   edits only this browser has are sent to the server (computed by state vector). Without a cache, `connect`
   rejects while the server is down.
+- **Board ids** are `bd_` plus 10 URL-safe characters. Every provider rejects an id that does not match
+  `isBoardId` (1–64 of `A–Z a–z 0–9 _ -`; exported from the main entry), and a block whose document holds an
+  invalid id gets a fresh one when it opens. Still encode the id in URLs (`encodeURIComponent`), as above.
 - `http()` has no presence: there is no live channel. Peers see each other's edits the next time they open the
   board.
 
@@ -287,7 +290,7 @@ import { collectBoardIds } from '@toantranmei/sketch-block' // pure, no yjs
 import { exportBoards, importBoards } from '@toantranmei/sketch-block/providers'
 
 const doc = editor.getJSON()
-collectBoardIds(doc) // ['bd_…', …] depth-first, each once
+collectBoardIds(doc) // ['bd_…', …] depth-first, each once (invalid ids skipped)
 
 const blob = await exportBoards(doc, provider) // JSON Blob
 const { doc: imported, imported: ids, skipped } = await importBoards(file, otherProvider)
@@ -300,7 +303,8 @@ editor.commands.setContent(imported)
   or `version`. A malformed board (bad base64 or Yjs data) is skipped and listed in `skipped`; it never throws for
   one bad board.
 - Only boards the bundled document references (`collectBoardIds(doc)`) are imported; other entries in `boards`
-  are listed in `skipped`, so a crafted bundle cannot write to unrelated boards.
+  are listed in `skipped`, so a crafted bundle cannot write to unrelated boards. Invalid ids (`isBoardId`) are
+  skipped too.
 - Import **merges** into the provider's board with the same id (Yjs updates merge): existing content is kept, and
   importing twice changes nothing.
 

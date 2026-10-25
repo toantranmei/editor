@@ -204,6 +204,11 @@ describe('websocket provider', () => {
     conn.destroy()
   })
 
+  it('rejects an invalid board id before connecting', async () => {
+    await expect(websocket({ url: 'ws://x', offline: false }).connect('../x?y=')).rejects.toThrow('invalid board id')
+    expect(FakeProvider.instances).toHaveLength(0)
+  })
+
   it('awareness exposed', async () => {
     const pending = websocket({ url: 'ws://x', offline: false }).connect('aw')
     const p = await nextProvider()

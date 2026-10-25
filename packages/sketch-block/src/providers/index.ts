@@ -3,6 +3,7 @@ export { http, type HttpProviderOptions } from './http'
 export { indexeddb } from './indexeddb'
 export { memory } from './memory'
 export { websocket, type WebsocketProviderOptions } from './websocket'
+export { isBoardId } from '../block/board-ids'
 export {
   BUNDLE_TYPE, BUNDLE_VERSION, collectBoardIds, exportBoards, importBoards, MAX_BUNDLE_BYTES,
   type BoardBundle, type ImportResult,

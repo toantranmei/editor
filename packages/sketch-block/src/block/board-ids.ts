@@ -1,8 +1,23 @@
 import type { JSONContent } from '@tiptap/core'
 
+const BOARD_ID = /^[A-Za-z0-9_-]{1,64}$/
+
 /**
- * Board ids of the `sketch` blocks in a document's JSON (`editor.getJSON()`), depth-first, each once. Pure (no
- * yjs): safe for the main entry.
+ * Whether `id` is a valid board id: 1–64 of `A–Z a–z 0–9 _ -`. Board ids come from documents (pasted HTML, JSON,
+ * bundles) and end up in URLs and storage keys, so anything else is refused. Pure: safe for the main entry.
+ */
+export function isBoardId(id: unknown): id is string {
+  return typeof id === 'string' && BOARD_ID.test(id)
+}
+
+/** Throws unless `id` is a valid board id (`isBoardId`). */
+export function assertBoardId(id: unknown): asserts id is string {
+  if (!isBoardId(id)) throw new Error(`sketch-block: invalid board id ${JSON.stringify(String(id)).slice(0, 80)}`)
+}
+
+/**
+ * Board ids of the `sketch` blocks in a document's JSON (`editor.getJSON()`), depth-first, each once; invalid ids
+ * (`isBoardId`) are skipped. Pure (no yjs): safe for the main entry.
  */
 export function collectBoardIds(doc: JSONContent): string[] {
   const seen = new Set<string>()
@@ -11,7 +26,7 @@ export function collectBoardIds(doc: JSONContent): string[] {
   while (stack.length) {
     const node = stack.pop()!
     const id = node.type === 'sketch' ? node.attrs?.boardId : null
-    if (typeof id === 'string' && id) seen.add(id)
+    if (isBoardId(id)) seen.add(id)
     const children = node.content
     if (Array.isArray(children)) for (let i = children.length - 1; i >= 0; i--) if (children[i]) stack.push(children[i]!)
   }

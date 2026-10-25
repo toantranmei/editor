@@ -12,6 +12,7 @@ import { computed, getCurrentInstance, markRaw, nextTick, onBeforeUnmount, onMou
 import { messages } from '../messages'
 import type { SketchElement } from '../model/types'
 import type { BoardConnection, ConnectionStatusValue, SketchProvider } from '../providers/types'
+import { isBoardId } from './board-ids'
 import { liveViews } from './live'
 import { newBoardId, SKETCH_MAX_HEIGHT, SKETCH_MIN_HEIGHT, type SketchOptions } from './node'
 
@@ -91,8 +92,8 @@ function ensureOpen(): Promise<boolean> {
 
 async function open(): Promise<boolean> {
   let id = boardId.value
-  if (!id) {
-    // e.g. pasted HTML without an id: give it one (read-only shows the preview only)
+  if (!isBoardId(id)) {
+    // e.g. pasted HTML without a (valid) id: give it one (read-only shows the preview only)
     if (!editable.value) return false
     id = newBoardId()
     const assigned = id
