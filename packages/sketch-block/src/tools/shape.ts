@@ -49,10 +49,11 @@ export class ShapeTool implements Tool {
     const min = MIN_SIZE_PX / viewport.zoom
     if (readonly() || draft.w < min || draft.h < min) return
     const { id: _id, index: _index, version: _v, ...init } = draft
-    history.stopCapturing()
+    history.beginGesture()
     // keeps the draft's seed, so the committed rough outline matches the preview
     const el = store.create(init)
-    history.stopCapturing()
+    this.host.created([el.id])
+    history.endGesture()
     this.host.setSelection([el.id])
     if (!this.host.toolLocked.value) this.host.setTool('select')
   }

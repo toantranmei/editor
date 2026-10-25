@@ -24,8 +24,6 @@ function deviceScale(ctx: CanvasRenderingContext2D): number {
   return t && Number.isFinite(t.a) ? Math.hypot(t.a, t.b) || 1 : 1
 }
 
-const cssPx = (): number => (typeof devicePixelRatio === 'number' && devicePixelRatio > 0 ? devicePixelRatio : 1)
-
 /**
  * A frame: a thin 1 px (screen) border, no fill. Its name is drawn by the interactive layer (render/frame-labels),
  * not in the bitmap, so it stays 12 px at every zoom. Hits only on the border band: clicks inside reach the
@@ -36,10 +34,11 @@ export const frameKind: ElementKind<FrameElement> = {
 
   shapeKey: el => hashString(JSON.stringify(['frame', el.w, el.h])),
 
-  draw(ctx, el, theme) {
+  draw(ctx, el, theme, opts) {
     ctx.save()
     ctx.setLineDash([])
-    ctx.lineWidth = cssPx() / deviceScale(ctx)
+    // 1 CSS px: `dpr` device px whatever the bitmap's scale
+    ctx.lineWidth = (opts?.dpr ?? 1) / deviceScale(ctx)
     ctx.strokeStyle = FRAME_COLOR[theme]
     ctx.strokeRect(0, 0, el.w, el.h)
     ctx.restore()
@@ -96,9 +95,21 @@ export function frameMembership(scene: Scene, el: SketchElement): string | null 
   return null
 }
 
+/** Children per frame id (z-order), built in one pass over the scene. */
+function childrenIndex(scene: Scene): Map<string, SketchElement[]> {
+  const out = new Map<string, SketchElement[]>()
+  for (const el of scene.elements) {
+    if (!el.frameId) continue
+    const list = out.get(el.frameId)
+    if (list) list.push(el)
+    else out.set(el.frameId, [el])
+  }
+  return out
+}
+
 /** Elements whose `frameId` is `frameId`, in z-order. */
 export function childrenOf(scene: Scene, frameId: string): SketchElement[] {
-  return scene.elements.filter(el => el.frameId === frameId)
+  return childrenIndex(scene).get(frameId) ?? []
 }
 
 /**
@@ -108,9 +119,11 @@ export function childrenOf(scene: Scene, frameId: string): SketchElement[] {
 export function withFrameChildren(scene: Scene, els: readonly SketchElement[]): SketchElement[] {
   const out = new Map<string, SketchElement>()
   for (const el of els) out.set(el.id, el)
+  if (!els.some(isFrame)) return [...out.values()]
+  const index = childrenIndex(scene)
   for (const el of els) {
     if (!isFrame(el)) continue
-    for (const child of childrenOf(scene, el.id)) {
+    for (const child of index.get(el.id) ?? []) {
       if (!child.locked && !out.has(child.id)) out.set(child.id, child)
     }
   }
@@ -118,19 +131,22 @@ export function withFrameChildren(scene: Scene, els: readonly SketchElement[]): 
 }
 
 /**
- * Ids whose membership may have changed after `ids` moved / resized / appeared: the elements themselves, and for
- * every frame among them its current children and every element now inside its box.
+ * Unlocked ids whose membership may have changed after `ids` moved / resized / appeared: the elements themselves,
+ * and for every frame among them its current children and every element now inside its box. Locked elements are
+ * never included: nothing writes to them (they stay put with a frame, and keep their frameId).
  */
 export function affectedByChange(scene: Scene, ids: Iterable<string>): Set<string> {
   const out = new Set<string>()
+  let index: Map<string, SketchElement[]> | null = null
   for (const id of ids) {
     const el = scene.get(id)
-    if (!el) continue
+    if (!el || el.locked) continue
     out.add(id)
     if (!isFrame(el)) continue
-    for (const child of childrenOf(scene, id)) out.add(child.id)
+    index ??= childrenIndex(scene)
+    for (const child of index.get(id) ?? []) if (!child.locked) out.add(child.id)
     for (const other of scene.queryBox(frameBox(el))) {
-      if (!isFrame(other) && insideFrame(other, el)) out.add(other.id)
+      if (!isFrame(other) && !other.locked && insideFrame(other, el)) out.add(other.id)
     }
   }
   return out
@@ -153,7 +169,8 @@ export function frameDeletePatches(scene: Scene, ids: readonly string[]): Record
   const gone = new Set(ids)
   const out: Record<string, ElementPatch> = {}
   for (const el of scene.elements) {
-    if (el.frameId && gone.has(el.frameId) && !gone.has(el.id)) out[el.id] = { frameId: null }
+    // locked elements are never written: a dangling frameId is ignored (no such frame to clip to)
+    if (el.frameId && gone.has(el.frameId) && !gone.has(el.id) && !el.locked) out[el.id] = { frameId: null }
   }
   return out
 }

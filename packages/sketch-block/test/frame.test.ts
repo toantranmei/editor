@@ -380,3 +380,91 @@ describe('frame clipboard', () => {
     expect(r.elements[0]!.angle).toBe(0)
   })
 })
+
+describe('membership of drawn elements', () => {
+  function withFrame() {
+    const s = setup()
+    const f = s.store.create(frameInit())
+    s.history.stopCapturing()
+    return { ...s, f }
+  }
+  const newest = (store: BoardStore) => store.all().find(e => e.type !== 'frame')!
+
+  it('a rectangle drawn inside a frame gets frameId; one undo removes it', () => {
+    const { store, c, history, f } = withFrame()
+    c.setTool('rectangle')
+    drag(c, [150, 150], [250, 250])
+    expect(newest(store).frameId).toBe(f.id)
+    history.undo()
+    expect(store.all()).toHaveLength(1)
+  })
+
+  it('a rectangle drawn outside stays null', () => {
+    const { store, c } = withFrame()
+    c.setTool('rectangle')
+    drag(c, [600, 600], [700, 700])
+    expect(newest(store).frameId).toBeNull()
+  })
+
+  it('a pen stroke drawn inside gets frameId; one undo removes it', () => {
+    const { store, c, history, f } = withFrame()
+    c.setTool('pen')
+    drag(c, [150, 150], [250, 250])
+    expect(newest(store).frameId).toBe(f.id)
+    history.undo()
+    expect(store.all()).toHaveLength(1)
+  })
+
+  it('an arrow drawn inside gets frameId; one undo removes it', () => {
+    const { store, c, history, f } = withFrame()
+    c.setTool('arrow')
+    drag(c, [150, 150], [250, 250])
+    expect(newest(store).frameId).toBe(f.id)
+    history.undo()
+    expect(store.all()).toHaveLength(1)
+  })
+
+  it('a sticky created inside gets frameId on commit; one undo removes it', () => {
+    const { store, c, history, f } = withFrame()
+    c.setTool('sticky')
+    drag(c, [150, 150], [250, 250])
+    c.commitEditing('hi')
+    expect(newest(store).frameId).toBe(f.id)
+    history.undo()
+    expect(store.all()).toHaveLength(1)
+  })
+
+  it('a text created inside gets frameId on commit (after autosize); one undo removes it', () => {
+    const { store, c, history, f } = withFrame()
+    c.setTool('text')
+    c.pointerDown(ptr(150, 200))
+    c.pointerUp(ptr(150, 200))
+    c.commitEditing('hello')
+    expect(newest(store).frameId).toBe(f.id)
+    history.undo()
+    expect(store.all()).toHaveLength(1)
+  })
+
+  it('a text growing out of its frame on commit leaves it', () => {
+    const { store, c, history, f } = withFrame()
+    const t = store.create({
+      ...DEFAULT_STYLE, type: 'text', text: 'a', autoSize: true, x: 400, y: 200, w: 10, h: 25, angle: 0, locked: false,
+      frameId: f.id,
+    } as ElementInit)
+    history.stopCapturing()
+    c.startEditing(t.id, 'text')
+    c.commitEditing('a much longer line of text')
+    expect(store.get(t.id)!.frameId).toBeNull()
+    history.undo()
+    expect(store.get(t.id)!.frameId).toBe(f.id)
+  })
+
+  it('a locked child keeps its frameId and position when the frame moves', () => {
+    const { store, c, f } = withFrame()
+    const r = store.create(rectInit({ x: 200, y: 200, frameId: f.id, locked: true }))
+    const v = store.get(r.id)!.version
+    drag(c, [100, 250], [600, 250])
+    expect(store.get(f.id)!.x).toBe(600)
+    expect(store.get(r.id)).toMatchObject({ x: 200, y: 200, frameId: f.id, version: v })
+  })
+})

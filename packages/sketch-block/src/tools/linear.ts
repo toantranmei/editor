@@ -97,9 +97,10 @@ export class LinearTool implements Tool {
     const distinct = pts.filter((pt, i) => i === 0 || !samePoint(pt, pts[i - 1]!))
     const { store, history, readonly } = this.host.ctx
     if (distinct.length < 2 || readonly()) return
-    history.stopCapturing()
+    history.beginGesture()
     const el = store.create({ ...this.props(), ...boxFromPoints(distinct), seed })
-    history.stopCapturing()
+    this.host.created([el.id])
+    history.endGesture()
     this.host.setSelection([el.id])
     if (!this.host.toolLocked.value) this.host.setTool('select')
   }

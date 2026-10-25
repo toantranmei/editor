@@ -129,6 +129,11 @@ export interface ToolHost {
   editAt(p: Point): void
   /** Creates a sticky note with box `box` (last used sticky color, current font) and edits it. */
   createSticky(box: { x: number; y: number; w: number; h: number }): void
+  /**
+   * `ids` were created or had their box changed: writes their frame membership (only where it changed). Call it
+   * inside the undo bracket of that change, after the box is final.
+   */
+  created(ids: Iterable<string>): void
   /** Creates a frame with box `box` named "Frame N", at the back, taking in the elements inside it. */
   createFrame(box: { x: number; y: number; w: number; h: number }): void
 }
@@ -652,13 +657,12 @@ export class ToolController implements ToolHost {
    * frame membership is computed for the new elements (and what new frames take in).
    */
   private insert(inits: ElementInit[], keepTool = false): void {
-    const { history, store, scene } = this.ctx
+    const { history, store } = this.ctx
     history.beginGesture()
     const others = store.createMany(inits.filter(i => i.type !== 'frame'))
     const frames = store.createMany(inits.filter(i => i.type === 'frame'), { atBack: true })
     const created = [...others, ...frames]
-    const patches = membershipPatches(scene, created.map(el => el.id))
-    if (Object.keys(patches).length) store.updateMany(patches)
+    this.created(created.map(el => el.id))
     history.endGesture()
     if (!keepTool && CREATORS.has(this.tool.value)) this.setTool('select')
     this.setSelection(created.map(el => el.id))
@@ -681,9 +685,11 @@ export class ToolController implements ToolHost {
       patches[el.id] = isText(el) ? { ...p, ...editedTextBox({ ...el, ...p } as TextElement, el.text) } : p
     }
     if (!Object.keys(patches).length) return
-    this.ctx.history.stopCapturing()
+    this.ctx.history.beginGesture()
     this.ctx.store.updateMany(patches)
-    this.ctx.history.stopCapturing()
+    // a refitted text may have grown out of (or into) a frame
+    this.created(Object.keys(patches).filter(id => 'w' in patches[id]! || 'h' in patches[id]!))
+    this.ctx.history.endGesture()
   }
 
   /** Takes the style of the first selected element; false when nothing is selected. */
@@ -768,6 +774,7 @@ export class ToolController implements ToolHost {
     this.endCrop()
     if (patch) {
       store.update(id, patch)
+      this.created([id])
       history.endGesture()
     } else {
       history.discardGesture()
@@ -826,6 +833,8 @@ export class ToolController implements ToolHost {
       } else {
         const patch = changedProps(el, { text: value, ...editedTextBox(el, value) })
         if (patch) store.update(el.id, patch)
+        // the box is final (autosized): frame membership, in the same undo step
+        this.created([el.id])
         history.endGesture()
         this.setSelection([el.id])
       }
@@ -833,6 +842,7 @@ export class ToolController implements ToolHost {
       // an empty sticky is kept (it is still a colored note), by design: also when it was just created and the
       // editor closed with Escape (which commits), unlike an empty text element, which is removed
       if (el.text !== value) store.update(el.id, { text: value })
+      this.created([el.id])
       history.endGesture()
       this.setSelection([el.id])
     } else if (el && target.kind === 'frame' && isFrame(el)) {
@@ -879,6 +889,11 @@ export class ToolController implements ToolHost {
     if (this.ctx.readonly() || this.editing.value) return
     const { color, fontFamily, textAlign, opacity } = this.currentStyle.value
     this.beginSticky(stickyInit(box.x, box.y, { w: box.w, h: box.h, color, fontFamily, textAlign, opacity }))
+  }
+
+  created(ids: Iterable<string>): void {
+    const patches = membershipPatches(this.ctx.scene, ids)
+    if (Object.keys(patches).length) this.ctx.store.updateMany(patches)
   }
 
   createFrame(box: { x: number; y: number; w: number; h: number }): void {
@@ -992,8 +1007,7 @@ export class ToolController implements ToolHost {
     if (!Object.keys(patches).length) return
     history.beginGesture()
     store.updateMany(patches)
-    const membership = membershipPatches(scene, Object.keys(patches))
-    if (Object.keys(membership).length) store.updateMany(membership)
+    this.created(Object.keys(patches))
     history.endGesture()
   }
 

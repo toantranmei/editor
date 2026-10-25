@@ -97,7 +97,7 @@ function drawElement(
   ctx.translate(-el.w / 2, -el.h / 2)
   const multiply = blendsMultiply(el, state.theme)
   if (multiply) ctx.globalCompositeOperation = 'multiply'
-  kindOf(el).draw(ctx, el, state.theme)
+  kindOf(el).draw(ctx, el, state.theme, { dpr: state.dpr })
   if (multiply) ctx.globalCompositeOperation = 'source-over'
   ctx.globalAlpha = 1
 }

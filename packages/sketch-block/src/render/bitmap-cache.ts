@@ -43,7 +43,7 @@ export function buildBitmap(el: SketchElement, zoom: number, dpr: number, theme:
   const ctx = canvas.getContext('2d')
   if (!ctx) return canvas
   ctx.setTransform(s, 0, 0, s, pad * s, pad * s)
-  kindOf(el).draw(ctx, el, theme)
+  kindOf(el).draw(ctx, el, theme, { dpr })
   return canvas
 }
 

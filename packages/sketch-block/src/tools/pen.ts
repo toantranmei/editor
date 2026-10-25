@@ -71,9 +71,10 @@ export class PenTool implements Tool {
     this.cancel()
     const { store, history, readonly } = this.host.ctx
     if (readonly()) return
-    history.stopCapturing()
-    store.create(init)
-    history.stopCapturing()
+    history.beginGesture()
+    const el = store.create(init)
+    this.host.created([el.id])
+    history.endGesture()
   }
 
   cancel(): void {
