@@ -103,10 +103,21 @@ function blobToDataUrl(blob: Blob): Promise<string> {
   })
 }
 
-/** PNG of a canvas, encoded once (the data URL is read from the blob); throws a SecurityError when tainted. */
-async function encodePng(canvas: HTMLCanvasElement): Promise<PreviewResult> {
-  const blob = await new Promise<Blob>((resolve, reject) =>
-    canvas.toBlob(b => (b ? resolve(b) : reject(new Error('toBlob failed'))), 'image/png'))
+/** Quality of the lossy (WebP / JPEG) canvas preview. */
+const LOSSY_QUALITY = 0.85
+
+const canvasBlob = (canvas: HTMLCanvasElement, type: string, quality?: number): Promise<Blob> =>
+  new Promise<Blob>((resolve, reject) =>
+    canvas.toBlob(b => (b ? resolve(b) : reject(new Error('toBlob failed'))), type, quality))
+
+/**
+ * WebP (quality 0.85) of an opaque canvas, or JPEG 0.85 where WebP cannot be encoded (the browser then returns
+ * another type, e.g. PNG). Encoded once per type (the data URL is read from the blob); throws a SecurityError
+ * when tainted.
+ */
+async function encodeLossy(canvas: HTMLCanvasElement): Promise<PreviewResult> {
+  let blob = await canvasBlob(canvas, 'image/webp', LOSSY_QUALITY)
+  if (blob.type !== 'image/webp') blob = await canvasBlob(canvas, 'image/jpeg', LOSSY_QUALITY)
   return { dataUrl: await blobToDataUrl(blob), blob }
 }
 
@@ -141,7 +152,7 @@ function drawPreviewElement(ctx: CanvasRenderingContext2D, el: SketchElement, sc
 
 /**
  * Browser-only: draws the elements (light theme, on white) onto a canvas at most `maxWidth` px
- * wide and returns a PNG. Images come from the image cache (loads awaited up to `waitMs`); with `images` false,
+ * wide and returns a WebP (JPEG where WebP is not supported). Images come from the image cache (loads awaited up to `waitMs`); with `images` false,
  * or for an image known to taint the canvas, a placeholder is drawn instead.
  */
 async function rasterizeSceneInBrowser(
@@ -182,14 +193,16 @@ async function rasterizeSceneInBrowser(
       ctx.restore()
     }
   }
-  return encodePng(canvas)
+  // opaque (white card): a lossy format keeps photos small
+  return encodeLossy(canvas)
 }
 
 const isSecurityError = (err: unknown): boolean =>
   typeof err === 'object' && err !== null && (err as { name?: unknown }).name === 'SecurityError'
 
 /**
- * Preview image for the document node. A board with images is drawn onto a canvas (PNG, max 1200 px wide; a
+ * Preview image for the document node. A board with images is drawn onto a canvas (WebP / JPEG 0.85 on a white
+ * card, max 1200 px wide; a
  * canvas tainted by a cross-origin image is re-drawn with placeholders); otherwise an SVG data URL when small,
  * else a PNG of the SVG (max 1200 px wide).
  */

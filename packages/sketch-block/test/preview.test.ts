@@ -44,7 +44,8 @@ beforeEach(() => {
     return ctxOf(this) as never
   } as never)
   vi.spyOn(HTMLCanvasElement.prototype, 'toDataURL').mockReturnValue('data:image/png;base64,UE5H')
-  toBlob = vi.fn((cb: BlobCallback) => cb(new Blob(['png'], { type: 'image/png' })))
+  // a browser that encodes every requested type (unsupported ones would come back as PNG)
+  toBlob = vi.fn((cb: BlobCallback, type = 'image/png') => cb(new Blob(['png'], { type })))
   vi.spyOn(HTMLCanvasElement.prototype, 'toBlob').mockImplementation(toBlob as never)
 })
 afterEach(() => {
@@ -59,10 +60,11 @@ describe('makePreview with images', () => {
     const rasterize = vi.fn()
     const p = await makePreview([rect({ w: 3000 }), image()], { rasterize })
     expect(rasterize).not.toHaveBeenCalled()
-    // encoded once (toBlob); the data URL is read from the blob
-    expect(p!.blob.type).toBe('image/png')
-    expect(p!.dataUrl).toBe(`data:image/png;base64,${btoa('png')}`)
+    // encoded once as WebP 0.85 (toBlob); the data URL is read from the blob
     expect(toBlob).toHaveBeenCalledTimes(1)
+    expect(toBlob.mock.calls[0]!.slice(1)).toEqual(['image/webp', 0.85])
+    expect(p!.blob.type).toBe('image/webp')
+    expect(p!.dataUrl).toBe(`data:image/webp;base64,${btoa('png')}`)
     expect(HTMLCanvasElement.prototype.toDataURL).not.toHaveBeenCalled()
     expect(canvases).toHaveLength(1)
     // a white card: the background is filled before anything else is drawn
@@ -84,6 +86,16 @@ describe('makePreview with images', () => {
     expect(canvases[0]!.width).toBe(340)
   })
 
+  it('the canvas path falls back to JPEG 0.85 when WebP is not supported', async () => {
+    // no WebP encoder: toBlob returns a PNG for the unknown type
+    toBlob.mockImplementation((cb: BlobCallback, type = 'image/png') =>
+      cb(new Blob(['x'], { type: type === 'image/jpeg' ? type : 'image/png' })))
+    const p = await makePreview([rect(), image()])
+    expect(toBlob.mock.calls.map(c => c.slice(1))).toEqual([['image/webp', 0.85], ['image/jpeg', 0.85]])
+    expect(p!.blob.type).toBe('image/jpeg')
+    expect(p!.dataUrl.startsWith('data:image/jpeg;base64,')).toBe(true)
+  })
+
   it('the canvas path is injectable', async () => {
     const png = { dataUrl: 'data:image/png;base64,AA', blob: new Blob(['x'], { type: 'image/png' }) }
     const rasterizeScene = vi.fn(async () => png)
@@ -101,7 +113,7 @@ describe('makePreview with images', () => {
       throw new DOMException('Tainted canvases may not be exported.', 'SecurityError')
     })
     const p = await makePreview([rect(), image()])
-    expect(p!.dataUrl.startsWith('data:image/png;base64,')).toBe(true)
+    expect(p!.dataUrl.startsWith('data:image/webp;base64,')).toBe(true)
     expect(canvases).toHaveLength(2)
     expect(drewImg(ctxOf(canvases[0]!))).toBe(true)
     // the re-render draws placeholders instead of images
@@ -137,7 +149,7 @@ describe('makePreview with images', () => {
     const start = Date.now()
     const p = await makePreview([image({ src: 'https://example.com/slow.png' })], { imageWaitMs: 20 })
     expect(Date.now() - start).toBeLessThan(1000)
-    expect(p!.dataUrl.startsWith('data:image/png;base64,')).toBe(true)
+    expect(p!.dataUrl.startsWith('data:image/webp;base64,')).toBe(true)
     expect(drewPlaceholder(ctxOf(canvases[0]!))).toBe(true)
   })
 })

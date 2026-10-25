@@ -36,8 +36,8 @@
     -webkit-user-drag: none;
   }
   /* An SVG preview is exported in the light theme (dark strokes, no background); in a dark
-     editor invert it, keeping hues, as Excalidraw does with its dark mode. A PNG preview (a
-     board with images) is a white card and is left alone, so photos are not inverted. */
+     editor invert it, keeping hues, as Excalidraw does with its dark mode. A raster preview (a
+     board with images: WebP / JPEG) is a white card and is left alone, so photos are not inverted. */
   html.dark .me-scope:not(.me-light) .me-sketch-preview[src^="data:image/svg+xml"],
   html.dark .me-scope:not(.me-light) .me-sketch-preview[src$=".svg"],
   .me-scope.me-dark .me-sketch-preview[src^="data:image/svg+xml"],
