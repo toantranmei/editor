@@ -6,7 +6,7 @@ import { type ElementType, type SketchElement, STICKY_COLORS } from '../model/ty
 import { displayColor, type Theme } from '../render/shapes'
 import { FONT_FAMILIES } from '../text/fonts'
 import { TOOL_ELEMENT_TYPES, type ToolName } from '../tools/controller'
-import type { AlignMode, DistributeAxis } from '../geometry/align'
+import { type AlignMode, arrangeUnits, canGroup as groupable, type DistributeAxis } from '../geometry/align'
 import {
   AlignCenterHorizontal, AlignCenterVertical, AlignEndHorizontal, AlignEndVertical, AlignHorizontalDistributeCenter,
   AlignStartHorizontal, AlignStartVertical, AlignVerticalDistributeCenter, BringToFront, Group, Lock, LockOpen, Palette, SendToBack, TextAlignCenter, TextAlignEnd, TextAlignStart, Ungroup,
@@ -197,7 +197,9 @@ function onOpacity(e: Event): void {
 }
 
 // ---------- arrange ----------
-const canGroup = computed(() => props.elements.length >= 2)
+// buttons appear only where they act: units are unlocked elements, an outermost group counting once
+const units = computed(() => arrangeUnits(props.elements))
+const canGroup = computed(() => groupable(props.elements))
 // lucide's "vertical" icons align along x (a vertical guide line), the "horizontal" ones along y
 const alignModes = computed(() => [
   { value: 'left' as const, label: m.value.alignElLeft, icon: AlignStartVertical },
@@ -211,7 +213,7 @@ const distributeAxes = computed(() => [
   { value: 'h' as const, label: m.value.distributeH, icon: AlignHorizontalDistributeCenter },
   { value: 'v' as const, label: m.value.distributeV, icon: AlignVerticalDistributeCenter },
 ])
-const canUngroup = computed(() => props.elements.some(el => el.groupIds.length > 0))
+const canUngroup = computed(() => props.elements.some(el => !el.locked && el.groupIds.length > 0))
 const allLocked = computed(() => props.elements.length > 0 && props.elements.every(el => el.locked))
 </script>
 
@@ -463,7 +465,7 @@ const allLocked = computed(() => props.elements.length > 0 && props.elements.eve
         <h3 class="me-sketch-style-label">
           {{ m.arrange }}
         </h3>
-        <div v-if="elements.length >= 2" class="me-sketch-style-row" role="group" :aria-label="m.arrange">
+        <div v-if="units >= 2" class="me-sketch-style-row" role="group" :aria-label="m.arrange">
           <button
             v-for="o in alignModes"
             :key="o.value"
@@ -475,7 +477,7 @@ const allLocked = computed(() => props.elements.length > 0 && props.elements.eve
             <component :is="o.icon" />
           </button>
         </div>
-        <div v-if="elements.length >= 3" class="me-sketch-style-row">
+        <div v-if="units >= 3" class="me-sketch-style-row">
           <button
             v-for="o in distributeAxes"
             :key="o.value"

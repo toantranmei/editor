@@ -412,6 +412,26 @@ describe('StylePanel', () => {
     expect(locked.find('[data-arrange="lock"]').attributes('aria-label')).toBe(messages.en.style.unlock)
   })
 
+  it('arrange buttons count units: a single group is one unit, locked elements do not count', () => {
+    const grp = panel({ elements: [
+      el({ type: 'rectangle', groupIds: ['g'] }), el({ type: 'ellipse', groupIds: ['g'] }), el({ type: 'text', groupIds: ['g'] }),
+    ] })
+    expect(grp.find('[data-align-mode]').exists()).toBe(false)
+    expect(grp.find('[data-distribute]').exists()).toBe(false)
+    expect(grp.find('[data-arrange="group"]').exists()).toBe(false)
+    expect(grp.find('[data-arrange="ungroup"]').exists()).toBe(true)
+    const withLocked = panel({ elements: [el({ type: 'rectangle' }), el({ type: 'ellipse', locked: true })] })
+    expect(withLocked.find('[data-align-mode]').exists()).toBe(false)
+    expect(withLocked.find('[data-arrange="group"]').exists()).toBe(false)
+    expect(withLocked.find('[data-arrange="lock"]').exists()).toBe(true)
+    // a group plus two loose elements: three units
+    const three = panel({ elements: [
+      el({ type: 'rectangle', groupIds: ['g'] }), el({ type: 'ellipse', groupIds: ['g'] }), el({ type: 'text' }), el({ type: 'diamond' }),
+    ] })
+    expect(three.find('[data-distribute]').exists()).toBe(true)
+    expect(three.find('[data-arrange="group"]').exists()).toBe(true)
+  })
+
   it('align buttons for 2+, distribute for 3+; emits align / distribute', async () => {
     const one = panel({ elements: [el({ type: 'rectangle' })] })
     expect(one.find('[data-align-mode]').exists()).toBe(false)

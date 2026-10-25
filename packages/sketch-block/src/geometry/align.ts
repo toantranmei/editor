@@ -45,6 +45,19 @@ function unitsOf(els: readonly SketchElement[]): Unit[] {
   return units
 }
 
+/** Number of units align / distribute would move: unlocked elements, each outermost group counting once. */
+export function arrangeUnits(els: readonly SketchElement[]): number {
+  return unitsOf(els.filter(el => !el.locked)).length
+}
+
+/** Grouping applies: at least 2 unlocked elements that do not already share one outermost group. */
+export function canGroup(els: readonly SketchElement[]): boolean {
+  const open = els.filter(el => !el.locked)
+  if (open.length < 2) return false
+  const outer = outermostGroup(open[0]!)
+  return !outer || !open.every(el => outermostGroup(el) === outer)
+}
+
 /** Adds `{x, y}` patches moving every element of `unit` by (dx, dy); nothing when it does not move. */
 function moveUnit(out: Record<string, { x: number; y: number }>, unit: Unit, dx: number, dy: number): void {
   if (!dx && !dy) return

@@ -184,6 +184,25 @@ describe('controller align / distribute', () => {
     expect(get(store, a.id).y).toBe(50)
   })
 
+  it('a frame selected with its child: the child keeps its own (even zero) move', () => {
+    const { store, c } = setup()
+    const f = frame(store, 0, 0, 200, 200)
+    const child = rect(store, 20, 20)
+    c.created([child.id])
+    const out = rect(store, 300, 0)
+    c.setSelection([f.id, child.id, out.id])
+    // union top 0: the frame and out stay, the child moves to y 0 on its own
+    c.align('top')
+    expect(get(store, child.id)).toMatchObject({ x: 20, y: 0 })
+    // align left: the frame (x 0) and the child (x 20 → 0) — out moves 300 → 0; the child is not carried
+    store.update(f.id, { x: 50 })
+    store.update(child.id, { x: 0 })
+    c.align('left')
+    expect(get(store, f.id).x).toBe(0)
+    expect(get(store, child.id).x).toBe(0)
+    expect(get(store, out.id).x).toBe(0)
+  })
+
   it('a frame takes its children along and membership is recomputed', () => {
     const { store, c } = setup()
     const f = frame(store, 0, 0, 200, 200)

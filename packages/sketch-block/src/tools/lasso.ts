@@ -3,8 +3,9 @@ import type { PointerInput, Tool, ToolHost } from './controller'
 
 /**
  * Lasso selection: collects a polygon of scene points while dragging; pointerUp selects the unlocked elements
- * whose 4 rotated box corners all lie inside it (even-odd). Shift adds to the selection. Then back to select
- * (unless the tool is locked). Groups are selected whole.
+ * whose 4 rotated box corners all lie inside it (even-odd), each expanded to every member of its outermost group
+ * (locked members included: groups are selected whole). Shift adds to the selection. Then back to select (unless
+ * the tool is locked).
  */
 export class LassoTool implements Tool {
   private base: Set<string> | null = null

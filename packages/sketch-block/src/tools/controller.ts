@@ -2,7 +2,9 @@ import { nanoid } from 'nanoid'
 import { type Ref, ref, shallowRef } from 'vue'
 import type { Box, Point } from '../geometry'
 import { boxCenter, elementBounds, elementCorners } from '../geometry/bounds'
-import { type AlignMode, alignPatches, type DistributeAxis, distributePatches } from '../geometry/align'
+import {
+  type AlignMode, alignPatches, canGroup, type DistributeAxis, distributePatches,
+} from '../geometry/align'
 import { boxesIntersect, rotatePoint } from '../geometry/math'
 import { hitElement } from '../geometry/hit'
 import type { History } from '../model/history'
@@ -16,7 +18,7 @@ import type {
 import {
   cleanFrameName, membershipPatches, withFrameChildren,
 } from '../elements/frame'
-import { expandToGroups, outermostGroup } from '../elements/group'
+import { expandToGroups } from '../elements/group'
 import { boxFromPoints, linearScenePoints } from '../elements/linear'
 import { anchorScenePoint, BIND_GAP, deletePatches, outlineAnchor, withFollowers } from '../geometry/binding'
 import { editedTextBox } from '../elements/text'
@@ -809,9 +811,7 @@ export class ToolController implements ToolHost {
   group(): void {
     if (!this.canArrange()) return
     const els = this.movableSelection()
-    if (els.length < 2) return
-    const outer = outermostGroup(els[0]!)
-    if (outer && els.every(el => outermostGroup(el) === outer)) return
+    if (!canGroup(els)) return
     const id = nanoid(10)
     const patches: Record<string, ElementPatch> = {}
     // arrays are written whole
@@ -849,31 +849,35 @@ export class ToolController implements ToolHost {
   /** Aligns the selected, unlocked elements (groups as one unit) to their union box's edge / center. One undo step. */
   align(mode: AlignMode): void {
     if (!this.canArrange()) return
-    this.arrange(alignPatches(this.movableSelection(), mode))
+    const els = this.movableSelection()
+    this.arrange(alignPatches(els, mode), els)
   }
 
   /** Spaces the selected, unlocked elements (groups as one unit, 3+) with equal gaps along `axis`. One undo step. */
   distribute(axis: DistributeAxis): void {
     if (!this.canArrange()) return
-    this.arrange(distributePatches(this.movableSelection(), axis))
+    const els = this.movableSelection()
+    this.arrange(distributePatches(els, axis), els)
   }
 
   /**
-   * Writes align / distribute moves: a moved frame takes its unlocked children along (by the same offset, unless
-   * they have a move of their own), bound lines follow, and frame membership is recomputed, in one undo step.
+   * Writes align / distribute moves: a moved frame takes its unlocked children along by the same offset, except
+   * children that were arranged themselves (`arranged`: their own move, even a zero one, wins); bound lines follow,
+   * and frame membership is recomputed, in one undo step.
    */
-  private arrange(moves: Record<string, { x: number; y: number }>): void {
+  private arrange(moves: Record<string, { x: number; y: number }>, arranged: readonly SketchElement[]): void {
     const ids = Object.keys(moves)
     if (!ids.length) return
     const { scene, store, history } = this.ctx
     const patches: Record<string, ElementPatch> = { ...moves }
+    const own = new Set(arranged.map(el => el.id))
     for (const id of ids) {
       const el = scene.get(id)
       if (!el || !isFrame(el)) continue
       const dx = moves[id]!.x - el.x
       const dy = moves[id]!.y - el.y
       for (const child of withFrameChildren(scene, [el])) {
-        if (!(child.id in patches)) patches[child.id] = { x: child.x + dx, y: child.y + dy }
+        if (!own.has(child.id) && !(child.id in patches)) patches[child.id] = { x: child.x + dx, y: child.y + dy }
       }
     }
     const all = this.withFollowers(patches)
