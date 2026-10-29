@@ -5,6 +5,8 @@
 | `packages/editor`  | Thư viện `@toantranmei/editor` được publish lên npm ([README](packages/editor/README.md)) |
 | `packages/sketch-block` | Block bảng vẽ tuỳ chọn `@toantranmei/sketch-block` ([README](packages/sketch-block/README.md)) |
 | `packages/page-block` | Block trang con / liên kết trang tuỳ chọn `@toantranmei/page-block` ([README](packages/page-block/README.md)) |
+| `packages/comments` | Bình luận theo đoạn văn `@toantranmei/comments` ([README](packages/comments/README.md)) |
+| `packages/synced-block` | Khối đồng bộ `@toantranmei/synced-block` ([README](packages/synced-block/README.md)) |
 | `apps/playground`  | App Nuxt để phát triển và thử editor (không publish)            |
 
 ## Phát triển
