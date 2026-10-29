@@ -21,6 +21,12 @@ importers:
 
   apps/playground:
     dependencies:
+      '@toantranmei/chart-block':
+        specifier: workspace:*
+        version: link:../../packages/chart-block
+      '@toantranmei/database-block':
+        specifier: workspace:*
+        version: link:../../packages/database-block
       '@toantranmei/editor':
         specifier: workspace:*
         version: link:../../packages/editor
@@ -64,6 +70,116 @@ importers:
       vue-tsc:
         specifier: ^3.0.0
         version: 3.3.13(typescript@5.9.3)
+
+  packages/chart-block:
+    dependencies:
+      echarts:
+        specifier: 6.1.0
+        version: 6.1.0
+    devDependencies:
+      '@lucide/vue':
+        specifier: ^1.61.0
+        version: 1.61.0(vue@3.5.44(typescript@5.9.3))
+      '@tiptap/core':
+        specifier: 3.32.0
+        version: 3.32.0(@tiptap/pm@3.32.0)
+      '@tiptap/pm':
+        specifier: 3.32.0
+        version: 3.32.0
+      '@tiptap/vue-3':
+        specifier: 3.32.0
+        version: 3.32.0(@floating-ui/dom@1.8.0)(@tiptap/core@3.32.0(@tiptap/pm@3.32.0))(@tiptap/pm@3.32.0)(vue@3.5.44(typescript@5.9.3))
+      '@toantranmei/editor':
+        specifier: workspace:*
+        version: link:../editor
+      '@types/node':
+        specifier: ^26.6.5
+        version: 26.6.5
+      '@vitejs/plugin-vue':
+        specifier: ^6.0.10
+        version: 6.0.10(vite@8.3.5(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.1))(vue@3.5.44(typescript@5.9.3))
+      '@vue/test-utils':
+        specifier: ^2.4.6
+        version: 2.5.1(@vue/compiler-dom@3.5.44)(@vue/server-renderer@3.5.44)(vue@3.5.44(typescript@5.9.3))
+      happy-dom:
+        specifier: 21.0.4
+        version: 21.0.4
+      typescript:
+        specifier: ~5.9.3
+        version: 5.9.3
+      vite:
+        specifier: ^8.3.5
+        version: 8.3.5(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.1)
+      vitest:
+        specifier: 5.0.5
+        version: 5.0.5(@types/node@26.6.5)(happy-dom@21.0.4)(vite@8.3.5(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.1))
+      vue:
+        specifier: ^3.5.0
+        version: 3.5.44(typescript@5.9.3)
+      vue-tsc:
+        specifier: ^3.0.0
+        version: 3.3.13(typescript@5.9.3)
+      yjs:
+        specifier: ^13.6.0
+        version: 13.6.33
+
+  packages/database-block:
+    dependencies:
+      '@tanstack/vue-table':
+        specifier: 8.21.3
+        version: 8.21.3(vue@3.5.44(typescript@5.9.3))
+      '@tanstack/vue-virtual':
+        specifier: 3.13.44
+        version: 3.13.44(vue@3.5.44(typescript@5.9.3))
+      '@toantranmei/chart-block':
+        specifier: workspace:^
+        version: link:../chart-block
+    devDependencies:
+      '@lucide/vue':
+        specifier: ^1.61.0
+        version: 1.61.0(vue@3.5.44(typescript@5.9.3))
+      '@tiptap/core':
+        specifier: 3.32.0
+        version: 3.32.0(@tiptap/pm@3.32.0)
+      '@tiptap/pm':
+        specifier: 3.32.0
+        version: 3.32.0
+      '@tiptap/vue-3':
+        specifier: 3.32.0
+        version: 3.32.0(@floating-ui/dom@1.8.0)(@tiptap/core@3.32.0(@tiptap/pm@3.32.0))(@tiptap/pm@3.32.0)(vue@3.5.44(typescript@5.9.3))
+      '@toantranmei/editor':
+        specifier: workspace:*
+        version: link:../editor
+      '@types/node':
+        specifier: ^26.6.5
+        version: 26.6.5
+      '@vitejs/plugin-vue':
+        specifier: ^6.0.10
+        version: 6.0.10(vite@8.3.5(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.1))(vue@3.5.44(typescript@5.9.3))
+      '@vue/test-utils':
+        specifier: ^2.4.6
+        version: 2.5.1(@vue/compiler-dom@3.5.44)(@vue/server-renderer@3.5.44)(vue@3.5.44(typescript@5.9.3))
+      happy-dom:
+        specifier: 21.0.4
+        version: 21.0.4
+      typescript:
+        specifier: ~5.9.3
+        version: 5.9.3
+      vite:
+        specifier: ^8.3.5
+        version: 8.3.5(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.1)
+      vitest:
+        specifier: 5.0.5
+        version: 5.0.5(@types/node@26.6.5)(happy-dom@21.0.4)(vite@8.3.5(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.1))
+      vue:
+        specifier: ^3.5.0
+        version: 3.5.44(typescript@5.9.3)
+      vue-tsc:
+        specifier: ^3.0.0
+        version: 3.3.13(typescript@5.9.3)
+      yjs:
+        specifier: ^13.6.0
+        version: 13.6.33
 
   packages/editor:
     dependencies:
@@ -1367,6 +1483,24 @@ packages:
     peerDependencies:
       vite: ^5.2.0 || ^6 || ^7 || ^8
 
+  '@tanstack/table-core@8.21.3':
+    resolution: {integrity: sha512-ldZXEhOBb8Is7xLs01fR3YEc3DERiz5silj8tnGkFZytt1abEvl/GhUmCE0PMLaMPTa3Jk4HbKmRlHmu+gCftg==}
+    engines: {node: '>=12'}
+
+  '@tanstack/virtual-core@3.19.3':
+    resolution: {integrity: sha512-jPxPiyBaUn+IChc8sfYNKn7B2SCOxYO1mCJrh7U4ldmrMxun19q/iw+jHRYk2cR/KNEjW8ABJrufX41m342Sqw==}
+
+  '@tanstack/vue-table@8.21.3':
+    resolution: {integrity: sha512-rusRyd77c5tDPloPskctMyPLFEQUeBzxdQ+2Eow4F7gDPlPOB1UnnhzfpdvqZ8ZyX2rRNGmqNnQWm87OI2OQPw==}
+    engines: {node: '>=12'}
+    peerDependencies:
+      vue: '>=3.2'
+
+  '@tanstack/vue-virtual@3.13.44':
+    resolution: {integrity: sha512-/ulR+fhneh8xi9qVJpwHwPtibbeWwRr7eMd3UTn2YRSWyyl657SZi2p66CFwnhOico45XRzSclTBrk71sxsuTw==}
+    peerDependencies:
+      vue: ^2.7.0 || ^3.0.0
+
   '@tiptap/core@3.32.0':
     resolution: {integrity: sha512-Ghh2h02GKSqzytQGcLV4espYOG4EHxjj0MsrUB2Vnr47xmlZYRf6r7k2J09H+JpBdaGrWwrTkyBEi5i3c3yy2Q==}
     peerDependencies:
@@ -2523,6 +2657,9 @@ packages:
 
   eastasianwidth@0.2.0:
     resolution: {integrity: sha512-I88TYZWc9XiYHRQ4/3c5rjjfgkjhLyW2luGIheGERbNQ6OY7yTybanSpDXZa8y7VUP9YmDcYa+eyq4ca7iLqWA==}
+
+  echarts@6.1.0:
+    resolution: {integrity: sha512-q0yaFPggC9FUdsWH4blavRWFmxdrIodbkoKNAjJudAI6CA9gNPxHtV2RcZNEepZVlk4yvBYkOkbk6HIVpIyHZA==}
 
   editorconfig@3.0.2:
     resolution: {integrity: sha512-T0ix8GhtxyKVfUFEcvdNDt3YGqlwkFHbD4/5bgFUDgFmxhI/cSRAeJ87/Sz//Cq8Eam6JX/e23RkoFO71P7aAA==}
@@ -3941,6 +4078,9 @@ packages:
     resolution: {integrity: sha512-JfJeIHke7y2egdGGgRAvpCwYFUsHlM2gPcrVOxFkznt/4uzQ7HFmvE63iFHVLBJNDuyDOQgijDK/tXH/f6Msjg==}
     engines: {node: '>=6.10'}
 
+  tslib@2.3.0:
+    resolution: {integrity: sha512-N82ooyxVNm6h1riLCoyS9e3fuJ3AMG2zIZs2Gd1ATcSFjSA23Q0fzjjZeh0jbJvWVDZ0cJT8yaNNaaXHzueNjg==}
+
   type-fest@5.10.0:
     resolution: {integrity: sha512-NoSdpq/WEiAg5sjmBkmV/hfxv6HJH4NqPNrqjtSO5CwRmpsDfaf4begxW34KdJykH/l1yHtwBWQkCRdoXO8mPA==}
     engines: {node: '>=20'}
@@ -4491,6 +4631,9 @@ packages:
   zip-stream@6.0.1:
     resolution: {integrity: sha512-zK7YHHz4ZXpW89AHXUPbQVGKI7uvkd3hzusTdotCg1UxyaVtg0zFJSTfW/Dq5f7OBBVnq6cZIaC8Ti4hb6dtCA==}
     engines: {node: '>= 14'}
+
+  zrender@6.1.0:
+    resolution: {integrity: sha512-oEGMDB6pOP2S6OwRR4PdVv610zrjnA3Bh+JnSG12fYJlBKjtNAoEb5fSUoCOOINlH96I2fU38/A2UpRKs67xYQ==}
 
 snapshots:
 
@@ -5693,6 +5836,20 @@ snapshots:
       '@tailwindcss/oxide': 4.3.3
       tailwindcss: 4.3.3
       vite: 8.3.5(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.1)
+
+  '@tanstack/table-core@8.21.3': {}
+
+  '@tanstack/virtual-core@3.19.3': {}
+
+  '@tanstack/vue-table@8.21.3(vue@3.5.44(typescript@5.9.3))':
+    dependencies:
+      '@tanstack/table-core': 8.21.3
+      vue: 3.5.44(typescript@5.9.3)
+
+  '@tanstack/vue-virtual@3.13.44(vue@3.5.44(typescript@5.9.3))':
+    dependencies:
+      '@tanstack/virtual-core': 3.19.3
+      vue: 3.5.44(typescript@5.9.3)
 
   '@tiptap/core@3.32.0(@tiptap/pm@3.32.0)':
     dependencies:
@@ -6911,6 +7068,11 @@ snapshots:
   duplexer@0.1.2: {}
 
   eastasianwidth@0.2.0: {}
+
+  echarts@6.1.0:
+    dependencies:
+      tslib: 2.3.0
+      zrender: 6.1.0
 
   editorconfig@3.0.2:
     dependencies:
@@ -8531,6 +8693,8 @@ snapshots:
 
   ts-dedent@2.3.0: {}
 
+  tslib@2.3.0: {}
+
   type-fest@5.10.0:
     dependencies:
       tagged-tag: 1.0.0
@@ -8995,3 +9159,7 @@ snapshots:
       archiver-utils: 5.0.2
       compress-commons: 6.0.2
       readable-stream: 4.8.0
+
+  zrender@6.1.0:
+    dependencies:
+      tslib: 2.3.0

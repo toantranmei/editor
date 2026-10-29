@@ -1,0 +1,93 @@
+{
+  "name": "@toantranmei/database-block",
+  "version": "0.0.0",
+  "description": "Notion-style database block (table, board, calendar, timeline, gallery, list, chart, pivot) for @toantranmei/editor.",
+  "keywords": [
+    "vue",
+    "tiptap",
+    "notion",
+    "database",
+    "table",
+    "board",
+    "editor",
+    "block"
+  ],
+  "license": "MIT",
+  "author": "toantranmei",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/toantranmei/editor.git",
+    "directory": "packages/database-block"
+  },
+  "homepage": "https://github.com/toantranmei/editor#readme",
+  "bugs": {
+    "url": "https://github.com/toantranmei/editor/issues"
+  },
+  "type": "module",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/types/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./style.css": "./dist/style.css",
+    "./memory": {
+      "types": "./dist/types/memory-source.d.ts",
+      "import": "./dist/memory.js"
+    }
+  },
+  "sideEffects": [
+    "**/*.css"
+  ],
+  "scripts": {
+    "build": "node ../editor/scripts/check-styles.mjs src && vite build && vue-tsc -p tsconfig.build.json",
+    "dev": "vite build --watch",
+    "typecheck": "vue-tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "prepublishOnly": "pnpm run build",
+    "check:styles": "node ../editor/scripts/check-styles.mjs src"
+  },
+  "peerDependencies": {
+    "@lucide/vue": "^1.61.0",
+    "@tiptap/core": "3.32.0",
+    "@tiptap/pm": "3.32.0",
+    "@tiptap/vue-3": "3.32.0",
+    "@toantranmei/editor": "^0.3.0",
+    "vue": "^3.5.0"
+  },
+  "dependencies": {
+    "@tanstack/vue-table": "8.21.3",
+    "@tanstack/vue-virtual": "3.13.44",
+    "@toantranmei/chart-block": "workspace:^"
+  },
+  "devDependencies": {
+    "@lucide/vue": "^1.61.0",
+    "@tiptap/core": "3.32.0",
+    "@tiptap/pm": "3.32.0",
+    "@tiptap/vue-3": "3.32.0",
+    "@toantranmei/editor": "workspace:*",
+    "@types/node": "^26.6.5",
+    "@vitejs/plugin-vue": "^6.0.10",
+    "@vue/test-utils": "^2.4.6",
+    "happy-dom": "21.0.4",
+    "typescript": "~5.9.3",
+    "vite": "^8.3.5",
+    "vitest": "5.0.5",
+    "vue": "^3.5.0",
+    "vue-tsc": "^3.0.0",
+    "yjs": "^13.6.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
