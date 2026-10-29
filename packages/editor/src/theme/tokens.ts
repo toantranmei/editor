@@ -370,6 +370,22 @@ export const component = {
     avatarSize: '1.1em',
     popoverWidth: '280px',
   },
+  /** Sub-page / link-to-page rows (`@toantranmei/page-block`). */
+  pageLink: {
+    color: r('color.text'),
+    hoverBg: r('color.hover'),
+    radius: r('radius.sm'),
+    padding: '3px 2px',
+    gap: r('space.3'),
+    fontWeight: r('fontWeight.medium'),
+    iconSize: '1.2em',
+    iconColor: r('color.textMuted'),
+    underline: r('color.textFaint'),
+    underlineHover: r('color.text'),
+    mutedColor: r('color.textMuted'),
+    missingColor: r('color.textFaint'),
+    popoverWidth: '320px',
+  },
   datepicker: {
     width: '264px',
     cell: '34px',

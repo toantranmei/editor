@@ -1,0 +1,64 @@
+/*
+ * Page link rows and the "Link to page" popover.
+ * Only var(--me-…) tokens from @toantranmei/editor (component.pageLink.* in its tokens.ts).
+ */
+@layer mei-editor {
+  .me-content .me-page-link {
+    margin: var(--me-block-gap) 0;
+    border-radius: var(--me-page-link-radius);
+  }
+  .me-content .me-page-link.is-selected { background: var(--me-block-selected-bg); }
+  .me-content .me-page-link-row {
+    display: flex;
+    align-items: center;
+    gap: var(--me-page-link-gap);
+    padding: var(--me-page-link-padding);
+    border-radius: var(--me-page-link-radius);
+    color: var(--me-page-link-color);
+    font-weight: var(--me-page-link-font-weight);
+    line-height: var(--me-font-line-height);
+    text-decoration: none;
+    cursor: pointer;
+    user-select: none;
+  }
+  .me-content .me-page-link-row:hover { background: var(--me-page-link-hover-bg); }
+  .me-content .me-page-link-row:focus-visible { outline: var(--me-border-width-medium) solid var(--me-input-focus-ring); }
+  .me-page-link-icon {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--me-page-link-icon-size);
+    height: var(--me-page-link-icon-size);
+    color: var(--me-page-link-icon-color);
+    --me-icon-size: var(--me-page-link-icon-size);
+  }
+  .me-page-link-icon svg { width: 100%; height: 100%; }
+  .me-page-link-emoji { line-height: 1; }
+  .me-content .me-page-link-title {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-decoration: underline;
+    text-decoration-color: var(--me-page-link-underline);
+    text-underline-offset: var(--me-space-1);
+  }
+  .me-content .me-page-link-row:hover .me-page-link-title { text-decoration-color: var(--me-page-link-underline-hover); }
+  .me-content .me-page-link-title.is-muted { color: var(--me-page-link-muted-color); }
+  .me-content .me-page-link.is-missing .me-page-link-row { cursor: default; }
+  .me-content .me-page-link.is-missing .me-page-link-title { color: var(--me-page-link-missing-color); text-decoration: none; }
+  .me-content .me-page-link.is-missing .me-page-link-row:hover { background: none; }
+
+  .me-page-link-popover {
+    display: flex;
+    flex-direction: column;
+    gap: var(--me-space-2);
+    width: var(--me-page-link-popover-width);
+    max-width: calc(100vw - 2 * var(--me-popover-offset)); /* me-allow-literal: viewport clamp */
+    margin-top: var(--me-popover-offset);
+  }
+  .me-page-link-search { flex: none; }
+  .me-page-link-results { max-height: var(--me-menu-max-height); overflow-y: auto; }
+  .me-page-link-untitled { color: var(--me-page-link-muted-color); }
+}

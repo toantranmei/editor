@@ -290,7 +290,7 @@ callouts and tables. Key latency includes two animation frames (~33ms floor).
 
 Up to ~10k blocks per page the editor stays smooth. For larger content, split it into
 sub-pages (Notion's approach): keep each document small and link pages together, e.g. with
-`mention` page links or your own "page" block. Run `pnpm bench` in the repo to measure.
+`mention` page links or [`@toantranmei/page-block`](https://www.npmjs.com/package/@toantranmei/page-block) (Notion-style sub-pages). Run `pnpm bench` in the repo to measure.
 
 ## Theming
 
