@@ -18,7 +18,7 @@ Excalidraw / Miro-style whiteboard block for [`@toantranmei/editor`](https://www
 - The document keeps only a board id and a preview image: pages stay light, and the board
   engine loads only when someone clicks "Edit"
 - Inline board with drag-to-resize height, or full-screen view
-- Vietnamese and English UI, styled with the editor's design tokens (light / dark)
+- Vietnamese, English and Simplified Chinese UI, styled with the editor's design tokens (light / dark)
 
 ## Install
 

@@ -17,7 +17,7 @@ import { ImageInsertError, type ImageInsertErrorCode, type ImageUploader, prepar
 import {
   type ImageResolver, onImageLoaded, resolveImageSrc, retryFailedImages, withImageResolver,
 } from '../io/image-loader'
-import { messages as allMessages } from '../messages'
+import { messages as allMessages, type SketchLocale } from '../messages'
 import { History } from '../model/history'
 import { Scene } from '../model/scene'
 import { BoardStore, LOCAL_ORIGIN } from '../model/store'
@@ -43,7 +43,7 @@ import ZoomControls from './ZoomControls.vue'
 const props = withDefaults(defineProps<{
   connection: BoardConnection
   readonly?: boolean
-  locale?: 'vi' | 'en'
+  locale?: SketchLocale
   theme?: 'light' | 'dark'
   /** Store + history shared across mounts (inline ↔ fullscreen). Owned by the caller: never destroyed here. */
   session?: BoardSession

@@ -48,7 +48,7 @@ export {
   type ThemeMode,
   type ThemeTokens,
 } from './theme'
-export { en, locales, resolveMessages, vi, type BlockGroup, type EditorMessages, type LocaleName, type PartialMessages } from './locale'
+export { en, locales, resolveMessages, vi, zh, type BlockGroup, type EditorMessages, type LocaleName, type PartialMessages } from './locale'
 
 export { blockNodeView } from './nodeviews/renderer'
 export { useClickOutside } from './composables/useClickOutside'

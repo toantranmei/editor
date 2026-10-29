@@ -58,7 +58,7 @@ function colorItems(editor: Editor): SlashItem[] {
       group: m.slash.colors,
       title,
       swatch: { kind, color },
-      terms: [title, name, color, kind === 'text' ? 'color mau chu' : 'background highlight nen'],
+      terms: [title, name, color, kind === 'text' ? 'color mau chu 文字颜色' : 'background highlight nen 背景颜色'],
       apply: (ed) => {
         pushRecentColor({ kind, color })
         const caret = ed.state.selection.from
