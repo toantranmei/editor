@@ -1,0 +1,26 @@
+import { fileURLToPath } from 'node:url'
+import vue from '@vitejs/plugin-vue'
+import { defineConfig } from 'vite'
+import pkg from './package.json' with { type: 'json' }
+
+// Peers stay external, so the host app has one copy of Vue / Tiptap / the editor.
+const external = [...Object.keys(pkg.peerDependencies)]
+const isExternal = (id: string) => external.some(dep => id === dep || id.startsWith(`${dep}/`)) || id.startsWith('node:')
+
+export default defineConfig({
+  plugins: [vue()],
+  build: {
+    lib: {
+      entry: {
+        index: fileURLToPath(new URL('./src/index.ts', import.meta.url)),
+        // DOM-free render hook for servers (`renderHTML`).
+        render: fileURLToPath(new URL('./src/render-entry.ts', import.meta.url)),
+      },
+      formats: ['es'],
+      cssFileName: 'style',
+    },
+    rolldownOptions: { external: isExternal },
+    sourcemap: true,
+    emptyOutDir: true,
+  },
+})
