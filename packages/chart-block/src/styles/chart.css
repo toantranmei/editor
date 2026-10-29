@@ -1,0 +1,91 @@
+/*
+ * Charts and the chart block's editor.
+ * Only var(--me-…) tokens from @toantranmei/editor (component.chart.* in its tokens.ts).
+ */
+@layer mei-editor {
+  .me-chart {
+    position: relative;
+    width: 100%;
+    height: var(--me-chart-height);
+    font-family: var(--me-chart-font-family);
+    font-size: var(--me-chart-font-size);
+    color: var(--me-chart-text);
+  }
+  .me-chart-canvas { position: absolute; inset: 0; }
+  .me-chart-empty {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--me-chart-empty-color);
+    pointer-events: none;
+  }
+
+  .me-content .me-chart-block { margin: var(--me-block-box-spacing) 0; border-radius: var(--me-box-radius); }
+  .me-content .me-chart-block.is-selected { background: var(--me-block-selected-bg); }
+  .me-chart-block table { border-collapse: collapse; }
+  .me-chart-frame {
+    position: relative;
+    padding: var(--me-chart-padding);
+    border: var(--me-border-width-thin) solid var(--me-box-border);
+    border-radius: var(--me-box-radius);
+  }
+  .me-chart-bar {
+    position: absolute;
+    z-index: 1;
+    top: var(--me-space-3);
+    right: var(--me-space-3);
+    opacity: 0;
+    transition: opacity var(--me-duration-fast);
+  }
+  .me-chart-block:hover .me-chart-bar,
+  .me-chart-block.is-editing .me-chart-bar,
+  .me-chart-bar:focus-within { opacity: 1; }
+  .me-chart-toggle { --me-icon-size: var(--me-font-size-sm); }
+  .me-chart-toggle-icon { width: var(--me-icon-size); height: var(--me-icon-size); }
+
+  .me-chart-editor {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--me-chart-panel-gap);
+    margin-top: var(--me-chart-panel-gap);
+    padding-top: var(--me-chart-panel-gap);
+    border-top: var(--me-border-width-thin) solid var(--me-box-border);
+    font-size: var(--me-font-size-sm);
+  }
+  .me-chart-panel { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--me-chart-panel-gap); }
+  .me-chart-field { display: flex; flex-direction: column; gap: var(--me-space-2); }
+  .me-chart-label { font-size: var(--me-font-size-xs); color: var(--me-color-text-muted); }
+  .me-chart-select { flex: none; width: auto; min-width: var(--me-chart-cell-width); }
+  .me-chart-value { display: flex; align-items: center; gap: var(--me-space-2); }
+  .me-chart-add { --me-icon-size: var(--me-font-size-sm); align-self: flex-start; }
+  .me-chart-check { display: inline-flex; align-items: center; gap: var(--me-space-3); height: var(--me-input-height); }
+
+  .me-chart-data { display: flex; flex-direction: column; gap: var(--me-space-4); min-width: 0; }
+  .me-chart-grid-wrap { max-height: var(--me-chart-grid-max-height); overflow: auto; border: var(--me-border-width-thin) solid var(--me-table-border); border-radius: var(--me-radius-sm); }
+  .me-chart-grid { border-collapse: collapse; }
+  .me-chart-grid th,
+  .me-chart-grid td { padding: 0; border: var(--me-border-width-thin) solid var(--me-table-border); }
+  .me-chart-grid thead th { position: sticky; top: 0; z-index: 1; background: var(--me-table-header-bg); }
+  .me-chart-grid-head-inner { display: flex; align-items: center; }
+  .me-chart-cell {
+    width: var(--me-chart-cell-width);
+    padding: var(--me-table-cell-padding);
+    border: 0;
+    background: transparent;
+    color: var(--me-color-text);
+    font: inherit;
+    outline: none;
+  }
+  .me-chart-cell.is-number { text-align: right; font-variant-numeric: tabular-nums; }
+  .me-chart-cell--head { font-weight: var(--me-font-weight-medium); }
+  .me-chart-cell:focus { box-shadow: inset 0 0 0 var(--me-border-width-medium) var(--me-input-focus-border); }
+  .me-chart-grid-actions { border: 0; background: transparent; }
+  .me-chart-grid .me-tool-btn { --me-icon-size: var(--me-font-size-sm); }
+  .me-chart-grid-delete { opacity: var(--me-button-disabled-opacity); }
+  .me-chart-grid-delete:hover { opacity: 1; color: var(--me-color-danger); }
+  .me-chart-data-actions { display: flex; flex-wrap: wrap; gap: var(--me-space-4); --me-icon-size: var(--me-font-size-sm); }
+  .me-chart-paste { display: flex; flex-direction: column; gap: var(--me-space-4); }
+  .me-chart-textarea { height: auto; min-height: var(--me-chart-grid-max-height); padding: var(--me-space-4); font-family: var(--me-font-mono); resize: vertical; }
+}
