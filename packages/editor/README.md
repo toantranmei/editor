@@ -10,7 +10,7 @@ Notion-style block editor for **Vue 3** and **Nuxt**, built on [Tiptap](https://
   callout, toggle, toggle headings, table, columns — plus opt-in table of contents, math (KaTeX),
   Mermaid diagrams, emoji picker, file/audio/video uploads and @mentions
 - Pick the blocks each app loads; heavy libraries load only when a document needs them
-- Vietnamese and English UI, themable with CSS variables, ships its own CSS (no Tailwind needed)
+- Vietnamese, English and Simplified Chinese UI, themable with CSS variables, ships its own CSS (no Tailwind needed)
 
 ## Install
 
@@ -152,7 +152,7 @@ the original JSON comes back unchanged in `v-model`. (Unknown *marks* are droppe
 | `modelValue`   | `JSONContent \| null`             | `null`  | Document as Tiptap JSON (`v-model`)                      |
 | `editable`     | `boolean`                         | `true`  | Read-only when `false`                                   |
 | `autofocus`    | `boolean \| 'start' \| 'end'`     | `false` | Focus on mount                                           |
-| `locale`       | `'vi' \| 'en'`                    | `'vi'`  | UI language                                              |
+| `locale`       | `'vi' \| 'en' \| 'zh'`            | `'vi'`  | UI language (`zh`: Simplified Chinese)                   |
 | `messages`     | `PartialMessages`                 | –       | Override any UI string                                   |
 | `blocks`       | `BlockDefinition[]`               | `defaultBlocks` | Blocks to load (read at mount), see "Choosing blocks" |
 | `uploadImage`  | `(file: File) => Promise<string>` | –       | Upload an image and return its URL (default: base64)     |
@@ -162,8 +162,56 @@ the original JSON comes back unchanged in `v-model`. (Unknown *marks* are droppe
 | `tokens`       | `ThemeTokens`                     | –       | Design token overrides for this editor (see Theming)     |
 | `blockLink`    | `(id: string) => string`          | –       | URL for "Copy link to block" (default: page URL + `#id`) |
 | `outline`      | `boolean \| { minHeadings }`      | `true`  | Floating outline on the right (shown from 2 headings)    |
+| `collaboration` | `{ document: Y.Doc, field?: string }` | – | Edit a shared Yjs document (read at mount). `field` defaults to `'default'`. See "Collaboration (Yjs)" |
 
-Events: `update:modelValue`, `ready(editor)`, `content-error({ fatal, issues, error })`. The Tiptap editor is also exposed via a template ref (`ref.editor`).
+Events: `update:modelValue` (not in collaboration mode), `change({ editor })` (every local or remote change, nothing serialized), `ready(editor)`, `content-error({ fatal, issues, error })`. The Tiptap editor is also exposed via a template ref (`ref.editor`).
+
+## Collaboration (Yjs)
+
+Pass a `Y.Doc` and the editor reads and writes it directly (Tiptap's `Collaboration` extension):
+
+- The `Y.Doc` is the source of truth: `modelValue` is never loaded (it would overwrite the shared
+  document) and `update:modelValue` is not emitted. Listen to `change` instead. It fires on every
+  change and doesn't serialize anything, so debounce your own work and call `editor.getJSON()` there.
+- Undo / redo is Yjs undo (only your own changes), with the same keys: `Mod-z`, `Mod-Shift-z`, `Mod-y`.
+- Block ids and every built-in block work as usual in a shared document.
+- The prop is read once at mount: to switch documents, re-mount the editor (`:key="pageId"`).
+- Yjs loads only for collaborative editors (`@toantranmei/editor/collaboration` is a separate chunk).
+  Install `yjs` (`^13.6`, an optional peer) in your app, and keep a single copy of it: two copies
+  of Yjs break the sync.
+
+```bash
+npm i yjs y-indexeddb
+```
+
+```vue
+<script setup lang="ts">
+import { onBeforeUnmount } from 'vue'
+import * as Y from 'yjs'
+import { IndexeddbPersistence } from 'y-indexeddb'
+import { MeiEditor, type Editor } from '@toantranmei/editor'
+
+const props = defineProps<{ pageId: string }>()
+const doc = new Y.Doc()
+const local = new IndexeddbPersistence(`page:${props.pageId}`, doc) // offline copy in this browser
+// const remote = new WebsocketProvider(url, props.pageId, doc)     // + any provider for live sync
+
+const saveTitle = (title: string) => { /* your API */ }
+let timer: ReturnType<typeof setTimeout> | undefined
+function onChange({ editor }: { editor: Editor }) {
+  clearTimeout(timer)
+  timer = setTimeout(() => saveTitle(editor.state.doc.firstChild?.textContent ?? ''), 1000)
+}
+onBeforeUnmount(() => { local.destroy(); doc.destroy() })
+</script>
+
+<template>
+  <MeiEditor :collaboration="{ document: doc, field: 'default' }" @change="onChange" />
+</template>
+```
+
+For a headless setup use `createExtensions({ blocks, undoRedo: false })` together with
+`collaborationExtensions({ document, field })` from `@toantranmei/editor/collaboration`.
 
 
 ## Keyboard & mouse
@@ -357,7 +405,7 @@ so documents follow your theme and dark mode. Change the palette with
 Everything is exported for building your own UI on the same blocks:
 `createExtensions`, `BLOCKS`, `filterBlocks`, `turnBlockInto`, the custom extensions
 (`Callout`, `Columns`, `ImageBlock`, `Embed`, `CodeBlock`, `SlashCommand`, `BlockDrop`, `TextColor`, `BgColor`),
-the token objects (`primitiveTokens`, `semanticLightTokens`, `semanticDarkTokens`, `componentTokens`) and locales (`vi`, `en`).
+the token objects (`primitiveTokens`, `semanticLightTokens`, `semanticDarkTokens`, `componentTokens`) and locales (`vi`, `en`, `zh`).
 
 ## License
 

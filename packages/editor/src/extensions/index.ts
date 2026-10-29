@@ -13,6 +13,11 @@ import { UnknownBlock, UnknownInline } from './unknown'
 export interface MeiExtensionsOptions extends Partial<MeiConfigStorage> {
   /** Block definitions to load (their extensions and menu items). */
   blocks: BlockDefinition[]
+  /**
+   * Built-in undo / redo (StarterKit's `undoRedo`). Default true. Set false with
+   * `collaborationExtensions()` (`@toantranmei/editor/collaboration`), which brings Yjs undo.
+   */
+  undoRedo?: boolean
 }
 
 /**
@@ -20,7 +25,7 @@ export interface MeiExtensionsOptions extends Partial<MeiConfigStorage> {
  * Core: paragraphs, text marks, links, history, colors, slash menu, drag & drop,
  * block selection, block ids and the unknown-block fallback.
  */
-export function createExtensions({ blocks, ...config }: MeiExtensionsOptions): AnyExtension[] {
+export function createExtensions({ blocks, undoRedo = true, ...config }: MeiExtensionsOptions): AnyExtension[] {
   return [
     MeiConfig.configure({ ...config, items: blocks.flatMap(b => b.items) }),
     StarterKit.configure({
@@ -33,6 +38,7 @@ export function createExtensions({ blocks, ...config }: MeiExtensionsOptions): A
       blockquote: false,
       codeBlock: false,
       horizontalRule: false,
+      ...(undoRedo ? {} : { undoRedo: false as const }),
       dropcursor: { color: '#93c5fd', width: 3 },
       link: { openOnClick: false, autolink: true, defaultProtocol: 'https' },
     }),

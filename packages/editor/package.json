@@ -41,6 +41,10 @@
       "types": "./dist/types/nuxt.d.ts",
       "import": "./dist/nuxt.js"
     },
+    "./collaboration": {
+      "types": "./dist/types/collaboration.d.ts",
+      "import": "./dist/collaboration.js"
+    },
     "./style.css": "./dist/style.css"
   },
   "sideEffects": [
@@ -52,13 +56,15 @@
     "typecheck": "vue-tsc --noEmit -p tsconfig.json",
     "check:deps": "node scripts/check-deps.mjs",
     "check:styles": "node scripts/check-styles.mjs",
-    "prepublishOnly": "pnpm run build"
+    "prepublishOnly": "pnpm run build",
+    "test": "vitest run"
   },
   "peerDependencies": {
     "@nuxt/kit": "^4.0.0",
     "katex": "^0.19.1",
     "mermaid": "^12.2.0",
-    "vue": "^3.5.0"
+    "vue": "^3.5.0",
+    "yjs": "^13.6.0"
   },
   "peerDependenciesMeta": {
     "@nuxt/kit": {
@@ -68,6 +74,9 @@
       "optional": true
     },
     "mermaid": {
+      "optional": true
+    },
+    "yjs": {
       "optional": true
     }
   },
@@ -98,20 +107,23 @@
     "emojibase-data": "^18.0.0",
     "highlight.js": "^11.11.0",
     "lowlight": "^3.3.0",
-    "y-protocols": "^1.0.6",
-    "yjs": "^13.6.0"
+    "y-protocols": "^1.0.6"
   },
   "devDependencies": {
     "@nuxt/kit": "^4.6.2",
     "@nuxt/schema": "^4.6.2",
     "@types/node": "^26.6.5",
     "@vitejs/plugin-vue": "^6.0.10",
+    "@vue/test-utils": "^2.4.6",
+    "happy-dom": "21.0.4",
     "katex": "^0.19.1",
     "mermaid": "^12.2.0",
     "typescript": "~5.9.3",
     "vite": "^8.3.5",
+    "vitest": "5.0.5",
     "vue": "^3.5.0",
-    "vue-tsc": "^3.0.0"
+    "vue-tsc": "^3.0.0",
+    "yjs": "^13.6.0"
   },
   "publishConfig": {
     "access": "public"

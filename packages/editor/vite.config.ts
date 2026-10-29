@@ -14,6 +14,8 @@ export default defineConfig({
       entry: {
         index: fileURLToPath(new URL('./src/index.ts', import.meta.url)),
         nuxt: fileURLToPath(new URL('./src/nuxt.ts', import.meta.url)),
+        // Separate entry, loaded lazily by <MeiEditor :collaboration>: Yjs stays out of the main graph.
+        collaboration: fileURLToPath(new URL('./src/collaboration.ts', import.meta.url)),
       },
       formats: ['es'],
       cssFileName: 'style',
