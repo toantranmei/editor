@@ -124,6 +124,11 @@ App-wide: `app.use(MeiEditorPlugin, { blocks })`, or in Nuxt `meiEditor: { block
 | `file` | – | File, audio, video; `upload`, `maxSize` (MB, base64 when no `upload`) |
 | `mention` | – | `@` people/pages via `search`; dates (today, 25/12…) built in. Click a date for a Notion-style picker (typed date/time, end date, date & time formats, reminders, clear); click a person/page to search and switch (read-only: `onClick` / page link). Reminders: `onRemind`, `getMentionReminders(doc)`, `reminderHelpUrl` |
 
+Separate packages add more blocks: [`@toantranmei/page-block`](https://www.npmjs.com/package/@toantranmei/page-block)
+(sub-pages), [`@toantranmei/database-block`](https://www.npmjs.com/package/@toantranmei/database-block) (Notion-style
+databases: table, board, calendar, timeline, gallery, list, chart, pivot) and
+[`@toantranmei/chart-block`](https://www.npmjs.com/package/@toantranmei/chart-block) (charts, ECharts loaded lazily).
+
 ### Custom blocks
 
 ```ts

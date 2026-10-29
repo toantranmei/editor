@@ -5,6 +5,8 @@
 | `packages/editor`  | Thư viện `@toantranmei/editor` được publish lên npm ([README](packages/editor/README.md)) |
 | `packages/sketch-block` | Block bảng vẽ tuỳ chọn `@toantranmei/sketch-block` ([README](packages/sketch-block/README.md)) |
 | `packages/page-block` | Block trang con / liên kết trang tuỳ chọn `@toantranmei/page-block` ([README](packages/page-block/README.md)) |
+| `packages/database-block` | Block cơ sở dữ liệu kiểu Notion `@toantranmei/database-block` ([README](packages/database-block/README.md)) |
+| `packages/chart-block` | Block biểu đồ + component biểu đồ cho database `@toantranmei/chart-block` ([README](packages/chart-block/README.md)) |
 | `apps/playground`  | App Nuxt để phát triển và thử editor (không publish)            |
 
 ## Phát triển
@@ -37,3 +39,5 @@ Repo GitHub cần secret `NPM_TOKEN` (npm → Access Tokens → Granular, quyề
   `packages/editor/src/theme/tokens.ts` (3 tầng: primitive → semantic sáng/tối → component).
 - CSS trong `packages/editor/src/styles/` chỉ được dùng `var(--me-…)`; template Vue chỉ dùng class `me-*`.
 - `pnpm --filter @toantranmei/editor check:styles` (chạy tự động khi build) báo lỗi nếu có giá trị cứng ở chỗ khác.
+  Các gói block (`database-block`, `chart-block`) chạy cùng script trên `src` của chúng khi build
+  (token của chúng nằm trong `component.database.*`, `component.chart.*`).

@@ -2,10 +2,11 @@
 //  - src/styles/*.css: no raw colors or lengths (use var(--me-…)).
 //  - .vue templates: static classes must be `me-*` / `is-*`; no inline colors or lengths.
 // Opt out for a single line with the comment `me-allow-literal` (and say why).
+// Block packages run it on their own sources: `node ../editor/scripts/check-styles.mjs src`.
 import { readdirSync, readFileSync } from 'node:fs'
-import { join, relative } from 'node:path'
+import { join, relative, resolve } from 'node:path'
 
-const root = new URL('../src/', import.meta.url).pathname
+const root = process.argv[2] ? `${resolve(process.argv[2])}/` : new URL('../src/', import.meta.url).pathname
 const RAW_VALUE = /#[0-9a-f]{3,8}\b|\brgba?\(|\bhsla?\(|(?<![\w-])\d*\.?\d+(px|rem|em|ms|s|vh|vw)\b/i
 const errors = []
 
