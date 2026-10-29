@@ -5,6 +5,7 @@ import tailwindcss from '@tailwindcss/vite'
 // Other projects just add '@toantranmei/editor/nuxt' to `modules`.
 const editorSrc = fileURLToPath(new URL('../../packages/editor/src', import.meta.url))
 const sketchSrc = fileURLToPath(new URL('../../packages/sketch-block/src', import.meta.url))
+const pageSrc = fileURLToPath(new URL('../../packages/page-block/src', import.meta.url))
 
 export default defineNuxtConfig({
   compatibilityDate: '2026-10-01',
@@ -18,6 +19,8 @@ export default defineNuxtConfig({
     '@toantranmei/sketch-block/providers': `${sketchSrc}/providers/index.ts`,
     '@toantranmei/sketch-block/engine': `${sketchSrc}/engine.ts`,
     '@toantranmei/sketch-block': `${sketchSrc}/index.ts`,
+    '@toantranmei/page-block': `${pageSrc}/index.ts`,
+    '@toantranmei/editor/collaboration': `${editorSrc}/collaboration.ts`,
     '@toantranmei/editor': `${editorSrc}/index.ts`,
   },
   // The playground enables the math block via props, so it adds KaTeX's CSS itself.
