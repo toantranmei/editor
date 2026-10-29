@@ -130,6 +130,22 @@ describe('collaboration', () => {
 })
 
 describe('<MeiEditor :collaboration>', () => {
+  // Regression: menus register plugins after creation; the Yjs binding lost its node mapping
+  // and reverted the first local edit.
+  it('keeps the first edit after mount (plugins registered by menus)', async () => {
+    const doc = new Y.Doc()
+    const wrapper = mount(MeiEditor, { props: { collaboration: { document: doc }, outline: false }, attachTo: document.body })
+    await vi.waitFor(() => expect(wrapper.emitted('ready')).toBeTruthy())
+    await new Promise(r => setTimeout(r, 20))
+    const editor = (wrapper.vm as unknown as { editor: Editor }).editor
+    editor.commands.insertContent('hello')
+    expect(editor.getText()).toBe('hello')
+    expect(doc.getXmlFragment('default').toString()).toContain('hello')
+    editor.chain().setTextSelection(1).insertContent('X').run()
+    expect(doc.getXmlFragment('default').toString()).toContain('Xhello')
+    wrapper.unmount()
+  })
+
   it('never loads modelValue, emits change instead of update:modelValue', async () => {
     const doc = new Y.Doc()
     // Content already in the Y.Doc wins over modelValue.

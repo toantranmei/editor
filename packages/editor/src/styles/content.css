@@ -563,7 +563,9 @@
   .me-render .me-content :is(.me-math-block, .me-math-inline) { cursor: auto; }
   .me-render .me-content :is(.me-math-block, .me-math-inline):hover { background: none; }
   .me-render .me-content a.me-mention:not(.me-mention--page) { text-decoration: none; }
-  .me-render .me-content ul[data-type="taskList"] input[type="checkbox"] { cursor: default; }
+  /* Not `disabled` (it would grey the box out): read-only by not taking clicks. */
+  .me-render .me-content ul[data-type="taskList"] input[type="checkbox"] { pointer-events: none; }
+  .me-render .me-content a.me-toc-item { color: var(--me-toc-item-color); text-decoration-color: var(--me-color-border); }
   .me-render .me-content pre.mermaid { text-align: center; }
   .me-render .me-content pre.mermaid[data-processed] { font-family: var(--me-font-sans); white-space: normal; }
   .me-render .me-content pre.mermaid svg { display: inline-block; max-width: 100%; height: auto; }

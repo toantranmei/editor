@@ -114,7 +114,7 @@ export const builtinNodes: Record<string, NodeRenderer> = {
   taskList: wrapBlock('ul', ' data-type="taskList"'),
   taskItem: (node, ctx) => {
     const checked = !!node.attrs?.checked
-    return `<li data-type="taskItem" data-checked="${checked}"${ctx.blockAttrs(node)}><label><input type="checkbox" disabled${checked ? ' checked' : ''}><span></span></label><div>${ctx.children(node)}</div></li>`
+    return `<li data-type="taskItem" data-checked="${checked}"${ctx.blockAttrs(node)}><label><input type="checkbox" tabindex="-1" aria-readonly="true"${checked ? ' checked' : ''}><span></span></label><div>${ctx.children(node)}</div></li>`
   },
 
   codeBlock: (node, ctx) => {
