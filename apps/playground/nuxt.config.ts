@@ -6,6 +6,8 @@ import tailwindcss from '@tailwindcss/vite'
 const editorSrc = fileURLToPath(new URL('../../packages/editor/src', import.meta.url))
 const sketchSrc = fileURLToPath(new URL('../../packages/sketch-block/src', import.meta.url))
 const pageSrc = fileURLToPath(new URL('../../packages/page-block/src', import.meta.url))
+const databaseSrc = fileURLToPath(new URL('../../packages/database-block/src', import.meta.url))
+const chartSrc = fileURLToPath(new URL('../../packages/chart-block/src', import.meta.url))
 
 export default defineNuxtConfig({
   compatibilityDate: '2026-10-01',
@@ -20,6 +22,9 @@ export default defineNuxtConfig({
     '@toantranmei/sketch-block/engine': `${sketchSrc}/engine.ts`,
     '@toantranmei/sketch-block': `${sketchSrc}/index.ts`,
     '@toantranmei/page-block': `${pageSrc}/index.ts`,
+    '@toantranmei/database-block/memory': `${databaseSrc}/memory-source.ts`,
+    '@toantranmei/database-block': `${databaseSrc}/index.ts`,
+    '@toantranmei/chart-block': `${chartSrc}/index.ts`,
     '@toantranmei/editor/collaboration': `${editorSrc}/collaboration.ts`,
     '@toantranmei/editor': `${editorSrc}/index.ts`,
   },

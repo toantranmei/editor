@@ -10,6 +10,8 @@
     "postinstall": "nuxt prepare"
   },
   "dependencies": {
+    "@toantranmei/chart-block": "workspace:*",
+    "@toantranmei/database-block": "workspace:*",
     "@toantranmei/editor": "workspace:*",
     "@toantranmei/page-block": "workspace:*",
     "@toantranmei/sketch-block": "workspace:*",
