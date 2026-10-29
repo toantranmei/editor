@@ -4,6 +4,7 @@ import type { EditorView } from '@tiptap/pm/view'
 import { createLowlight } from 'lowlight'
 import { blockNodeView } from '../nodeviews/renderer'
 import CodeBlockView from '../nodeviews/CodeBlockView.vue'
+import { LANGUAGE_ALIASES as ALIASES } from './code-languages'
 
 /** Starts empty: each language's grammar is loaded the first time a code block uses it. */
 export const lowlight = createLowlight()
@@ -47,10 +48,6 @@ const LOADERS: Record<string, () => Promise<{ default: Grammar }>> = {
 /** Languages offered in the code block's language picker. */
 export const CODE_LANGUAGES = ['plaintext', ...Object.keys(LOADERS)]
 
-const ALIASES: Record<string, string> = {
-  js: 'javascript', ts: 'typescript', sh: 'bash', zsh: 'bash', html: 'xml', vue: 'xml', py: 'python',
-  yml: 'yaml', md: 'markdown', 'c++': 'cpp', cs: 'csharp', rb: 'ruby', rs: 'rust', kt: 'kotlin', golang: 'go',
-}
 
 const pending = new Map<string, Promise<boolean>>()
 

@@ -16,6 +16,8 @@ export default defineConfig({
         nuxt: fileURLToPath(new URL('./src/nuxt.ts', import.meta.url)),
         // Separate entry, loaded lazily by <MeiEditor :collaboration>: Yjs stays out of the main graph.
         collaboration: fileURLToPath(new URL('./src/collaboration.ts', import.meta.url)),
+        // Server-side HTML (Node, no DOM): no Vue components or ProseMirror in its graph.
+        render: fileURLToPath(new URL('./src/render/index.ts', import.meta.url)),
       },
       formats: ['es'],
       cssFileName: 'style',

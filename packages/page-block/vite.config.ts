@@ -11,7 +11,11 @@ export default defineConfig({
   plugins: [vue()],
   build: {
     lib: {
-      entry: { index: fileURLToPath(new URL('./src/index.ts', import.meta.url)) },
+      entry: {
+        index: fileURLToPath(new URL('./src/index.ts', import.meta.url)),
+        // DOM-free render hook for servers (`renderHTML`).
+        render: fileURLToPath(new URL('./src/render-entry.ts', import.meta.url)),
+      },
       formats: ['es'],
       cssFileName: 'style',
     },

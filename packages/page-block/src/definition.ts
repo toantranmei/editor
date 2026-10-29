@@ -1,6 +1,7 @@
 import { FileText, Link2 } from '@lucide/vue'
 import { type BlockType, defineBlock } from '@toantranmei/editor'
 import { PageLinkNode } from './node'
+import { pageLinkRenderers } from './render'
 import type { PageBlockOptions } from './types'
 
 /**
@@ -23,6 +24,7 @@ export const pageBlock = defineBlock<PageBlockOptions>({
   },
   nodes: ['pageLink'],
   extensions: o => [PageLinkNode.configure(o)],
+  render: o => pageLinkRenderers(o),
   items: (o) => {
     const items: BlockType[] = []
     if (o.createPage) {
