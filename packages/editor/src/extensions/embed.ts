@@ -1,6 +1,7 @@
 import { Node, mergeAttributes } from '@tiptap/core'
 import { blockNodeView } from '../nodeviews/renderer'
 import EmbedView from '../nodeviews/EmbedView.vue'
+import { toEmbedUrl } from './embed-url'
 
 declare module '@tiptap/core' {
   interface Commands<ReturnType> {
@@ -10,33 +11,7 @@ declare module '@tiptap/core' {
   }
 }
 
-/** Turns a YouTube / Vimeo / Loom watch link into an embeddable URL. */
-export function toEmbedUrl(raw: string): string | null {
-  let url: URL
-  try {
-    url = new URL(raw.trim())
-  }
-  catch {
-    return null
-  }
-  if (!/^https?:$/.test(url.protocol)) return null
-
-  const host = url.hostname.replace(/^www\./, '')
-  if (host === 'youtu.be') return `https://www.youtube.com/embed/${url.pathname.slice(1)}`
-  if (host.endsWith('youtube.com')) {
-    const id = url.searchParams.get('v') ?? url.pathname.match(/\/(?:embed|shorts)\/([^/]+)/)?.[1]
-    if (id) return `https://www.youtube.com/embed/${id}`
-  }
-  if (host === 'vimeo.com') {
-    const id = url.pathname.match(/\/(\d+)/)?.[1]
-    if (id) return `https://player.vimeo.com/video/${id}`
-  }
-  if (host === 'loom.com') {
-    const id = url.pathname.match(/\/share\/([^/]+)/)?.[1]
-    if (id) return `https://www.loom.com/embed/${id}`
-  }
-  return url.toString()
-}
+export { toEmbedUrl }
 
 export const Embed = Node.create({
   name: 'embed',

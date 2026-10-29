@@ -12,9 +12,11 @@
   "dependencies": {
     "@toantranmei/chart-block": "workspace:*",
     "@toantranmei/database-block": "workspace:*",
+    "@toantranmei/comments": "workspace:*",
     "@toantranmei/editor": "workspace:*",
     "@toantranmei/page-block": "workspace:*",
     "@toantranmei/sketch-block": "workspace:*",
+    "@toantranmei/synced-block": "workspace:*",
     "fractional-indexing": "4.0.0",
     "katex": "^0.19.1",
     "mermaid": "^12.2.0",

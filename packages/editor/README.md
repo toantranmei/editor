@@ -141,6 +141,10 @@ export const invoice = defineBlock({
   extensions: () => [InvoiceNode], // your Tiptap node
   items: () => [{ id: 'invoice', icon: Receipt, group: 'advanced', keywords: ['bill'], insert: c => c.insertInvoice() }],
   messages: { vi: { blocks: { invoice: { title: 'Hoá đơn', description: 'Chèn hoá đơn' } } } },
+  // Optional: static HTML for `renderHTML` (see "Server-side rendering"); must not touch the DOM.
+  render: () => ({ nodes: { invoice: (node, ctx) => `<div class="invoice"${ctx.blockAttrs(node)}>${ctx.escape(node.attrs?.total)}</div>` } }),
+  // Optional: buttons in the selection bubble menu; `readOnly: true` also shows them in read-only editors.
+  formatActions: () => [{ id: 'cite', icon: Quote, title: 'Cite', run: editor => cite(editor) }],
 })
 ```
 
@@ -217,6 +221,53 @@ onBeforeUnmount(() => { local.destroy(); doc.destroy() })
 
 For a headless setup use `createExtensions({ blocks, undoRedo: false })` together with
 `collaborationExtensions({ document, field })` from `@toantranmei/editor/collaboration`.
+The same entry has `fillDocument(doc, json, editor.schema, field?)` (seed / replace a shared document's
+content in one Yjs transaction) and `documentToJSON(doc, field?)` (its content as editor JSON).
+
+## Server-side rendering
+
+`@toantranmei/editor/render` turns editor JSON into static HTML, in Node (no DOM, no Vue, no
+ProseMirror) or the browser. The markup and `me-*` classes are the editor's, so
+`@toantranmei/editor/style.css` styles it like a read-only editor: heading anchors (block id, or a slug),
+the table of contents as links, code highlighted with lowlight, equations with KaTeX, toggles as
+`<details>`, images with width / alignment / crop / caption, tables, columns, callouts, files, audio,
+video, mentions as links, embeds and HTML blocks as sandboxed iframes.
+
+```ts
+// server/routes/p/[slug].get.ts (Nuxt / Nitro)
+import { defaultBlocks, math, mention, toc } from '@toantranmei/editor' // or only render hooks, see below
+import { renderHTMLAsync, renderTokensStyle } from '@toantranmei/editor/render'
+import { pageBlockRender } from '@toantranmei/page-block/render'
+
+const html = await renderHTMLAsync(page.doc, {
+  locale: page.lang,                       // 'vi' | 'en' | 'zh'
+  blocks: [pageBlockRender],                // render hooks of non-built-in blocks
+  resolveLink: id => ({ href: `/notes/p/${slug}/${id}`, title: titles[id], icon: icons[id] }), // null = missing
+})
+// <head>: '@toantranmei/editor/style.css' (+ 'katex/dist/katex.min.css' with math) and renderTokensStyle()
+```
+
+| Option | Description |
+| --- | --- |
+| `blocks` | Blocks whose `render` hooks are used (BlockDefinitions or `{ name, render }`). Built-in blocks always render |
+| `locale`, `messages` | UI strings (TOC label, "Untitled"…) and date formats |
+| `resolveLink(pageId)` | `{ href, title?, icon? }` or `null` for page links (`@toantranmei/page-block`) |
+| `mentionHref(mention)` | Link for person / page mentions (default: the stored `href`) |
+| `katex` | `import katex from 'katex'` to render equations synchronously; `renderHTMLAsync` loads it when a document has math. Without it: the TeX source |
+| `wrap` | Default `true`: `<div class="me-scope me-root me-render"><div class="me-content">…</div></div>` |
+| `theme`, `className` | `'light'` / `'dark'` force a mode (default follows `<html class="dark">`), extra wrapper classes |
+| `externalLinksInNewTab` | Default `true` (`target="_blank" rel="noopener noreferrer nofollow"`) |
+| `data` | Anything custom renderers need (e.g. `syncedBlocks`, database rows) |
+
+Safety: every text and attribute is escaped; link URLs are limited to `http:`, `https:`, `mailto:` and
+relative URLs (`safeUrl`), media also to `data:image|audio|video`; embeds need an absolute http(s) URL and
+keep the editor's sandbox; HTML blocks run in `sandbox` without `allow-same-origin` (code kept in `srcdoc`).
+
+Also exported: `renderHTML` (sync), `hasMath`, `escapeHtml`, `attr`, `safeUrl`, `highlightCode`,
+`renderTokensStyle(overrides?)` (`<style id="mei-editor-tokens">` with the default tokens, which the editor
+otherwise injects at runtime), and `hydrateMermaid(root?)`: a browser helper that turns
+`<pre class="mermaid">` into diagrams (loads the optional `mermaid` peer). A 1,000-block document renders in
+~5 ms.
 
 
 ## Keyboard & mouse

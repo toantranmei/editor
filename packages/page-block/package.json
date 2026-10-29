@@ -36,6 +36,10 @@
       "types": "./dist/types/index.d.ts",
       "import": "./dist/index.js"
     },
+    "./render": {
+      "types": "./dist/types/render-entry.d.ts",
+      "import": "./dist/render.js"
+    },
     "./style.css": "./dist/style.css"
   },
   "sideEffects": [

@@ -27,7 +27,7 @@ export interface MeiExtensionsOptions extends Partial<MeiConfigStorage> {
  */
 export function createExtensions({ blocks, undoRedo = true, ...config }: MeiExtensionsOptions): AnyExtension[] {
   return [
-    MeiConfig.configure({ ...config, items: blocks.flatMap(b => b.items) }),
+    MeiConfig.configure({ ...config, items: blocks.flatMap(b => b.items), formatActions: blocks.flatMap(b => b.formatActions ?? []) }),
     StarterKit.configure({
       // Block types come from block definitions.
       heading: false,

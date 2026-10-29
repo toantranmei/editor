@@ -15,6 +15,8 @@ export default defineConfig({
       entry: {
         index: fileURLToPath(new URL('./src/index.ts', import.meta.url)),
         memory: fileURLToPath(new URL('./src/memory-source.ts', import.meta.url)),
+        // DOM-free render hook for servers (`renderHTML`).
+        render: fileURLToPath(new URL('./src/render-entry.ts', import.meta.url)),
       },
       formats: ['es'],
       cssFileName: 'style',

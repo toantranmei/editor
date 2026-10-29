@@ -1,6 +1,23 @@
-import type { AnyExtension } from '@tiptap/core'
+import type { AnyExtension, Editor } from '@tiptap/core'
+import type { Component } from 'vue'
 import type { BlockType } from './block-items'
 import type { LocaleName, PartialMessages } from './locale'
+import type { BlockRenderers } from './render/types'
+
+/**
+ * A button a block adds to the selection bubble menu (after the built-in marks),
+ * e.g. "Comment". `readOnly: true` also shows it in read-only editors.
+ */
+export interface FormatAction {
+  id: string
+  icon: Component
+  title: string | ((editor: Editor) => string)
+  run: (editor: Editor) => void
+  /** Show in read-only editors too (the menu then shows only these actions). */
+  readOnly?: boolean
+  /** Hide the action for this editor / selection. */
+  isVisible?: (editor: Editor) => boolean
+}
 
 export interface BlockSpec<O extends object = Record<string, never>> {
   /** Unique name, e.g. `'heading'`, `'math'`. */
@@ -15,6 +32,13 @@ export interface BlockSpec<O extends object = Record<string, never>> {
   nodes?: string[]
   /** UI strings per locale, merged into the editor messages (for custom blocks). */
   messages?: Partial<Record<LocaleName, PartialMessages>>
+  /** Bubble-menu buttons for a text selection. */
+  formatActions?: (options: O) => FormatAction[]
+  /**
+   * Server-side HTML for the block's nodes / marks, used by `renderHTML` from
+   * `@toantranmei/editor/render`. Must not touch the DOM.
+   */
+  render?: (options: O) => BlockRenderers
 }
 
 /** A block ready to pass to `<MeiEditor :blocks>`. */
@@ -25,6 +49,9 @@ export interface BlockDefinition<O extends object = any> {
   items: BlockType[]
   nodes: string[]
   messages?: Partial<Record<LocaleName, PartialMessages>>
+  formatActions?: FormatAction[]
+  /** Static HTML renderers (see `renderHTML`). */
+  render?: BlockRenderers
   /** Returns a copy with different options: `file.configure({ upload })`. */
   configure: (options: Partial<O>) => BlockDefinition<O>
 }
@@ -49,6 +76,8 @@ export function defineBlock<O extends object = Record<string, never>>(spec: Bloc
     items: spec.items?.(options) ?? [],
     nodes: spec.nodes ?? [],
     messages: spec.messages,
+    formatActions: spec.formatActions?.(options),
+    render: spec.render?.(options),
     configure: overrides => build({ ...options, ...overrides }),
   })
   return build({ ...(spec.defaults ?? {}) } as O)

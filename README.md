@@ -7,6 +7,8 @@
 | `packages/page-block` | Block trang con / liên kết trang tuỳ chọn `@toantranmei/page-block` ([README](packages/page-block/README.md)) |
 | `packages/database-block` | Block cơ sở dữ liệu kiểu Notion `@toantranmei/database-block` ([README](packages/database-block/README.md)) |
 | `packages/chart-block` | Block biểu đồ + component biểu đồ cho database `@toantranmei/chart-block` ([README](packages/chart-block/README.md)) |
+| `packages/comments` | Bình luận theo đoạn văn `@toantranmei/comments` ([README](packages/comments/README.md)) |
+| `packages/synced-block` | Khối đồng bộ `@toantranmei/synced-block` ([README](packages/synced-block/README.md)) |
 | `apps/playground`  | App Nuxt để phát triển và thử editor (không publish)            |
 
 ## Phát triển

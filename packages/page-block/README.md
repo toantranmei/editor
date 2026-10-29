@@ -80,6 +80,19 @@ HTML: `<div data-type="page-link" data-page-id="abc123"><a href="…">Title</a><
 
 To find a page's children, walk the document for `pageLink` nodes (e.g. when saving) and store the ids.
 
+### Server-side HTML
+
+`pageBlock` has a render hook for `renderHTML` (`@toantranmei/editor/render`): the row gets its title, icon
+and URL from the render option `resolveLink(pageId)` (`null` renders "not found / no access" without a link;
+without `resolveLink`, `href` gives the URL). Servers that shouldn't load Vue use the DOM-free entry:
+
+```ts
+import { renderHTML } from '@toantranmei/editor/render'
+import { pageBlockRender } from '@toantranmei/page-block/render'
+
+renderHTML(doc, { blocks: [pageBlockRender], resolveLink: id => ({ href: `/notes/p/${slug}/${id}`, title, icon }) })
+```
+
 ### Commands
 
 `editor.commands.insertPageLink(pageId)`, `createSubPage()` and `linkToPage()` (the slash items), plus

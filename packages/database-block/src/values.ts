@@ -4,7 +4,6 @@
  */
 import type { DateDisplay, DateValue, FileValue, NumberFormat, OptionColor, Prop, SelectOption } from './types'
 import { fold, isEmptyValue, uuidv7 } from './util'
-import { PALETTE_NAMES } from '@toantranmei/editor'
 
 export interface ValueContext {
   locale: string
@@ -146,8 +145,10 @@ export const optionsOf = (prop: Prop): SelectOption[] => prop.config?.options ??
 export const optionById = (prop: Prop, id: unknown) => optionsOf(prop).find(o => o.id === id)
 
 /** Next palette color for a new option (round robin, like Notion). */
+/** The editor's palette names (kept here so this module stays free of the editor's Vue code: render entry). */
+const PALETTE: readonly OptionColor[] = ['gray', 'brown', 'orange', 'yellow', 'green', 'blue', 'purple', 'pink', 'red']
 export function nextColor(options: SelectOption[]): OptionColor {
-  const colors = PALETTE_NAMES as readonly OptionColor[]
+  const colors = PALETTE
   return colors[options.length % colors.length]!
 }
 

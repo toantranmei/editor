@@ -3,6 +3,7 @@ import './styles/database.css'
 export { databaseBlock } from './definition'
 export { DATABASE_NODE, DatabaseViewNode, insertDatabaseAt } from './node'
 export { DatabaseView } from './lazy'
+export { databaseBlockRender, databaseRenderers, renderStaticDatabase, type StaticDatabase } from './render'
 export { databaseMessages, messages, type DatabaseMessages } from './messages'
 export { RowStore, type Item as RowStoreItem, type RowStoreOptions, type Segment } from './row-store'
 export {

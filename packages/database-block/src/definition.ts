@@ -2,6 +2,7 @@ import { Database, FileStack } from '@lucide/vue'
 import { type BlockType, defineBlock } from '@toantranmei/editor'
 import { messages } from './messages'
 import { DATABASE_NODE, DatabaseViewNode } from './node'
+import { databaseRenderers } from './render'
 import type { DatabaseBlockOptions } from './types'
 
 const desc = {
@@ -28,6 +29,7 @@ export const databaseBlock = defineBlock<DatabaseBlockOptions>({
   },
   nodes: [DATABASE_NODE],
   extensions: o => [DatabaseViewNode.configure(o)],
+  render: o => databaseRenderers(o),
   items: (o) => {
     if (!o.createDatabase) return []
     const keywords = ['database', 'db', 'table', 'board', 'kanban', 'calendar', 'co so du lieu', 'csdl', 'bang', '数据库', '表格', '看板']

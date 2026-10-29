@@ -45,6 +45,10 @@
       "types": "./dist/types/collaboration.d.ts",
       "import": "./dist/collaboration.js"
     },
+    "./render": {
+      "types": "./dist/types/render/index.d.ts",
+      "import": "./dist/render.js"
+    },
     "./style.css": "./dist/style.css"
   },
   "sideEffects": [

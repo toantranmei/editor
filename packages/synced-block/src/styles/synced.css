@@ -1,0 +1,42 @@
+/*
+ * Synced block frame. Only var(--me-…) tokens (component.synced.* in the editor's tokens.ts).
+ */
+@layer mei-editor {
+  .me-synced {
+    position: relative;
+    margin: var(--me-block-box-spacing) 0;
+    padding: var(--me-synced-padding);
+    border: var(--me-synced-border-width) solid transparent;
+    border-radius: var(--me-synced-radius);
+    transition: border-color var(--me-duration-fast);
+  }
+  .me-synced:hover, .me-synced:focus-within, .me-synced.is-selected { border-color: var(--me-synced-border); }
+  .me-synced:focus-within { border-color: var(--me-synced-hover-border); }
+  .me-synced-bar {
+    --me-icon-size: var(--me-synced-label-font-size);
+    position: absolute;
+    top: var(--me-synced-label-offset);
+    left: var(--me-space-5);
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    gap: var(--me-synced-gap);
+    padding: var(--me-synced-label-padding);
+    background: var(--me-synced-label-bg);
+    color: var(--me-synced-label-color);
+    font-size: var(--me-synced-label-font-size);
+    line-height: var(--me-font-line-height);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity var(--me-duration-fast);
+  }
+  .me-synced:hover .me-synced-bar, .me-synced:focus-within .me-synced-bar, .me-synced.is-selected .me-synced-bar { opacity: 1; pointer-events: auto; }
+  .me-synced-label { display: inline-flex; align-items: center; gap: var(--me-space-2); }
+  .me-synced-origin { color: inherit; text-decoration: underline; text-underline-offset: var(--me-space-1); }
+  .me-synced-empty { padding: var(--me-space-4) var(--me-block-padding-x); color: var(--me-synced-empty-color); }
+  /* The nested editor sits flush inside the frame. */
+  .me-synced-content > .me-root { background: transparent; }
+  .me-synced-content .me-content > :last-child { margin-bottom: 0; }
+  /* The page has its own "click below to write" area; the nested one would pad the frame. */
+  .me-synced-content .me-editor-tail { display: none; }
+}

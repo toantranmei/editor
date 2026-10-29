@@ -37,11 +37,15 @@
       "types": "./dist/types/index.d.ts",
       "import": "./dist/index.js"
     },
-    "./style.css": "./dist/style.css",
+    "./render": {
+      "types": "./dist/types/render-entry.d.ts",
+      "import": "./dist/render.js"
+    },
     "./memory": {
       "types": "./dist/types/memory-source.d.ts",
       "import": "./dist/memory.js"
-    }
+    },
+    "./style.css": "./dist/style.css"
   },
   "sideEffects": [
     "**/*.css"

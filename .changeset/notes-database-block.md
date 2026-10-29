@@ -20,6 +20,8 @@ Notion-style databases and charts.
 - Board, calendar, timeline, gallery, list, chart (via chart-block) and pivot views; property menu (rename, edit,
   change type with a lossy warning, hide, sort, filter, delete) and "add property" with formula check.
 - `<DatabaseView>` for full-page databases; `@toantranmei/database-block/memory` in-memory source for demos / tests.
+- Static HTML: a `render` hook (read-only table from `data.databases[databaseId]`) and a DOM-free
+  `@toantranmei/database-block/render` entry (`databaseBlockRender`).
 - Optional source additions: `validateFormula`, `rowsInRange`, and a `{ search }` query argument.
 
 **@toantranmei/chart-block** (new)

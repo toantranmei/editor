@@ -105,6 +105,24 @@ The interface of the notes contract (section 1.7): reactive `meta`, `props`, `vi
 sorts, groups, aggregates, chart, pivot and a small formula language in JS) and `sampleDatabase(n)`, for demos and
 tests.
 
+## Static HTML (public pages)
+
+`renderHTML` from `@toantranmei/editor/render` renders a database block as a read-only table, from data you pass:
+
+```ts
+import { renderHTML } from '@toantranmei/editor/render'
+import { databaseBlockRender } from '@toantranmei/database-block/render' // DOM-free: no Vue / Tiptap / TanStack
+
+const html = renderHTML(doc, {
+  blocks: [databaseBlockRender],
+  // per database: { meta?, props, views, rows (first ≤ 200 of the view), total?, people?, rowTitles? }
+  data: { databases: { [databaseId]: snapshot } },
+  resolveLink: id => ({ href: `/p/${id}`, title }), // full-page database links
+})
+```
+
+`databaseBlock` (the editor block) carries the same render hook. Style it with `@toantranmei/database-block/style.css`.
+
 ## Performance
 
 Playground `/database`, 100k rows, 24 properties, production build, headless Chromium (Apple Silicon): wheel,

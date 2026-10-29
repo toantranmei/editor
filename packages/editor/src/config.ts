@@ -1,6 +1,7 @@
 import { Extension } from '@tiptap/core'
 import { shallowReactive } from 'vue'
 import type { BlockType } from './block-items'
+import type { FormatAction } from './define-block'
 import { type EditorMessages, type LocaleName, vi } from './locale'
 
 /** Uploads an image file and resolves to its public URL. */
@@ -11,6 +12,8 @@ export interface MeiConfigStorage {
   locale: LocaleName
   /** Menu entries of the loaded blocks (slash menu, "Turn into"). */
   items: BlockType[]
+  /** Extra bubble-menu buttons of the loaded blocks (e.g. "Comment"). */
+  formatActions: FormatAction[]
   /** Custom uploader. Without it, images are inlined as base64 data URLs. */
   uploadImage: ImageUploader | null
   /** Max image size in MB. */
@@ -38,6 +41,7 @@ export const MeiConfig = Extension.create<Partial<MeiConfigStorage>, MeiConfigSt
       messages: this.options.messages ?? vi,
       locale: this.options.locale ?? 'vi',
       items: this.options.items ?? [],
+      formatActions: this.options.formatActions ?? [],
       uploadImage: this.options.uploadImage ?? null,
       maxImageSize: this.options.maxImageSize ?? 5,
       scope: this.options.scope ?? { 'class': ['me-scope'], 'data-me-id': '' },

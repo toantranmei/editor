@@ -622,3 +622,34 @@
   .me-db-link-icon svg { width: 100%; height: 100%; }
   .me-db-link-title { text-decoration: underline; text-decoration-color: var(--me-page-link-underline); text-underline-offset: var(--me-space-1); }
 }
+
+/* Static HTML (`renderHTML`, public pages): a read-only table. */
+@layer mei-editor {
+  .me-db-static-title { font-size: var(--me-database-title-size); font-weight: var(--me-database-title-weight); color: var(--me-database-title-color); }
+  .me-db-static-view {
+    align-self: flex-start;
+    padding: var(--me-database-tab-padding);
+    border-bottom: var(--me-database-tab-indicator) solid var(--me-database-tab-active-color);
+    color: var(--me-database-tab-active-color);
+  }
+  .me-db-static-scroll { overflow-x: auto; max-width: 100%; }
+  .me-db-static-table { border-collapse: collapse; min-width: 100%; font-size: var(--me-database-font-size); }
+  .me-db-static-table th, .me-db-static-table td {
+    min-width: var(--me-database-cell-min-width);
+    max-width: var(--me-database-cell-default-width);
+    height: var(--me-database-row-height);
+    padding: 0 var(--me-database-cell-padding-x);
+    border: var(--me-border-width-thin) solid var(--me-database-border);
+    overflow: hidden;
+    text-align: left;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    vertical-align: middle;
+  }
+  .me-db-static-table thead th { color: var(--me-database-header-color); font-weight: var(--me-database-header-weight); }
+  .me-db-static-table tbody th { font-weight: var(--me-font-weight-medium); }
+  .me-db-static-table tr > :first-child { border-left: 0; }
+  .me-db-static-table tr > :last-child { border-right: 0; }
+  .me-db-static-table .me-db-tag + .me-db-tag { margin-left: var(--me-database-tag-gap); }
+  .me-db-static-more, .me-db-muted { color: var(--me-database-muted-color); }
+}

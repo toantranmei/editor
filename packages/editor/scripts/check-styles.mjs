@@ -4,9 +4,10 @@
 // Opt out for a single line with the comment `me-allow-literal` (and say why).
 // Block packages run it on their own sources: `node ../editor/scripts/check-styles.mjs src`.
 import { readdirSync, readFileSync } from 'node:fs'
-import { join, relative, resolve } from 'node:path'
+import { join, relative } from 'node:path'
 
-const root = process.argv[2] ? `${resolve(process.argv[2])}/` : new URL('../src/', import.meta.url).pathname
+// Optional argument: another package's src dir (block packages reuse this check).
+const root = process.argv[2] ? join(process.cwd(), process.argv[2], '/') : new URL('../src/', import.meta.url).pathname
 const RAW_VALUE = /#[0-9a-f]{3,8}\b|\brgba?\(|\bhsla?\(|(?<![\w-])\d*\.?\d+(px|rem|em|ms|s|vh|vw)\b/i
 const errors = []
 

@@ -8,6 +8,8 @@ const sketchSrc = fileURLToPath(new URL('../../packages/sketch-block/src', impor
 const pageSrc = fileURLToPath(new URL('../../packages/page-block/src', import.meta.url))
 const databaseSrc = fileURLToPath(new URL('../../packages/database-block/src', import.meta.url))
 const chartSrc = fileURLToPath(new URL('../../packages/chart-block/src', import.meta.url))
+const commentsSrc = fileURLToPath(new URL('../../packages/comments/src', import.meta.url))
+const syncedSrc = fileURLToPath(new URL('../../packages/synced-block/src', import.meta.url))
 
 export default defineNuxtConfig({
   compatibilityDate: '2026-10-01',
@@ -21,11 +23,16 @@ export default defineNuxtConfig({
     '@toantranmei/sketch-block/providers': `${sketchSrc}/providers/index.ts`,
     '@toantranmei/sketch-block/engine': `${sketchSrc}/engine.ts`,
     '@toantranmei/sketch-block': `${sketchSrc}/index.ts`,
+    '@toantranmei/page-block/render': `${pageSrc}/render-entry.ts`,
     '@toantranmei/page-block': `${pageSrc}/index.ts`,
     '@toantranmei/database-block/memory': `${databaseSrc}/memory-source.ts`,
     '@toantranmei/database-block': `${databaseSrc}/index.ts`,
     '@toantranmei/chart-block': `${chartSrc}/index.ts`,
+    '@toantranmei/comments': `${commentsSrc}/index.ts`,
+    '@toantranmei/synced-block/render': `${syncedSrc}/render-entry.ts`,
+    '@toantranmei/synced-block': `${syncedSrc}/index.ts`,
     '@toantranmei/editor/collaboration': `${editorSrc}/collaboration.ts`,
+    '@toantranmei/editor/render': `${editorSrc}/render/index.ts`,
     '@toantranmei/editor': `${editorSrc}/index.ts`,
   },
   // The playground enables the math block via props, so it adds KaTeX's CSS itself.
