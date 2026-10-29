@@ -29,6 +29,11 @@ export interface MemorySourceInit {
   related?: Record<string, Array<{ id: string, title: string }>>
   /** Simulated latency of reads, ms (0: next microtask). */
   latency?: number
+  /**
+   * Apply row / cell writes this many ms later (then bump `version`), like a real source whose writes go through a
+   * worker: `createRow` still returns the id at once. Default 0: applied synchronously.
+   */
+  writeDelay?: number
   /** Current user id for created_by / last_edited_by. */
   userId?: string
   canEditContent?: boolean
@@ -581,6 +586,8 @@ export function createMemorySource(init: MemorySourceInit): MemorySource {
     r.last_edited_by = userId
   }
   const bump = () => version.value++
+  /** Runs a row / cell write now, or after `writeDelay` (pending writes keep their order). */
+  const apply = (fn: () => void) => (init.writeDelay ? void setTimeout(fn, init.writeDelay) : fn())
   const record = (method: string, args: unknown[]) => log.push({ method, args })
 
   const source: MemorySource = {
@@ -734,54 +741,62 @@ export function createMemorySource(init: MemorySourceInit): MemorySource {
 
     setCell(rowId, propId, value) {
       record('setCell', [rowId, propId, value])
-      const r = byId.get(rowId)
-      if (!r) return
-      r.values = { ...r.values }
-      if (value === null || value === undefined) delete r.values[propId]
-      else r.values[propId] = value
-      touch(r)
-      bump()
+      apply(() => {
+        const r = byId.get(rowId)
+        if (!r) return
+        r.values = { ...r.values }
+        if (value === null || value === undefined) delete r.values[propId]
+        else r.values[propId] = value
+        touch(r)
+        bump()
+      })
     },
     createRow(initRow) {
       record('createRow', [initRow])
       const id = uuidv7()
-      const at = initRow?.after === undefined || initRow.after === null ? -1 : rows.findIndex(r => r.id === initRow.after)
-      const insertAt = initRow?.after === null ? 0 : at < 0 ? rows.length : at + 1
-      const now = Date.now()
-      const row: MemoryRow = {
-        id,
-        position: '',
-        values: { ...initRow?.values },
-        created_time: now,
-        created_by: userId,
-        last_edited_time: now,
-        last_edited_by: userId,
-        unique_id: ++uniqueId,
-      }
-      // `after: undefined` appends; `after: null` puts it first.
-      rows = [...rows.slice(0, initRow?.after === undefined ? rows.length : insertAt), row, ...rows.slice(initRow?.after === undefined ? rows.length : insertAt)]
-      renumber()
-      byId.set(id, row)
-      bump()
+      apply(() => {
+        const at = initRow?.after === undefined || initRow.after === null ? -1 : rows.findIndex(r => r.id === initRow.after)
+        const insertAt = initRow?.after === null ? 0 : at < 0 ? rows.length : at + 1
+        const now = Date.now()
+        const row: MemoryRow = {
+          id,
+          position: '',
+          values: { ...initRow?.values },
+          created_time: now,
+          created_by: userId,
+          last_edited_time: now,
+          last_edited_by: userId,
+          unique_id: ++uniqueId,
+        }
+        // `after: undefined` appends; `after: null` puts it first.
+        rows = [...rows.slice(0, initRow?.after === undefined ? rows.length : insertAt), row, ...rows.slice(initRow?.after === undefined ? rows.length : insertAt)]
+        renumber()
+        byId.set(id, row)
+        bump()
+      })
       return id
     },
     deleteRows(ids) {
       record('deleteRows', [ids])
-      const set = new Set(ids)
-      rows = rows.filter(r => !set.has(r.id))
-      ids.forEach(id => byId.delete(id))
-      bump()
+      apply(() => {
+        const set = new Set(ids)
+        rows = rows.filter(r => !set.has(r.id))
+        ids.forEach(id => byId.delete(id))
+        bump()
+      })
     },
     moveRow(rowId, after, before) {
       record('moveRow', [rowId, after, before])
-      const row = byId.get(rowId)
-      if (!row) return
-      const rest = rows.filter(r => r.id !== rowId)
-      let at = after ? rest.findIndex(r => r.id === after) + 1 : before ? rest.findIndex(r => r.id === before) : 0
-      if (at < 0) at = rest.length
-      rows = [...rest.slice(0, at), row, ...rest.slice(at)]
-      renumber()
-      bump()
+      apply(() => {
+        const row = byId.get(rowId)
+        if (!row) return
+        const rest = rows.filter(r => r.id !== rowId)
+        let at = after ? rest.findIndex(r => r.id === after) + 1 : before ? rest.findIndex(r => r.id === before) : 0
+        if (at < 0) at = rest.length
+        rows = [...rest.slice(0, at), row, ...rest.slice(at)]
+        renumber()
+        bump()
+      })
     },
     upsertProp(prop) {
       record('upsertProp', [prop])

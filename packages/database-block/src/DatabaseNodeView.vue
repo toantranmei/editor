@@ -50,6 +50,24 @@ function setView(viewId: string) {
   if (props.editor.isEditable && viewId !== props.node.attrs.viewId) props.updateAttributes({ viewId })
 }
 const linkTitle = computed(() => source.value?.meta.value?.title?.trim() || m.value.untitled)
+/**
+ * A mousedown inside the database UI would move the document selection into the (non-editable) node, which the
+ * editor turns into a selection of the whole block. Keep the selection where it is and focus the control instead.
+ * Text fields, selects and draggable parts (row / column / card drag) keep their default behavior.
+ */
+function onMouseDown(e: MouseEvent) {
+  const target = e.target as HTMLElement | null
+  if (!target || e.button !== 0) return
+  const ui = e.currentTarget as HTMLElement
+  // Text fields and drag sources (rows, columns, cards) keep their default. Only look inside the UI: the editor root
+  // is contenteditable and the node view wrapper is draggable.
+  const keep = target.closest('input, textarea, select, label, [contenteditable="true"], [draggable="true"]')
+  if (keep && ui.contains(keep)) return
+  e.preventDefault()
+  const focusable = target.closest<HTMLElement>('button, a[href], [tabindex]')
+  focusable?.focus({ preventScroll: true })
+}
+
 function openLink(e: MouseEvent | KeyboardEvent) {
   if (databaseId.value && state.value !== 'missing') options.value.open?.(databaseId.value, e)
 }
@@ -62,12 +80,12 @@ function openLink(e: MouseEvent | KeyboardEvent) {
     data-type="database-view"
     :data-database-id="databaseId ?? undefined"
   >
-    <div v-if="state === 'loading'" class="me-db-empty" contenteditable="false">{{ m.loading }}</div>
-    <div v-else-if="state === 'missing' || !source" class="me-db-empty is-missing" contenteditable="false">{{ m.notFound }}</div>
+    <div class="me-db-ui" contenteditable="false" @mousedown="onMouseDown">
+    <div v-if="state === 'loading'" class="me-db-empty">{{ m.loading }}</div>
+    <div v-else-if="state === 'missing' || !source" class="me-db-empty is-missing">{{ m.notFound }}</div>
     <a
       v-else-if="!inline"
       class="me-db-link-row"
-      contenteditable="false"
       role="link"
       tabindex="0"
       :aria-label="m.openDatabase.replace('{title}', linkTitle)"
@@ -82,7 +100,6 @@ function openLink(e: MouseEvent | KeyboardEvent) {
     </a>
     <DatabaseView
       v-else
-      contenteditable="false"
       :source="source"
       :database-id="databaseId!"
       :view-id="(node.attrs.viewId as string | null)"
@@ -92,5 +109,6 @@ function openLink(e: MouseEvent | KeyboardEvent) {
       :scope="scope"
       @update:view-id="setView"
     />
+    </div>
   </NodeViewWrapper>
 </template>

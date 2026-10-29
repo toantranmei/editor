@@ -97,14 +97,22 @@ export const DatabaseViewNode = Node.create<DatabaseBlockOptions>({
 
   addNodeView() {
     const base = blockNodeView(DatabaseNodeView)
-    // Everything inside the database UI (keys, copy / paste, drags, clicks) is the block's own, not ProseMirror's.
+    // Everything inside the database UI (keys, input, copy / paste, drags, clicks, DOM selection) is the block's own,
+    // not ProseMirror's. Otherwise a click inside turns into a NodeSelection of the whole block, and the next typed
+    // character replaces the block with text.
     return ((props: Parameters<typeof base>[0]) => {
-      const view = base(props) as ReturnType<typeof base> & { dom: HTMLElement, stopEvent: (e: Event) => boolean }
-      view.stopEvent = (event: Event) => {
-        if (event.type === 'mousemove') return false
-        const target = event.target as Element | null
-        return !!target && view.dom.contains(target) && !!target.closest?.('.me-db, .me-db-link-row')
+      const view = base(props) as ReturnType<typeof base> & {
+        dom: HTMLElement
+        stopEvent: (e: Event) => boolean
+        ignoreMutation: (m: MutationRecord | { type: 'selection', target: globalThis.Node }) => boolean
       }
+      const inside = (node: globalThis.Node | null | undefined) => {
+        const el = node && (node.nodeType === 1 ? node as globalThis.Element : node.parentElement)
+        return !!el && view.dom.contains(el) && !!el.closest('.me-db-ui')
+      }
+      view.stopEvent = (event: Event) => event.type !== 'mousemove' && inside(event.target as globalThis.Node | null)
+      const ignore = view.ignoreMutation?.bind(view)
+      view.ignoreMutation = mutation => inside(mutation.target) || (ignore ? ignore(mutation) : mutation.type !== 'selection')
       return view
     }) as typeof base
   },

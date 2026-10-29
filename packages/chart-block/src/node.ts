@@ -66,7 +66,25 @@ export const ChartNode = Node.create<ChartBlockOptions>({
   },
 
   addNodeView() {
-    return blockNodeView(ChartView)
+    const base = blockNodeView(ChartView)
+    // The toolbar and the data editor own their events and DOM selection: otherwise a click there becomes a
+    // NodeSelection of the chart and typing replaces the block. The chart itself still selects the block on click.
+    return ((props: Parameters<typeof base>[0]) => {
+      const view = base(props) as ReturnType<typeof base> & {
+        dom: HTMLElement
+        stopEvent: (e: Event) => boolean
+        ignoreMutation: (m: MutationRecord | { type: 'selection', target: globalThis.Node }) => boolean
+      }
+      const inside = (node: globalThis.Node | null | undefined) => {
+        const el = node && (node.nodeType === 1 ? node as globalThis.Element : node.parentElement)
+        return !!el && view.dom.contains(el) && !!el.closest('.me-chart-bar, .me-chart-editor')
+      }
+      const stop = view.stopEvent?.bind(view)
+      view.stopEvent = (event: Event) => (event.type !== 'mousemove' && inside(event.target as globalThis.Node | null)) || !!stop?.(event)
+      const ignore = view.ignoreMutation?.bind(view)
+      view.ignoreMutation = mutation => inside(mutation.target) || (ignore ? ignore(mutation) : mutation.type !== 'selection')
+      return view
+    }) as typeof base
   },
 
   addCommands() {

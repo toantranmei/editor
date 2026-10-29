@@ -242,6 +242,12 @@ function startEdit(text: string | null) {
 }
 function endEdit(move?: 'down' | 'right' | 'left' | null) {
   editing.value = null
+  // Enter on the last row of an ungrouped table adds a row and edits its title (like a spreadsheet).
+  if (move === 'down' && sel.value && !store.value?.grouped && sel.value.focus.row === itemCount.value - 1) {
+    newRow()
+    focusGrid()
+    return
+  }
   if (move && sel.value) {
     const key = move === 'down' ? 'ArrowDown' : 'Tab'
     const next = navigate(sel.value, { key, shiftKey: move === 'left' }, bounds.value)
@@ -403,15 +409,33 @@ async function pasteMatrix(matrix: string[][], seg: number, index: number, col: 
 }
 
 // ── Rows: create, delete, check, move, open ──
+/**
+ * "+ New": `createRow` returns the id at once, but a real source applies the write asynchronously (worker round
+ * trip), so the row shows up only after `version` bumps and the window is re-read. We wait for it (scrolling to the
+ * end meanwhile) and then open its title editor, so typing goes into the cell.
+ */
 function newRow(seg?: number) {
   if (!db.canEditContent.value) return
   const key = seg === undefined ? undefined : segment(seg)?.key
   const gv = groupValue(key)
   const values = gv !== undefined && groupProp.value ? { [groupProp.value.id]: gv } : {}
-  const id = db.source.createRow({ values })
+  const last = !store.value?.grouped && !db.view.value?.config.sorts?.length && itemCount.value ? rowOfItem(itemCount.value - 1)?.id : undefined
+  const id = db.source.createRow(last ? { values, after: last } : { values })
   pendingEdit.value = id
-  if (!store.value?.grouped && !db.view.value?.config.sorts?.length) nextTick(() => rowVirtualizer.value.scrollToIndex(itemCount.value, { align: 'end' }))
+  clearTimeout(pendingTimer)
+  pendingTimer = setTimeout(() => {
+    if (pendingEdit.value === id) pendingEdit.value = null
+  }, 5000)
+  followEnd()
 }
+let pendingTimer: ReturnType<typeof setTimeout> | undefined
+/** While a new row is pending in an unsorted, ungrouped table, keep the end in view (it lands there). */
+function followEnd() {
+  if (!pendingEdit.value || store.value?.grouped || db.view.value?.config.sorts?.length) return
+  nextTick(() => rowVirtualizer.value.scrollToIndex(Math.max(0, itemCount.value - 1), { align: 'end' }))
+}
+watch(itemCount, followEnd)
+onBeforeUnmount(() => clearTimeout(pendingTimer))
 function deleteChecked() {
   if (!db.canEditContent.value || !checked.value.size) return
   db.source.deleteRows([...checked.value])
