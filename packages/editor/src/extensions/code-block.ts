@@ -76,6 +76,13 @@ function refresh(view: EditorView, language: string) {
 }
 
 export const CodeBlock = CodeBlockLowlight.extend({
+  addAttributes() {
+    const parent: Record<string, object> = this.parent?.() ?? {}
+    // No language stays null: a default here would be filled in for every code block read from
+    // a Yjs document (it doesn't store null attributes), turning a pure view into an edit (KS-BUG-4).
+    // Highlighting still falls back to `defaultLanguage`.
+    return { ...parent, language: { ...parent.language, default: null } }
+  },
   addProseMirrorPlugins() {
     // One load + one re-highlight per language (not per code block: that was O(n²)).
     const requested = new Set<string>()
