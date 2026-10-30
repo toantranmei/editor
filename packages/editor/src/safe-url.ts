@@ -5,9 +5,13 @@ export type DataUrlPolicy = 'image' | 'any' | 'none'
 
 /**
  * URLs from document content (pasted, synced, imported) before they reach `src`, `href` or
- * `window.open`: http(s), `blob:`, relative / same-origin paths (`/api/v1/files/<id>`,
- * `//cdn.example.com/a.png`) and the allowed `data:` URLs. Anything else — `javascript:`,
- * `data:text/html`, `vbscript:`, URLs with control characters — gives `null`.
+ * `window.open`: http(s), `blob:`, URLs without a scheme and the allowed `data:` URLs. Anything
+ * else — `javascript:`, `data:text/html`, `vbscript:`, URLs with control characters — gives `null`.
+ *
+ * URLs without a scheme take the page's: paths (`/api/v1/files/<id>`, `a.png`) are same-origin,
+ * while `//cdn.example.com/a.png` (and `\\host`, `/\host`, which browsers read the same way) are
+ * http(s) URLs on another host — as safe as any https URL, but not same-origin. Use `isSameOrigin`
+ * when that matters.
  */
 export function safeUrl(src: unknown, data: DataUrlPolicy = 'none'): string | null {
   if (typeof src !== 'string') return null
@@ -23,4 +27,24 @@ export function safeUrl(src: unknown, data: DataUrlPolicy = 'none'): string | nu
     if (data === 'image' && /^data:image\/[a-z\d.+-]+[;,]/i.test(url)) return url
   }
   return null
+}
+
+/** True when `url` (resolved against the page) is on the page's origin. */
+export function isSameOrigin(url: string, base: string = globalThis.location?.href ?? 'http://localhost/'): boolean {
+  try {
+    return new URL(url, base).origin === new URL(base).origin
+  }
+  catch {
+    return false
+  }
+}
+
+/** True when `url` (resolved against the page) is an http(s) URL. */
+export function isWebUrl(url: string, base: string = globalThis.location?.href ?? 'http://localhost/'): boolean {
+  try {
+    return /^https?:$/.test(new URL(url, base).protocol)
+  }
+  catch {
+    return false
+  }
 }

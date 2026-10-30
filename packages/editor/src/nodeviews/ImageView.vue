@@ -10,7 +10,7 @@ import ImageLightbox from '../components/ImageLightbox.vue'
 import { useClickOutside } from '../composables/useClickOutside'
 import { useEditable } from '../composables/useEditable'
 import { useScope } from '../composables/useScope'
-import { safeUrl } from '../safe-url'
+import { isSameOrigin, isWebUrl, safeUrl } from '../safe-url'
 
 const props = defineProps(nodeViewProps)
 const editable = useEditable(props.editor)
@@ -108,7 +108,9 @@ const crop = computed(() => props.node.attrs.crop as ImageCrop | null)
 const captionShown = computed(() => props.node.attrs.showCaption ?? !!props.node.attrs.caption)
 /** The image URL if it is safe to load and open (KS-BUG-7: never `javascript:` / `data:text/html`). */
 const src = computed(() => safeUrl(props.node.attrs.src, 'image'))
-const isRemote = computed(() => /^https?:/i.test(src.value ?? ''))
+/** A web URL (link actions apply); `isRemote` when it is on another origin (download fetches it). */
+const isWeb = computed(() => !!src.value && isWebUrl(src.value))
+const isRemote = computed(() => isWeb.value && !isSameOrigin(src.value!))
 
 const menu = ref<'align' | 'more' | null>(null)
 const toolbar = ref<HTMLElement | null>(null)
@@ -157,7 +159,7 @@ async function download() {
 
 async function copyLink() {
   if (!src.value) return
-  await navigator.clipboard?.writeText(src.value)
+  await navigator.clipboard?.writeText(new URL(src.value, location.href).href)
   copied.value = true
   setTimeout(() => (copied.value = false), 1500)
   menu.value = null
@@ -288,11 +290,11 @@ const cropStyle = computed(() => {
                 <span class="me-menu-icon"><RefreshCw /></span>
                 <span class="me-menu-title me-menu-text">{{ m.replace }}</span>
               </button>
-              <button v-if="isRemote" type="button" class="me-menu-item" @click="copyLink">
+              <button v-if="isWeb" type="button" class="me-menu-item" @click="copyLink">
                 <span class="me-menu-icon"><component :is="copied ? Check : Copy" /></span>
                 <span class="me-menu-title me-menu-text">{{ copied ? m.linkCopied : m.copyLink }}</span>
               </button>
-              <button v-if="isRemote" type="button" class="me-menu-item" @click="openOriginal">
+              <button v-if="isWeb" type="button" class="me-menu-item" @click="openOriginal">
                 <span class="me-menu-icon"><ExternalLink /></span>
                 <span class="me-menu-title me-menu-text">{{ m.original }}</span>
               </button>

@@ -5,7 +5,7 @@ import MeiEditor from '../src/components/MeiEditor.vue'
 import { createExtensions } from '../src/extensions'
 import { defaultBlocks, file } from '../src/blocks'
 import { text } from '../src/blocks/basic'
-import { safeUrl } from '../src/safe-url'
+import { isSameOrigin, isWebUrl, safeUrl } from '../src/safe-url'
 
 const editors: Editor[] = []
 afterEach(() => {
@@ -46,6 +46,21 @@ describe('safeUrl', () => {
     expect(safeUrl('data:image/svg+xml,<svg/>', 'image')).toBe('data:image/svg+xml,<svg/>')
     expect(safeUrl('data:audio/wav;base64,UklGRg==', 'image')).toBeNull()
     expect(safeUrl('data:audio/wav;base64,UklGRg==', 'any')).toBe('data:audio/wav;base64,UklGRg==')
+  })
+})
+
+describe('isSameOrigin / isWebUrl', () => {
+  const base = 'https://app.example/notes/1'
+  it('paths are same-origin; protocol-relative and backslash hosts are not', () => {
+    for (const url of ['/api/v1/files/1', 'a.png', '?v=1', 'https://app.example/x'])
+      expect(isSameOrigin(url, base), url).toBe(true)
+    for (const url of ['//evil.com/a.png', '\\\\evil.com/a.png', '/\\evil.com/a.png', 'https://evil.com/', 'data:image/png;base64,AA=='])
+      expect(isSameOrigin(url, base), url).toBe(false)
+  })
+  it('web URLs', () => {
+    expect(isWebUrl('//evil.com/a', base)).toBe(true)
+    expect(isWebUrl('/x', base)).toBe(true)
+    expect(isWebUrl('data:image/png;base64,AA==', base)).toBe(false)
   })
 })
 
