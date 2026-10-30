@@ -214,6 +214,7 @@ watch(rendered, (list) => {
   if (pendingEdit.value) {
     const hit = list.find(r => r.row?.id === pendingEdit.value)
     if (hit) {
+      if (typeAheadEl && !typedAhead.enter) typedAhead.text = typeAheadEl.value
       const { text, enter } = typedAhead
       stopTypeAhead()
       pendingEdit.value = null
@@ -488,27 +489,41 @@ function newRow(seg?: number, top = false) {
 }
 let pendingTimer: ReturnType<typeof setTimeout> | undefined
 /**
- * Keys typed between "+ New" and the row showing up (worker round trip) would otherwise be lost: buffer them and
- * hand them to the title editor once it opens (Enter commits them directly).
+ * Text typed between "+ New" and the row showing up (worker round trip) would otherwise be lost: a hidden textarea
+ * takes focus meanwhile (so IME input such as Vietnamese Telex works too) and hands its text to the title editor
+ * once it opens; Enter commits it directly.
  */
 let typedAhead = { text: '', enter: false }
-function onTypeAhead(e: KeyboardEvent) {
-  if (e.isComposing || e.metaKey || e.ctrlKey || e.altKey) return
-  if (e.key === 'Escape') return stopTypeAhead()
-  if (e.key === 'Enter') typedAhead.enter = true
-  else if (e.key === 'Backspace') typedAhead.text = typedAhead.text.slice(0, -1)
-  else if (e.key.length === 1 && !typedAhead.enter) typedAhead.text += e.key
-  else return
-  e.preventDefault()
-  e.stopPropagation()
-}
+let typeAheadEl: HTMLTextAreaElement | null = null
 function startTypeAhead() {
   stopTypeAhead()
-  window.addEventListener('keydown', onTypeAhead, true)
+  const el = document.createElement('textarea')
+  el.setAttribute('aria-hidden', 'true')
+  el.tabIndex = -1
+  el.style.cssText = 'position:fixed;left:-9999px;top:0;width:1px;height:1px;opacity:0'
+  el.addEventListener('keydown', (e) => {
+    if (e.isComposing) return
+    if (e.key === 'Escape') stopTypeAhead()
+    else if (e.key === 'Enter') {
+      e.preventDefault()
+      typedAhead.enter = true
+    }
+  })
+  el.addEventListener('input', () => {
+    if (!typedAhead.enter) typedAhead.text = el.value
+  })
+  el.addEventListener('blur', () => {
+    if (typeAheadEl === el) typedAhead.text = el.value
+  })
+  ;(scroller.value ?? document.body).appendChild(el)
+  el.focus({ preventScroll: true })
+  typeAheadEl = el
 }
 function stopTypeAhead() {
   typedAhead = { text: '', enter: false }
-  window.removeEventListener('keydown', onTypeAhead, true)
+  const el = typeAheadEl
+  typeAheadEl = null
+  el?.remove()
 }
 /** While a new row is pending in an unsorted, ungrouped table, keep the end in view (it lands there). */
 function followEnd() {
