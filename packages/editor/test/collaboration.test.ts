@@ -1,6 +1,7 @@
 import { Editor, type JSONContent } from '@tiptap/vue-3'
 import { flushPromises, mount } from '@vue/test-utils'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { Plugin, PluginKey } from '@tiptap/pm/state'
 import * as Y from 'yjs'
 import { collaborationExtensions } from '../src/collaboration'
 import MeiEditor from '../src/components/MeiEditor.vue'
@@ -127,6 +128,39 @@ describe('collaboration', () => {
     expect(press('z', true)).toBe(true)
     expect(a.getText()).toContain('hello')
   })
+
+  // KS-BUG-10: every registerPlugin() (drag handle, bubble menus) made y-tiptap re-render the doc
+  // while plugin views were being created, duplicating them; the undo manager then stopped tracking
+  // its own undo steps, so the redo stack stayed empty.
+  it('redo works after plugins are registered later (no duplicated plugin views)', () => {
+    const a = collabEditor(new Y.Doc())
+    for (let i = 0; i < 3; i++) a.registerPlugin(new Plugin({ key: new PluginKey(`late${i}`), view: () => ({}) }))
+    const view = a.view as unknown as { pluginViews: unknown[] }
+    expect(view.pluginViews.length).toBe(a.state.plugins.filter(p => p.spec.view).length)
+
+    a.commands.insertContent('kept')
+    const um = (a.state.plugins.find(p => (p as unknown as { key: string }).key === 'y-undo$')!.getState(a.state) as { undoManager: Y.UndoManager }).undoManager
+    um.stopCapturing()
+    a.commands.insertContent(' undone')
+    expect(a.commands.undo()).toBe(true)
+    expect(a.getText()).toBe('kept')
+    expect(a.can().redo()).toBe(true)
+    expect(a.commands.redo()).toBe(true)
+    expect(a.getText()).toBe('kept undone')
+  })
+
+  it('renders an existing Y.Doc once, and plugin re-registration does not re-render it', () => {
+    const doc = new Y.Doc()
+    const seed = collabEditor(doc)
+    seed.commands.setContent(RICH)
+    const a = collabEditor(doc)
+    expect(a.getJSON()).toEqual(seed.getJSON())
+    let rerenders = 0
+    a.on('transaction', ({ transaction }) => transaction.docChanged && rerenders++)
+    a.registerPlugin(new Plugin({ key: new PluginKey('late'), view: () => ({}) }))
+    expect(rerenders).toBe(0)
+    expect(a.getJSON()).toEqual(seed.getJSON())
+  })
 })
 
 describe('<MeiEditor :collaboration>', () => {
@@ -173,6 +207,21 @@ describe('<MeiEditor :collaboration>', () => {
     await wrapper.setProps({ modelValue: { type: 'doc', content: [p('other')] } })
     expect(editor.getText()).toContain('from yjs')
     getJSON.mockRestore()
+    wrapper.unmount()
+  })
+
+  it('undo then redo (KS-BUG-10: MeiEditor registers drag handle / menu plugins after creating the editor)', async () => {
+    const wrapper = mount(MeiEditor, { props: { collaboration: { document: new Y.Doc() }, outline: false }, attachTo: document.body })
+    await flushPromises()
+    await vi.waitFor(() => expect(wrapper.emitted('ready')).toBeTruthy())
+    await flushPromises()
+    const editor = (wrapper.vm as unknown as { editor: Editor }).editor
+    editor.commands.insertContent('typed')
+    expect(editor.commands.undo()).toBe(true)
+    expect(editor.getText()).toBe('')
+    expect(editor.can().redo()).toBe(true)
+    expect(editor.commands.redo()).toBe(true)
+    expect(editor.getText()).toBe('typed')
     wrapper.unmount()
   })
 
