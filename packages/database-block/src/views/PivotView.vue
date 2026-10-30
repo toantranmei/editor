@@ -21,17 +21,19 @@ async function load() {
   if (!view) return
   const mine = ++seq
   // Switching views runs this watcher once more, with the next view, before this one unmounts
-  // (KS-BUG-12): never query a view that isn't a pivot, or a pivot without rows or columns yet.
-  if (view.type !== 'pivot' || !(view.config?.rows?.length || view.config?.cols?.length)) {
-    data.value = { rows: [], cols: [], cells: [] }
-    return
-  }
+  // (KS-BUG-12): never query a view that isn't a pivot.
+  if (view.type !== 'pivot') return
+  // Without rows and columns some sources answer with just the grand total, others refuse
+  // ("View is missing rows/cols"): the latter is the expected empty state, not an error.
+  const axes = !!(view.config?.rows?.length || view.config?.cols?.length)
   try {
     const res = await db.source.pivot(view.id)
     if (mine === seq) data.value = res
   }
   catch (error) {
-    db.report(error)
+    if (mine !== seq) return
+    if (axes) db.report(error)
+    else data.value = { rows: [], cols: [], cells: [] }
   }
 }
 watch([() => db.view.value?.id, () => JSON.stringify(c.value), () => db.source.version.value], load, { immediate: true })

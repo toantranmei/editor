@@ -42,18 +42,41 @@ describe('switching away from chart / pivot views', () => {
     for (const [method, type] of asked) expect(type, `${method} asked for a ${type} view`).toBe(method)
   })
 
-  it('a chart without an x axis or a pivot without rows / columns is not queried', async () => {
+  it('a chart without an x axis is not queried', async () => {
     const source = createMemorySource(sampleDatabase(10, { databaseId: 'db1' }))
     const chart = source.views.value.find(v => v.id === 'v-chart')!
     chart.config = { ...chart.config, x: undefined }
+    const wrapper = mount({ render: () => h(DatabaseView, { source, databaseId: 'db1', viewId: 'v-chart', locale: 'en' }) }, { attachTo: document.body })
+    wrappers.push(wrapper)
+    await settle()
+    expect(wrapper.text()).not.toContain('Loading')
+    expect(source.log.filter(l => l.method === 'chart')).toHaveLength(0)
+  })
+
+  it('a pivot without rows and columns still shows the grand total', async () => {
+    const source = createMemorySource(sampleDatabase(10, { databaseId: 'db1' }))
     const pivot = source.views.value.find(v => v.id === 'v-pivot')!
     pivot.config = { ...pivot.config, rows: [], cols: [] }
-    for (const viewId of ['v-chart', 'v-pivot']) {
-      const wrapper = mount({ render: () => h(DatabaseView, { source, databaseId: 'db1', viewId, locale: 'en' }) }, { attachTo: document.body })
-      wrappers.push(wrapper)
-      await settle()
-      expect(wrapper.text()).not.toContain('Loading')
+    const wrapper = mount({ render: () => h(DatabaseView, { source, databaseId: 'db1', viewId: 'v-pivot', locale: 'en' }) }, { attachTo: document.body })
+    wrappers.push(wrapper)
+    await settle()
+    expect(source.log.filter(l => l.method === 'pivot')).toHaveLength(1)
+    expect(wrapper.find('.me-db-pivot-table').exists()).toBe(true)
+  })
+
+  it('a source that refuses a pivot without rows / columns gives the empty state, not an error', async () => {
+    const source = createMemorySource(sampleDatabase(10, { databaseId: 'db1' }))
+    const pivot = source.views.value.find(v => v.id === 'v-pivot')!
+    pivot.config = { ...pivot.config, rows: [], cols: [] }
+    source.pivot = async () => {
+      throw new Error('View is missing rows/cols')
     }
-    expect(source.log.filter(l => l.method === 'chart' || l.method === 'pivot')).toHaveLength(0)
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const wrapper = mount({ render: () => h(DatabaseView, { source, databaseId: 'db1', viewId: 'v-pivot', locale: 'en' }) }, { attachTo: document.body })
+    wrappers.push(wrapper)
+    await settle()
+    expect(wrapper.text()).not.toContain('Loading')
+    expect(error.mock.calls.flat().join(' ')).not.toContain('missing rows/cols')
+    error.mockRestore()
   })
 })
