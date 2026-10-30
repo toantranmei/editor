@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /** List view: one line per row (title + card properties), virtualized, optionally grouped. Click opens the row. */
-import { ChevronDown, ChevronRight, FileText } from '@lucide/vue'
+import { ChevronDown, ChevronRight, FileText, Plus } from '@lucide/vue'
 import { useVirtualizer } from '@tanstack/vue-virtual'
 import { componentTokens } from '@toantranmei/editor'
 import { computed, ref, watch } from 'vue'
@@ -56,10 +56,15 @@ watch(() => {
   store.value.ensureItems(a!, b!)
 })
 const segment = (i: number) => store.value?.segments.value[i]
+function newRow(e: MouseEvent) {
+  const id = db.source.createRow({})
+  db.openRow(id, e)
+}
 </script>
 
 <template>
-  <div ref="scroller" class="me-db-scroll me-db-list" :class="{ 'is-full': full }" role="list">
+  <div class="me-db-list-wrap">
+  <div ref="scroller" class="me-db-scroll me-db-list" :class="{ 'is-full': full }" :style="{ height: `${virtualizer.getTotalSize()}px` }" role="list">
     <div class="me-db-virtual" :style="{ height: `${virtualizer.getTotalSize()}px` }">
       <div v-for="it in items" :key="it.v.index" class="me-db-list-item" :class="{ 'is-group': it.item?.kind === 'group' }" :style="{ transform: `translateY(${it.v.start}px)`, height: `${it.v.size}px` }" role="listitem">
         <template v-if="it.item?.kind === 'group'">
@@ -70,7 +75,7 @@ const segment = (i: number) => store.value?.segments.value[i]
           <span class="me-db-group-count">{{ segment(it.item.seg)?.count }}</span>
         </template>
         <template v-else-if="it.row">
-          <button type="button" class="me-db-list-open" @click="db.source.openRow(it.row.id)">
+          <button type="button" class="me-db-list-open" :data-row-id="it.row.id" @click="db.openRow(it.row.id, $event)">
             <FileText class="me-db-menu-icon" />
             <span class="me-db-list-title">{{ title ? String(cellValue(it.row, title) ?? '') || m.untitled : m.untitled }}</span>
           </button>
@@ -83,5 +88,7 @@ const segment = (i: number) => store.value?.segments.value[i]
         <span v-else-if="it.item?.kind === 'row'" class="me-db-skeleton" />
       </div>
     </div>
+  </div>
+  <button v-if="db.canEditContent.value && !store?.grouped" type="button" class="me-db-new-row is-static is-list" data-new-row @click="newRow($event)"><Plus />{{ m.newRow }}</button>
   </div>
 </template>

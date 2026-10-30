@@ -24,6 +24,9 @@ const weekdays = computed(() => {
   const f = new Intl.DateTimeFormat(intl.value, { weekday: 'short' })
   return Array.from({ length: 7 }, (_, i) => f.format(new Date(2023, 0, 2 + i)))
 })
+const weekends = computed(() => db.view.value?.config.show_weekends !== false)
+const shownWeekdays = computed(() => (weekends.value ? weekdays.value : weekdays.value.slice(0, 5)))
+/** The 6-week grid (always 42 days: loading and `byDay` use its first / last day). */
 const days = computed(() => {
   const first = month.value
   const offset = (first.getDay() + 6) % 7
@@ -33,6 +36,8 @@ const days = computed(() => {
   })
 })
 const today = isoDay(new Date())
+/** Days drawn: without weekends, Monday to Friday of each week. */
+const shownDays = computed(() => (weekends.value ? days.value : days.value.filter((_, i) => i % 7 < 5)))
 
 const rows = shallowRef<Row[]>([])
 let seq = 0
@@ -89,11 +94,11 @@ function onDrop(day: string) {
   const deltaDays = Math.round((parseIso(day)!.getTime() - parseIso(d.from)!.getTime()) / 86400000)
   db.source.setCell(d.id, p.id, shiftDate(v, deltaDays, deltaDays))
 }
-function addOn(day: string) {
+function addOn(day: string, e?: MouseEvent) {
   const p = dateProp.value
   if (!p || p.type !== 'date') return
   const id = db.source.createRow({ values: { [p.id]: { start: day } } })
-  db.source.openRow(id)
+  db.openRow(id, e)
 }
 </script>
 
@@ -107,10 +112,10 @@ function addOn(day: string) {
         <button type="button" class="me-db-icon-button" :aria-label="m.previous" @click="month = new Date(month.getFullYear(), month.getMonth() - 1, 1)"><ChevronLeft /></button>
         <button type="button" class="me-db-icon-button" :aria-label="m.next" @click="month = new Date(month.getFullYear(), month.getMonth() + 1, 1)"><ChevronRight /></button>
       </div>
-      <div class="me-db-calendar-grid" role="grid">
-        <span v-for="(w, i) in weekdays" :key="i" class="me-db-calendar-weekday" role="columnheader">{{ w }}</span>
+      <div class="me-db-calendar-grid" :class="{ 'is-weekdays': !weekends }" role="grid">
+        <span v-for="(w, i) in shownWeekdays" :key="i" class="me-db-calendar-weekday" role="columnheader">{{ w }}</span>
         <div
-          v-for="d in days"
+          v-for="d in shownDays"
           :key="d.id"
           class="me-db-calendar-day"
           :class="{ 'is-outside': d.outside, 'is-today': d.id === today, 'is-over': overDay === d.id }"
@@ -120,7 +125,7 @@ function addOn(day: string) {
           @drop.prevent="onDrop(d.id)"
         >
           <span class="me-db-calendar-date">{{ d.label }}</span>
-          <button v-if="db.canEditContent.value && dateProp.type === 'date'" type="button" class="me-db-icon-button me-db-calendar-add" :aria-label="m.newRow" @click="addOn(d.id)"><Plus /></button>
+          <button v-if="db.canEditContent.value && dateProp.type === 'date'" type="button" class="me-db-icon-button me-db-calendar-add" :aria-label="m.newRow" @click="addOn(d.id, $event)"><Plus /></button>
           <button
             v-for="r in (byDay.get(d.id) ?? []).slice(0, MAX)"
             :key="r.id"
@@ -130,7 +135,7 @@ function addOn(day: string) {
             :data-row-id="r.id"
             @dragstart="dragging = { id: r.id, from: d.id }"
             @dragend="dragging = null; overDay = null"
-            @click="db.source.openRow(r.id)"
+            @click="db.openRow(r.id, $event)"
           >
             {{ titleOf(r) }}
           </button>

@@ -1,19 +1,22 @@
 <script setup lang="ts">
 /** Gallery view: cards in a responsive grid (virtualized by card rows), cover from a files property. */
+import { Image as ImageIcon, Plus } from '@lucide/vue'
 import { useVirtualizer } from '@tanstack/vue-virtual'
 import { componentTokens } from '@toantranmei/editor'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import CellValue from '../components/CellValue.vue'
 import { useDb } from '../context'
 import { rectWithFallback } from '../virtual'
-import type { FileValue, Row } from '../types'
+import type { Row } from '../types'
 import { useRowStore } from '../use-rows'
-import { cellValue, cssPx, isEmptyValue } from '../util'
+import { cellValue, coverImage, cssPx, isEmptyValue } from '../util'
 
 defineProps<{ full?: boolean }>()
 const db = useDb()
 const m = computed(() => db.m.value)
 const store = useRowStore(db, { grouped: () => false })
+/** "+ New" card after the last one (a slot in the grid). */
+const canAdd = computed(() => db.canEditContent.value)
 const scroller = ref<HTMLElement | null>(null)
 const T = componentTokens.database
 const size = computed(() => db.view.value?.config.size ?? 'm')
@@ -49,8 +52,9 @@ const total = computed(() => {
   void store.value?.tick.value
   return store.value?.segments.value[0]?.count ?? 0
 })
+const slotsTotal = computed(() => total.value + (canAdd.value ? 1 : 0))
 const virtualizer = useVirtualizer(computed(() => ({
-  count: Math.ceil(total.value / lanes.value),
+  count: Math.ceil(slotsTotal.value / lanes.value),
   getScrollElement: () => scroller.value,
   estimateSize: () => cardH.value + gap,
   overscan: 3,
@@ -68,20 +72,20 @@ watch(() => {
 })
 const rowsOf = (line: number) => {
   void store.value?.tick.value
-  const out: Array<Row | null> = []
-  for (let i = line * lanes.value; i < Math.min(total.value, (line + 1) * lanes.value); i++) out.push(store.value?.rowAt(0, i) ?? null)
+  const out: Array<Row | null | 'add'> = []
+  for (let i = line * lanes.value; i < Math.min(slotsTotal.value, (line + 1) * lanes.value); i++) out.push(i === total.value ? 'add' : store.value?.rowAt(0, i) ?? null)
   return out
 }
-function coverUrl(row: Row): string | null {
-  if (!coverProp.value) return null
-  const files = cellValue(row, coverProp.value) as FileValue[] | undefined
-  const img = files?.find(f => /\.(png|jpe?g|gif|webp|avif|svg)(\?|$)/i.test(f.url) || f.url.startsWith('blob:') || f.url.startsWith('data:image'))
-  return img?.url ?? null
+const coverUrl = (row: Row) => (coverProp.value ? coverImage(cellValue(row, coverProp.value)) : null)
+const fit = computed(() => !!db.view.value?.config.fit_image)
+function newCard(e: MouseEvent) {
+  const id = db.source.createRow({})
+  db.openRow(id, e)
 }
 </script>
 
 <template>
-  <div ref="scroller" class="me-db-scroll me-db-gallery" :class="{ 'is-full': full }" :data-size="size">
+  <div ref="scroller" class="me-db-scroll me-db-gallery" :class="{ 'is-full': full, 'is-fit': fit }" :style="{ height: `${virtualizer.getTotalSize()}px` }" :data-size="size">
     <div class="me-db-virtual" :style="{ height: `${virtualizer.getTotalSize()}px` }">
       <div
         v-for="v in virtualizer.getVirtualItems()"
@@ -89,10 +93,14 @@ function coverUrl(row: Row): string | null {
         class="me-db-gallery-line"
         :style="{ transform: `translateY(${v.start}px)`, gridTemplateColumns: `repeat(${lanes}, ${cardW}px)` }"
       >
-        <template v-for="(row, i) in rowsOf(v.index)" :key="row?.id ?? `p${i}`">
-          <button v-if="row" type="button" class="me-db-card" :style="{ height: `${cardH}px` }" @click="db.source.openRow(row.id)">
+        <template v-for="(row, i) in rowsOf(v.index)" :key="row === 'add' ? 'add' : row?.id ?? `p${i}`">
+          <button v-if="row === 'add'" type="button" class="me-db-card is-new" :style="{ height: `${cardH}px` }" data-new-card @click="newCard($event)">
+            <Plus />{{ m.newRow }}
+          </button>
+          <button v-else-if="row" type="button" class="me-db-card" :data-row-id="row.id" :style="{ height: `${cardH}px` }" @click="db.openRow(row.id, $event)">
             <span v-if="coverProp" class="me-db-cover">
-              <img v-if="coverUrl(row)" :src="coverUrl(row)!" alt="" loading="lazy" class="me-db-cover-img">
+              <img v-if="coverUrl(row)" :src="coverUrl(row)!" alt="" loading="lazy" decoding="async" class="me-db-cover-img">
+              <ImageIcon v-else class="me-db-cover-empty" />
             </span>
             <span class="me-db-card-title">{{ title ? String(cellValue(row, title) ?? '') || m.untitled : m.untitled }}</span>
             <template v-for="p in shown" :key="p!.id">

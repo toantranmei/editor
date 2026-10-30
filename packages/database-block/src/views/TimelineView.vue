@@ -36,6 +36,8 @@ watch(scroller, (el) => {
   }
 })
 const dayW = computed(() => px.value[scale.value])
+/** Width of the title column ("Show table" off: no column, titles stay on the bars). */
+const labelW = computed(() => (c.value.show_table === false ? 0 : px.value.label))
 const span = computed(() => (scale.value === 'day' ? 60 : scale.value === 'week' ? 26 * 7 : 730))
 const origin = ref(new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate() - 14))
 const firstDay = computed(() => isoDay(origin.value))
@@ -116,13 +118,13 @@ function onPointerDown(e: PointerEvent, r: Row, mode: 'move' | 'start' | 'end') 
 function onPointerMove(e: PointerEvent) {
   if (drag.value) drag.value = { ...drag.value, dx: e.clientX - drag.value.x }
 }
-function onPointerUp(r: Row) {
+function onPointerUp(e: PointerEvent, r: Row) {
   const d = drag.value
   drag.value = null
   if (!d || d.id !== r.id) return
   const n = Math.round(d.dx / dayW.value)
   if (!n) {
-    if (Math.abs(d.dx) < 3) db.source.openRow(r.id)
+    if (Math.abs(d.dx) < 3) db.openRow(r.id, e)
     return
   }
   const sp = startProp.value!
@@ -165,31 +167,31 @@ const titleOf = (r: Row) => (title.value ? String(cellValue(r, title.value) ?? '
           <button v-for="s in (['day', 'week', 'month'] as const)" :key="s" type="button" class="me-db-tool" :class="{ 'is-on': scale === s }" :disabled="!db.canEditStructure.value" @click="db.updateView({ scale: s })">{{ m.scales[s] }}</button>
         </span>
       </div>
-      <div ref="scroller" class="me-db-scroll me-db-timeline-scroll" :style="{ '--me-db-timeline-width': `${width + px.label}px` }">
-        <div class="me-db-timeline-inner" :style="{ width: `${width + px.label}px`, height: `${virtualizer.getTotalSize() + px.row}px` }">
+      <div ref="scroller" class="me-db-scroll me-db-timeline-scroll" :style="{ '--me-db-timeline-width': `${width + labelW}px` }">
+        <div class="me-db-timeline-inner" :style="{ width: `${width + labelW}px`, height: `${virtualizer.getTotalSize() + px.row}px` }">
           <div class="me-db-timeline-header" :style="{ height: `${px.row}px` }">
-            <div class="me-db-timeline-label is-head" :style="{ width: `${px.label}px` }" />
-            <div class="me-db-timeline-ticks" :style="{ left: `${px.label}px`, width: `${width}px` }">
+            <div v-if="labelW" class="me-db-timeline-label is-head" :style="{ width: `${labelW}px` }" />
+            <div class="me-db-timeline-ticks" :style="{ left: `${labelW}px`, width: `${width}px` }">
               <span v-for="t in ticks" :key="t.left" class="me-db-timeline-tick" :class="{ 'is-major': t.major }" :style="{ left: `${t.left}px` }">{{ t.label }}</span>
             </div>
           </div>
-          <div class="me-db-timeline-today" :style="{ left: `${px.label + todayLeft}px` }" />
+          <div class="me-db-timeline-today" :style="{ left: `${labelW + todayLeft}px` }" />
           <div
             v-for="v in virtualizer.getVirtualItems()"
             :key="v.index"
             class="me-db-timeline-row"
             :style="{ transform: `translateY(${v.start}px)`, height: `${px.row}px` }"
           >
-            <button type="button" class="me-db-timeline-label" :style="{ width: `${px.label}px` }" @click="db.source.openRow(rows[v.index]!.id)">{{ titleOf(rows[v.index]!) }}</button>
+            <button v-if="labelW" type="button" class="me-db-timeline-label" :style="{ width: `${labelW}px` }" @click="db.openRow(rows[v.index]!.id, $event)">{{ titleOf(rows[v.index]!) }}</button>
             <div
               v-if="barStyle(rows[v.index]!)"
               class="me-db-bar"
               :class="{ 'is-dragging': drag?.id === rows[v.index]!.id }"
               :data-row-id="rows[v.index]!.id"
-              :style="{ ...barStyle(rows[v.index]!), marginLeft: `${px.label}px` }"
+              :style="{ ...barStyle(rows[v.index]!), marginLeft: `${labelW}px` }"
               @pointerdown="onPointerDown($event, rows[v.index]!, 'move')"
               @pointermove="onPointerMove"
-              @pointerup="onPointerUp(rows[v.index]!)"
+              @pointerup="onPointerUp($event, rows[v.index]!)"
             >
               <span class="me-db-bar-handle is-start" @pointerdown="onPointerDown($event, rows[v.index]!, 'start')" />
               <span class="me-db-bar-title">{{ titleOf(rows[v.index]!) }}</span>

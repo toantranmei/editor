@@ -11,7 +11,7 @@ import { useDb } from '../context'
 import { fmt } from '../messages'
 import type { Row } from '../types'
 import { useRowStore } from '../use-rows'
-import { cellValue, isEmptyValue, isReadOnly } from '../util'
+import { cellValue, coverImage, isEmptyValue, isReadOnly } from '../util'
 import { newOption, optionById } from '../values'
 
 defineProps<{ full?: boolean }>()
@@ -22,6 +22,15 @@ const groupProp = computed(() => db.props.value.find(p => p.id === db.view.value
 const title = computed(() => db.props.value.find(p => p.type === 'title'))
 const shown = computed(() => (db.view.value?.config.card?.props ?? []).map(id => db.props.value.find(p => p.id === id)).filter(p => !!p))
 const coverProp = computed(() => db.props.value.find(p => p.id === db.view.value?.config.card?.cover && p.type === 'files'))
+const config = computed(() => db.view.value?.config ?? {})
+const cardSize = computed(() => config.value.card?.size ?? 'm')
+const coverUrl = (row: Row) => (coverProp.value ? coverImage(cellValue(row, coverProp.value)) : null)
+/** Option color of a column (when "Color columns" is on). */
+const columnColor = (key: string | null | undefined) => {
+  if (!config.value.color_columns) return undefined
+  const c = optionOf(key)?.color
+  return c && c !== 'default' ? c : undefined
+}
 const PAGE = 50
 /** Cards loaded per column (grows with "Load more"). */
 const limits = ref<Record<string, number>>({})
@@ -87,14 +96,14 @@ function onDrop(e: DragEvent) {
   }
 }
 
-function newCard(seg: number) {
+function newCard(seg: number, e?: MouseEvent) {
   const p = groupProp.value
   const key = segments.value[seg]?.key
   const values: Record<string, unknown> = {}
   const v = valueFor(key)
   if (p && v !== undefined && v !== null) values[p.id] = v
   const id = db.source.createRow({ values })
-  db.source.openRow(id)
+  db.openRow(id, e)
 }
 
 // ── Add group (new option) ──
@@ -118,14 +127,15 @@ const loadMore = (key: string | null | undefined) => (limits.value = { ...limits
 </script>
 
 <template>
-  <div class="me-db-scroll me-db-board" :class="{ 'is-full': full }">
+  <div class="me-db-scroll me-db-board" :class="{ 'is-full': full, 'is-fit': !!config.fit_image }" :data-size="cardSize">
     <div v-if="!groupProp" class="me-db-empty">{{ m.groupBy }}</div>
     <div
       v-for="(s, i) in segments"
       v-else
       :key="String(s.key)"
       class="me-db-column"
-      :class="{ 'is-over': over?.seg === i }"
+      :class="{ 'is-over': over?.seg === i, 'is-colored': !!columnColor(s.key) }"
+      :data-color="columnColor(s.key)"
       :data-group="s.key ?? ''"
       @dragover="onDragOver($event, i, null)"
       @drop="onDrop"
@@ -134,7 +144,7 @@ const loadMore = (key: string | null | undefined) => (limits.value = { ...limits
         <span v-if="optionOf(s.key)" class="me-db-tag" :data-color="optionOf(s.key)!.color === 'default' ? undefined : optionOf(s.key)!.color">{{ s.label }}</span>
         <span v-else class="me-db-group-label">{{ s.label || fmt(m.noValue, { name: groupProp.name }) }}</span>
         <span class="me-db-group-count">{{ s.count }}</span>
-        <button v-if="db.canEditContent.value" type="button" class="me-db-icon-button" :aria-label="m.newRow" @click="newCard(i)"><Plus /></button>
+        <button v-if="db.canEditContent.value" type="button" class="me-db-icon-button" :aria-label="m.newRow" :title="m.newRow" @click="newCard(i, $event)"><Plus /></button>
       </div>
       <div class="me-db-column-cards">
         <button
@@ -148,10 +158,10 @@ const loadMore = (key: string | null | undefined) => (limits.value = { ...limits
           @dragstart="onDragStart($event, row, i)"
           @dragover="onDragOver($event, i, row.id)"
           @dragend="dragging = null; over = null"
-          @click="db.source.openRow(row.id)"
+          @click="db.openRow(row.id, $event)"
         >
-          <span v-if="coverProp && cellValue(row, coverProp)" class="me-db-cover">
-            <CellValue :prop="coverProp" :value="cellValue(row, coverProp)" compact />
+          <span v-if="coverProp && coverUrl(row)" class="me-db-cover">
+            <img :src="coverUrl(row)!" alt="" loading="lazy" decoding="async" class="me-db-cover-img">
           </span>
           <span class="me-db-card-title">{{ title ? String(cellValue(row, title) ?? '') || m.untitled : m.untitled }}</span>
           <template v-for="p in shown" :key="p!.id">
@@ -159,7 +169,7 @@ const loadMore = (key: string | null | undefined) => (limits.value = { ...limits
           </template>
         </button>
         <button v-if="s.count > limitOf(s.key)" type="button" class="me-db-text-button" @click="loadMore(s.key)">{{ m.loadMore }}</button>
-        <button v-if="db.canEditContent.value" type="button" class="me-db-new-row is-card" @click="newCard(i)"><Plus />{{ m.newRow }}</button>
+        <button v-if="db.canEditContent.value" type="button" class="me-db-new-row is-card" @click="newCard(i, $event)"><Plus />{{ m.newRow }}</button>
       </div>
     </div>
     <div v-if="canAddGroup" class="me-db-column is-add">
