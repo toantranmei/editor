@@ -159,6 +159,7 @@ export interface DatabaseMessages {
   wrapText: string
   wrapAll: string
   freezeColumn: string
+  freezeFirst: string
   unfreezeColumns: string
   insertLeft: string
   insertRight: string
@@ -357,6 +358,7 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     wrapText: 'Wrap text',
     wrapAll: 'Wrap all columns',
     freezeColumn: 'Freeze up to this column',
+    freezeFirst: 'Freeze first column',
     unfreezeColumns: 'Unfreeze columns',
     insertLeft: 'Insert left',
     insertRight: 'Insert right',
@@ -551,6 +553,7 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     wrapText: 'Xuống dòng',
     wrapAll: 'Xuống dòng mọi cột',
     freezeColumn: 'Cố định đến cột này',
+    freezeFirst: 'Cố định cột đầu',
     unfreezeColumns: 'Bỏ cố định cột',
     insertLeft: 'Chèn bên trái',
     insertRight: 'Chèn bên phải',
@@ -745,6 +748,7 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     wrapText: '自动换行',
     wrapAll: '所有列自动换行',
     freezeColumn: '冻结至此列',
+    freezeFirst: '冻结首列',
     unfreezeColumns: '取消冻结列',
     insertLeft: '在左侧插入',
     insertRight: '在右侧插入',

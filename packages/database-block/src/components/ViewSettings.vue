@@ -135,7 +135,7 @@ const value = (e: Event) => (e.target as HTMLSelectElement).value
           <input type="checkbox" class="me-db-switch" data-setting="wrap" :checked="!!c.wrap" :disabled="!editable" @change="set({ wrap: checked($event) || undefined, wraps: undefined })">
         </label>
         <label class="me-db-toggle-row">
-          <span>{{ m.freezeColumn }}</span>
+          <span>{{ m.freezeFirst }}</span>
           <input type="checkbox" class="me-db-switch" data-setting="freeze" :checked="(c.freeze ?? 1) > 0" :disabled="!editable" @change="set({ freeze: checked($event) ? undefined : 0 })">
         </label>
       </template>
