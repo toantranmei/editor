@@ -39,8 +39,8 @@ async function render() {
   }
   catch (e) {
     if (latest !== id) return
+    // The last good diagram stays while the code has a syntax error (e.g. mid-typing).
     error.value = e instanceof Error && /Failed to fetch|import/i.test(e.message) ? props.messages.mermaid.missing : props.messages.mermaid.invalid
-    svg.value = ''
   }
   finally {
     // Mermaid renders in temporary elements in <body> and leaves them there on a syntax error.
@@ -64,7 +64,7 @@ const label = computed(() => props.messages.mermaid.preview)
 <template>
   <div class="me-mermaid" contenteditable="false" :aria-label="label">
     <div v-if="svg" class="me-mermaid-svg" v-html="svg" />
-    <p v-else-if="error" class="me-error">
+    <p v-if="error" class="me-error">
       {{ error }}
     </p>
   </div>

@@ -48,4 +48,16 @@ describe('<MermaidDiagram> (KS-BUG-8)', () => {
     expect([...document.body.children].filter(el => el.id.startsWith('dme-mermaid'))).toHaveLength(0)
     for (const w of wrappers) w.unmount()
   })
+
+  it('keeps the last good diagram while the code has a syntax error, with the error shown', async () => {
+    const wrapper = mount(MermaidDiagram, { props: { code: 'flowchart LR\n  A --> B', messages, dark: false }, attachTo: document.body })
+    await vi.waitFor(() => expect(wrapper.find('svg').exists()).toBe(true), { timeout: 2000 })
+    await wrapper.setProps({ code: 'flowchart LR\n  A --> ???' })
+    await vi.waitFor(() => expect(wrapper.find('.me-error').exists()).toBe(true), { timeout: 2000 })
+    expect(wrapper.text()).toContain('A --> B')
+    await wrapper.setProps({ code: 'flowchart LR\n  A --> C' })
+    await vi.waitFor(() => expect(wrapper.find('.me-error').exists()).toBe(false), { timeout: 2000 })
+    expect(wrapper.text()).toContain('A --> C')
+    wrapper.unmount()
+  })
 })
