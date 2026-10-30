@@ -7,160 +7,372 @@ import { safeUrl } from '../safe-url'
  * Pasting Markdown as plain text (from a chat, a README, an LLM answer…) gives blocks instead of
  * one paragraph per line (KS-BUG-11): headings, bullet / numbered / task lists (nested by
  * indentation), quotes, fenced code, dividers, and inline bold, italic, strike, code and links.
- * Only plain-text pastes that contain a block-level Markdown construct are converted, never
- * inside a code block, and never when the clipboard also has HTML (that path keeps its format).
+ *
+ * Converted only when the text clearly is Markdown (`looksLikeMarkdown`), at most
+ * `MARKDOWN_PASTE_MAX` characters, never inside a code block, never for "paste as plain text"
+ * (Shift+Mod+V) and never when the clipboard also has HTML. The parsers are linear in the input
+ * (no backtracking regexes, bounded nesting), so a pasted text can't freeze the tab.
  */
 
-const BLOCK_MARKERS = /^(?: {0,3}#{1,6} \S| {0,3}(?:[-*+]|\d{1,9}[.)]) \S| {0,3}> | {0,3}(?:```|~~~)| {0,3}(?:-{3,}|\*{3,}|_{3,})\s*$)/m
+/** Longer plain-text pastes are never converted. */
+export const MARKDOWN_PASTE_MAX = 256 * 1024
+/** Deeper quote / list nesting is flattened to this depth. */
+const MAX_DEPTH = 8
 
-/** True when `text` has at least one Markdown block (heading, list, quote, code fence, divider). */
-export function looksLikeMarkdown(text: string): boolean {
-  return BLOCK_MARKERS.test(text)
+// ---------------------------------------------------------------------------------------------
+// Lines
+
+interface ListLine { indent: number, ordered: boolean, start: number, task: boolean | null, text: string }
+
+type Line =
+  | { kind: 'blank' }
+  | { kind: 'fence', marker: string, info: string }
+  | { kind: 'heading', level: number, text: string }
+  | { kind: 'hr' }
+  | { kind: 'quote' }
+  | { kind: 'list', item: ListLine }
+  | { kind: 'text' }
+
+const isSpace = (c: string | undefined) => c === ' ' || c === '\t'
+const isDigit = (c: string | undefined) => c !== undefined && c >= '0' && c <= '9'
+
+/** Indentation width (tab = 4) and the index of the first other character. */
+function indentOf(line: string): [indent: number, at: number] {
+  let indent = 0
+  let at = 0
+  while (at < line.length && isSpace(line[at])) indent += line[at++] === '\t' ? 4 : 1
+  return [indent, at]
 }
 
-type Inline = JSONContent[]
-type Mark = { type: string, attrs?: Record<string, unknown> }
+/** Heading text without the optional closing `#`s (`## Title ##`). */
+function headingText(rest: string): string {
+  let end = rest.length
+  while (end > 0 && isSpace(rest[end - 1])) end--
+  let hashes = end
+  while (hashes > 0 && rest[hashes - 1] === '#') hashes--
+  if (hashes < end && (hashes === 0 || isSpace(rest[hashes - 1]))) {
+    end = hashes
+    while (end > 0 && isSpace(rest[end - 1])) end--
+  }
+  return rest.slice(0, end)
+}
 
-/** Inline Markdown → text nodes with marks (bold, italic, strike, code, link). */
-export function parseInline(text: string, marks: Mark[] = []): Inline {
-  const out: Inline = []
-  const push = (t: string, m: Mark[]) => {
-    if (!t) return
-    const last = out.at(-1)
-    if (last && JSON.stringify(last.marks ?? []) === JSON.stringify(m)) last.text += t
-    else out.push(m.length ? { type: 'text', text: t, marks: m } : { type: 'text', text: t })
+function listItem(line: string, indent: number, at: number): ListLine | null {
+  let i = at
+  let ordered = false
+  let start = 1
+  if (line[i] === '-' || line[i] === '*' || line[i] === '+') {
+    i++
   }
-  const pattern = /`([^`]+)`|\*\*(.+?)\*\*|__(.+?)__|~~(.+?)~~|\*([^*\s][^*]*?)\*|(?<![\w])_([^_\s][^_]*?)_(?![\w])|\[([^\]]+)\]\(([^)\s]+)(?:\s+"[^"]*")?\)|\\([\\`*_~[\]()#>!-])/g
-  let at = 0
-  for (const m of text.matchAll(pattern)) {
-    push(text.slice(at, m.index), marks)
-    at = m.index! + m[0].length
-    if (m[1] !== undefined) push(m[1], [...marks, { type: 'code' }])
-    else if (m[2] !== undefined || m[3] !== undefined) out.push(...parseInline(m[2] ?? m[3]!, [...marks, { type: 'bold' }]))
-    else if (m[4] !== undefined) out.push(...parseInline(m[4], [...marks, { type: 'strike' }]))
-    else if (m[5] !== undefined || m[6] !== undefined) out.push(...parseInline(m[5] ?? m[6]!, [...marks, { type: 'italic' }]))
-    else if (m[7] !== undefined) {
-      const href = safeUrl(m[8])
-      out.push(...parseInline(m[7], href ? [...marks, { type: 'link', attrs: { href } }] : marks))
+  else {
+    const digits = i
+    while (i - digits < 4 && isDigit(line[i])) i++
+    // At most 3 digits: "2024. A great year" stays a sentence.
+    if (i === digits || i - digits > 3 || (line[i] !== '.' && line[i] !== ')')) return null
+    ordered = true
+    start = Number(line.slice(digits, i))
+    i++
+  }
+  if (!isSpace(line[i])) return null
+  while (isSpace(line[i])) i++
+  let task: boolean | null = null
+  if (!ordered && line[i] === '[' && line[i + 2] === ']' && isSpace(line[i + 3]) && ' xX'.includes(line[i + 1] ?? '-')) {
+    task = line[i + 1] !== ' '
+    i += 4
+    while (isSpace(line[i])) i++
+  }
+  const text = line.slice(i)
+  return text.trim() ? { indent, ordered, start, task, text } : null
+}
+
+function classify(line: string): Line {
+  const [indent, at] = indentOf(line)
+  if (at === line.length) return { kind: 'blank' }
+  const c = line[at]!
+  if (indent < 4) {
+    if ((c === '`' || c === '~') && line.startsWith(c.repeat(3), at)) {
+      let end = at
+      while (line[end] === c) end++
+      const info = line.slice(end).trim()
+      const space = info.search(/[ \t]/)
+      return { kind: 'fence', marker: line.slice(at, end), info: space === -1 ? info : info.slice(0, space) }
     }
-    else if (m[9] !== undefined) push(m[9], marks)
+    if (c === '#') {
+      let end = at
+      while (line[end] === '#' && end - at < 7) end++
+      const level = end - at
+      if (level <= 6 && isSpace(line[end])) {
+        const text = headingText(line.slice(end + 1))
+        if (text.trim()) return { kind: 'heading', level, text: text.trim() }
+      }
+    }
+    if (c === '-' || c === '*' || c === '_') {
+      let n = 0
+      let only = true
+      for (let i = at; i < line.length && only; i++) {
+        if (line[i] === c) n++
+        else if (!isSpace(line[i])) only = false
+      }
+      if (only && n >= 3) return { kind: 'hr' }
+    }
+    if (c === '>') return { kind: 'quote' }
   }
-  push(text.slice(at), marks)
+  const item = listItem(line, indent, at)
+  return item ? { kind: 'list', item } : { kind: 'text' }
+}
+
+const splitLines = (text: string) => text.replace(/\r\n?/g, '\n').split('\n')
+
+const closesFence = (line: Line, open: string) => line.kind === 'fence' && !line.info && line.marker[0] === open[0] && line.marker.length >= open.length
+
+/**
+ * True when `text` clearly is Markdown: a heading, a closed code fence, a task item, or two list
+ * items of the same kind in a row. A lone "- Alice" signature or "1) apples" is not enough.
+ */
+export function looksLikeMarkdown(text: string): boolean {
+  if (text.length > MARKDOWN_PASTE_MAX) return false
+  let openFence: string | null = null
+  let previousList: boolean | null = null // previous non-blank line was a list item: ordered?
+  for (const raw of splitLines(text)) {
+    const line = classify(raw)
+    if (openFence !== null) {
+      if (closesFence(line, openFence)) return true
+      continue
+    }
+    if (line.kind === 'blank') continue
+    if (line.kind === 'heading') return true
+    if (line.kind === 'fence') {
+      openFence = line.marker
+      continue
+    }
+    if (line.kind === 'list') {
+      if (line.item.task !== null || previousList === line.item.ordered) return true
+      previousList = line.item.ordered
+      continue
+    }
+    previousList = null
+  }
+  return false
+}
+
+// ---------------------------------------------------------------------------------------------
+// Inline
+
+type Mark = { type: string, attrs?: Record<string, unknown> }
+const OPEN_AFTER = '([{\'"'
+const CLOSE_BEFORE = '.,;:!?)]}\'"'
+const ESCAPABLE = '\\`*_~[]()#>!-'
+const isWs = (c: string | undefined) => c === undefined || c === ' ' || c === '\t' || c === '\n' || c === ' '
+const isWord = (c: string | undefined) => c !== undefined && /[\p{L}\p{N}_]/u.test(c)
+const EMPHASIS: [delimiter: string, mark: string][] = [['**', 'bold'], ['__', 'bold'], ['~~', 'strike'], ['*', 'italic'], ['_', 'italic']]
+
+/**
+ * Next match of `needle` at or after `from`, optionally passing `valid`. Queries for one key come
+ * in increasing `from` order, so the last answer is reused: the whole scan stays linear even
+ * with thousands of unmatched `[`, `` ` `` or `*`.
+ */
+function finder(text: string) {
+  const last = new Map<string, number>()
+  return (key: string, needle: string, from: number, valid?: (i: number) => boolean): number => {
+    const cached = last.get(key)
+    if (cached !== undefined && (cached === -1 || cached >= from)) return cached
+    let i = text.indexOf(needle, from)
+    while (i !== -1 && valid && !valid(i)) i = text.indexOf(needle, i + 1)
+    last.set(key, i)
+    return i
+  }
+}
+
+/** Inline Markdown → text nodes with marks (bold, italic, strike, code, link). Linear time. */
+export function parseInline(text: string, marks: Mark[] = [], inLink = false): JSONContent[] {
+  const out: JSONContent[] = []
+  let buf = ''
+  const flush = () => {
+    if (!buf) return
+    const last = out.at(-1)
+    if (last?.text !== undefined && JSON.stringify(last.marks ?? []) === JSON.stringify(marks)) last.text += buf
+    else out.push(marks.length ? { type: 'text', text: buf, marks } : { type: 'text', text: buf })
+    buf = ''
+  }
+  const next = finder(text)
+  // An emphasis closer follows a non-space and ends a word: `__init__.py`, `2*3*4` and
+  // `snake_case` stay text.
+  const closer = (len: number) => (i: number) => !isWs(text[i - 1]) && text[i - 1] !== text[i]
+    && (isWs(text[i + len]) || (CLOSE_BEFORE.includes(text[i + len]!) && !isWord(text[i + len + 1])))
+
+  let i = 0
+  while (i < text.length) {
+    const c = text[i]!
+    if (c === '\\' && ESCAPABLE.includes(text[i + 1] ?? '\0')) {
+      buf += text[i + 1]
+      i += 2
+      continue
+    }
+    if (c === '`') {
+      const end = next('`', '`', i + 1)
+      if (end > i + 1) {
+        flush()
+        out.push({ type: 'text', text: text.slice(i + 1, end), marks: [...marks, { type: 'code' }] })
+        i = end + 1
+        continue
+      }
+    }
+    if (c === '[' && !inLink) {
+      const close = next(']', ']', i + 1)
+      if (close > i + 1 && text[close + 1] === '(') {
+        const paren = next(')', ')', close + 2)
+        if (paren !== -1) {
+          const inside = text.slice(close + 2, paren).trim()
+          const space = inside.search(/\s/)
+          const url = space === -1 ? inside : inside.slice(0, space)
+          const title = space === -1 ? '' : inside.slice(space).trim()
+          if (url && (!title || (title.length > 1 && title[0] === '"' && title.at(-1) === '"' && !title.slice(1, -1).includes('"')))) {
+            flush()
+            const href = safeUrl(url)
+            out.push(...parseInline(text.slice(i + 1, close), href ? [...marks, { type: 'link', attrs: { href } }] : marks, true))
+            i = paren + 1
+            continue
+          }
+        }
+      }
+    }
+    if (c === '*' || c === '_' || c === '~') {
+      const delimiter = EMPHASIS.find(([d]) => text.startsWith(d, i))
+      // Opens at a word start, before a non-space.
+      if (delimiter && (i === 0 || isWs(text[i - 1]) || OPEN_AFTER.includes(text[i - 1]!)) && !isWs(text[i + delimiter[0].length])) {
+        const [d, type] = delimiter
+        const end = next(`em${d}`, d, i + d.length + 1, closer(d.length))
+        if (end !== -1) {
+          flush()
+          out.push(...parseInline(text.slice(i + d.length, end), [...marks, { type }], inLink))
+          i = end + d.length
+          continue
+        }
+      }
+      // Not a delimiter here: keep the whole run as text.
+      let j = i
+      while (text[j] === c) j++
+      buf += text.slice(i, j)
+      i = j
+      continue
+    }
+    buf += c
+    i++
+  }
+  flush()
   return out
 }
+
+// ---------------------------------------------------------------------------------------------
+// Blocks
 
 const paragraph = (text: string): JSONContent => {
   const content = parseInline(text)
   return content.length ? { type: 'paragraph', content } : { type: 'paragraph' }
 }
 
-interface ListLine { indent: number, ordered: boolean, start: number, task: boolean | null, text: string }
-const LIST = /^(\s*)([-*+]|(\d{1,9})[.)])\s+(?:\[( |x|X)\]\s+)?(.*)$/
-
-function listLine(line: string): ListLine | null {
-  const m = LIST.exec(line)
-  if (!m) return null
-  return {
-    indent: m[1]!.replace(/\t/g, '    ').length,
-    ordered: m[3] !== undefined,
-    start: m[3] ? Number(m[3]) : 1,
-    task: m[4] === undefined ? null : m[4] !== ' ',
-    text: m[5]!,
+/** Nested lists from consecutive list items, without recursion (nesting capped at MAX_DEPTH). */
+function buildList(items: ListLine[]): JSONContent[] {
+  const root: JSONContent[] = []
+  const stack: { indent: number, container: JSONContent[], list: JSONContent }[] = []
+  for (const line of items) {
+    while (stack.length && line.indent < stack.at(-1)!.indent) stack.pop()
+    const type = line.task !== null ? 'taskList' : line.ordered ? 'orderedList' : 'bulletList'
+    let top = stack.at(-1)
+    if (top && line.indent > top.indent && stack.length < MAX_DEPTH) {
+      const parent = top.list.content!.at(-1)!
+      const list: JSONContent = { type, content: [] }
+      parent.content!.push(list)
+      top = { indent: line.indent, container: parent.content!, list }
+      stack.push(top)
+    }
+    if (!top) {
+      const list: JSONContent = { type, content: [] }
+      root.push(list)
+      top = { indent: line.indent, container: root, list }
+      stack.push(top)
+    }
+    if (top.list.type !== type) {
+      top.list = { type, content: [] }
+      top.container.push(top.list)
+    }
+    if (type === 'orderedList' && !top.list.content!.length && line.start !== 1) top.list.attrs = { start: line.start }
+    const item: JSONContent = { type: type === 'taskList' ? 'taskItem' : 'listItem', content: [paragraph(line.text)] }
+    if (type === 'taskList') item.attrs = { checked: !!line.task }
+    top.list.content!.push(item)
   }
+  return root
 }
 
-/** Nested lists from consecutive list lines; deeper indentation nests under the previous item. */
-function buildList(lines: ListLine[]): JSONContent[] {
-  const lists: JSONContent[] = []
-  let i = 0
-  const level = (indent: number): JSONContent[] => {
-    const result: JSONContent[] = []
-    let list: JSONContent | null = null
-    while (i < lines.length && lines[i]!.indent >= indent) {
-      const line = lines[i]!
-      if (line.indent > indent && list) {
-        const last = list.content!.at(-1)!
-        last.content!.push(...level(line.indent))
-        continue
-      }
-      const type = line.task !== null ? 'taskList' : line.ordered ? 'orderedList' : 'bulletList'
-      if (!list || list.type !== type) {
-        list = { type, content: [] }
-        if (type === 'orderedList' && line.start !== 1) list.attrs = { start: line.start }
-        result.push(list)
-      }
-      const item: JSONContent = { type: type === 'taskList' ? 'taskItem' : 'listItem', content: [paragraph(line.text)] }
-      if (type === 'taskList') item.attrs = { checked: !!line.task }
-      list.content!.push(item)
-      i++
-    }
-    return result
-  }
-  while (i < lines.length) lists.push(...level(lines[i]!.indent))
-  return lists
+/** Removes one quote marker (`> `), or all of them (`>>> x` → `x`). */
+function unquote(line: string, all: boolean): string {
+  let at = indentOf(line)[1]
+  do {
+    at++ // the '>'
+    if (line[at] === ' ') at++
+    if (!all) break
+    while (isSpace(line[at])) at++
+  } while (line[at] === '>')
+  return line.slice(at)
 }
 
 /** Block Markdown → Tiptap JSON blocks (types are mapped to the schema by `fitToSchema`). */
-export function markdownToBlocks(markdown: string): JSONContent[] {
-  const lines = markdown.replace(/\r\n?/g, '\n').split('\n')
+export function markdownToBlocks(markdown: string, depth = 0): JSONContent[] {
+  const lines = splitLines(markdown)
+  const kinds = lines.map(classify)
   const blocks: JSONContent[] = []
-  let para: string[] = []
-  const flush = () => {
-    if (para.length) blocks.push(paragraph(para.join(' ')))
-    para = []
-  }
   for (let i = 0; i < lines.length;) {
-    const line = lines[i]!
-    const fence = /^ {0,3}(`{3,}|~{3,})\s*([\w+#.-]*)/.exec(line)
-    if (fence) {
-      flush()
+    const kind = kinds[i]!
+    if (kind.kind === 'fence') {
       const body: string[] = []
       i++
-      while (i < lines.length && !lines[i]!.trimStart().startsWith(fence[1]!)) body.push(lines[i++]!)
+      while (i < lines.length && !closesFence(kinds[i]!, kind.marker)) body.push(lines[i++]!)
       i++ // closing fence
       const text = body.join('\n')
-      blocks.push({ type: 'codeBlock', attrs: { language: fence[2] || null }, content: text ? [{ type: 'text', text }] : [] })
+      blocks.push({ type: 'codeBlock', attrs: { language: /^[\w+#.-]{1,32}$/.test(kind.info) ? kind.info : null }, content: text ? [{ type: 'text', text }] : [] })
       continue
     }
-    const heading = /^ {0,3}(#{1,6})\s+(.*?)\s*#*\s*$/.exec(line)
-    if (heading) {
-      flush()
-      const content = parseInline(heading[2]!)
-      blocks.push({ type: 'heading', attrs: { level: Math.min(3, heading[1]!.length) }, ...(content.length ? { content } : {}) })
+    if (kind.kind === 'heading') {
+      const content = parseInline(kind.text)
+      blocks.push({ type: 'heading', attrs: { level: Math.min(3, kind.level) }, ...(content.length ? { content } : {}) })
       i++
       continue
     }
-    if (/^ {0,3}(?:-{3,}|\*{3,}|_{3,})\s*$/.test(line)) {
-      flush()
+    if (kind.kind === 'hr') {
       blocks.push({ type: 'horizontalRule' })
       i++
       continue
     }
-    if (/^ {0,3}>/.test(line)) {
-      flush()
+    if (kind.kind === 'quote') {
       const quoted: string[] = []
-      while (i < lines.length && /^ {0,3}>/.test(lines[i]!)) quoted.push(lines[i++]!.replace(/^ {0,3}> ?/, ''))
-      blocks.push({ type: 'blockquote', content: markdownToBlocks(quoted.join('\n')) })
+      const flatten = depth + 1 >= MAX_DEPTH
+      while (i < lines.length && kinds[i]!.kind === 'quote') quoted.push(unquote(lines[i++]!, flatten))
+      const content = flatten ? quoted.filter(l => l.trim()).map(l => paragraph(l.trim())) : markdownToBlocks(quoted.join('\n'), depth + 1)
+      blocks.push({ type: 'blockquote', content: content.length ? content : [{ type: 'paragraph' }] })
       continue
     }
-    if (listLine(line) && (/^\s{0,3}\S/.test(line) || !para.length)) {
-      flush()
-      const items: ListLine[] = []
-      while (i < lines.length) {
-        const item = listLine(lines[i]!)
-        if (item) items.push(item)
-        else if (lines[i]!.trim() && items.length && /^\s+\S/.test(lines[i]!)) items.at(-1)!.text += ` ${lines[i]!.trim()}`
-        else break
-        i++
+    if (kind.kind === 'list') {
+      // A lone numbered line not starting at 1 ("7) and so on") stays a paragraph.
+      const following = kinds[i + 1]
+      const lone = kind.item.ordered && kind.item.start !== 1 && !(following?.kind === 'list' && following.item.ordered)
+      if (!lone) {
+        const items: ListLine[] = []
+        while (i < lines.length) {
+          const k = kinds[i]!
+          if (k.kind === 'list') items.push(k.item)
+          else if (k.kind === 'blank' && items.length && kinds[i + 1]?.kind === 'list') { /* loose list */ }
+          else if (k.kind === 'text' && items.length && isSpace(lines[i]![0])) items.at(-1)!.text += ` ${lines[i]!.trim()}`
+          else break
+          i++
+        }
+        blocks.push(...buildList(items))
+        continue
       }
-      blocks.push(...buildList(items))
-      continue
     }
-    if (!line.trim()) flush()
-    else para.push(line.trim())
+    // Text: one paragraph per line, like a plain-text paste (line breaks are kept).
+    if (kind.kind !== 'blank') blocks.push(paragraph(lines[i]!.trim()))
     i++
   }
-  flush()
   return blocks
 }
 
@@ -181,7 +393,17 @@ export function fitToSchema(node: JSONContent, schema: Schema): JSONContent {
   return out
 }
 
-const textOf = (node: JSONContent): string => node.text ?? (node.content ?? []).map(textOf).join(' ')
+/** All text in a node, without recursion. */
+function textOf(node: JSONContent): string {
+  const parts: string[] = []
+  const stack: JSONContent[] = [node]
+  while (stack.length) {
+    const n = stack.pop()!
+    if (n.text) parts.push(n.text)
+    if (n.content) for (let i = n.content.length - 1; i >= 0; i--) stack.push(n.content[i]!)
+  }
+  return parts.join(' ')
+}
 
 export const MarkdownPaste = Extension.create({
   name: 'markdownPaste',
@@ -193,12 +415,18 @@ export const MarkdownPaste = Extension.create({
         handlePaste: (view, event) => {
           const data = event.clipboardData
           const text = data?.getData('text/plain')
-          if (!text || data!.getData('text/html') || !looksLikeMarkdown(text)) return false
-          const { $from } = view.state.selection
-          if ($from.parent.type.spec.code) return false
+          if (!text || data!.getData('text/html')) return false
+          // Shift+Mod+V, "paste as plain text": ProseMirror tracks Shift for its own plain paste.
+          if ((view as unknown as { input?: { shiftKey?: boolean } }).input?.shiftKey) return false
+          if (view.state.selection.$from.parent.type.spec.code) return false
+          if (!looksLikeMarkdown(text)) return false
           const blocks = markdownToBlocks(text).map(b => fitToSchema(b, view.state.schema))
           if (!blocks.length) return false
-          return editor.commands.insertContent(blocks)
+          // Marked as a paste so paste rules run like on a normal paste (bare URLs become links).
+          return editor.chain().command(({ tr }) => {
+            tr.setMeta('uiEvent', 'paste')
+            return true
+          }).insertContent(blocks).run()
         },
       },
     })]

@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { createExtensions } from '../src/extensions'
 import { defaultBlocks } from '../src/blocks'
 import { text } from '../src/blocks/basic'
-import { looksLikeMarkdown, markdownToBlocks, parseInline } from '../src/extensions/markdown-paste'
+import { looksLikeMarkdown, MARKDOWN_PASTE_MAX, markdownToBlocks, parseInline } from '../src/extensions/markdown-paste'
 
 const editors: Editor[] = []
 afterEach(() => {
@@ -17,7 +17,8 @@ function editor(blocks = [text, ...defaultBlocks]) {
 }
 
 /** A real paste event through ProseMirror's handlePaste props. */
-function paste(e: Editor, plain: string, html = '') {
+function paste(e: Editor, plain: string, html = '', shift = false) {
+  ;(e.view as unknown as { input: { shiftKey: boolean } }).input.shiftKey = shift
   const event = new Event('paste') as ClipboardEvent
   Object.defineProperty(event, 'clipboardData', { value: { getData: (type: string) => (type === 'text/plain' ? plain : type === 'text/html' ? html : '') } })
   return e.view.someProp('handlePaste', f => f(e.view, event, e.state.doc.slice(0, 0))) ?? false
@@ -43,13 +44,13 @@ describe('markdown paste (KS-BUG-11)', () => {
   })
 
   it('nested, numbered and task lists, quotes, dividers, links', () => {
-    const blocks = markdownToBlocks('1. one\n2. two\n   - nested\n\n5) five\n\n- [x] done\n- [ ] todo\n\n> quoted **b**\n\n---\n\n[site](https://example.com) and [bad](javascript:alert(1))')
-    expect(blocks.map(b => b.type)).toEqual(['orderedList', 'orderedList', 'taskList', 'blockquote', 'horizontalRule', 'paragraph'])
+    const blocks = markdownToBlocks('1. one\n2. two\n   - nested\n\nbetween\n\n5) five\n6) six\n\n- [x] done\n- [ ] todo\n\n> quoted **b**\n\n---\n\n[site](https://example.com) and [bad](javascript:alert(1))')
+    expect(blocks.map(b => b.type)).toEqual(['orderedList', 'paragraph', 'orderedList', 'taskList', 'blockquote', 'horizontalRule', 'paragraph'])
     expect(blocks[0]!.content![1]!.content![1]).toMatchObject({ type: 'bulletList', content: [{ type: 'listItem' }] })
-    expect(blocks[1]!.attrs).toEqual({ start: 5 })
-    expect(blocks[2]!.content!.map(i => i.attrs!.checked)).toEqual([true, false])
-    expect(blocks[3]!.content![0]!.content![1]).toEqual({ type: 'text', text: 'b', marks: [{ type: 'bold' }] })
-    const links = blocks[5]!.content!
+    expect(blocks[2]!.attrs).toEqual({ start: 5 })
+    expect(blocks[3]!.content!.map(i => i.attrs!.checked)).toEqual([true, false])
+    expect(blocks[4]!.content![0]!.content![1]).toEqual({ type: 'text', text: 'b', marks: [{ type: 'bold' }] })
+    const links = blocks[6]!.content!
     expect(links[0]).toEqual({ type: 'text', text: 'site', marks: [{ type: 'link', attrs: { href: 'https://example.com' } }] })
     expect(links.some(n => JSON.stringify(n).includes('javascript'))).toBe(false)
   })
@@ -78,5 +79,73 @@ describe('markdown paste (KS-BUG-11)', () => {
     expect(paste(e, '# Title\n\n- a\n- [ ] b')).toBe(true)
     expect(e.getJSON().content!.every(n => n.type === 'paragraph')).toBe(true)
     expect(e.getText()).toContain('Title')
+  })
+
+  it('needs clear Markdown: a lone list line or a numbered sentence keeps the plain paste', () => {
+    for (const plain of ['Dear Bob,\nthanks.\n- Alice', '2024. A great year\nWe did - things', 'Totals:\n1) apples', '#hashtag is fun', '> just one quoted line', '---'])
+      expect(looksLikeMarkdown(plain), plain).toBe(false)
+    for (const md of ['# Title', '- a\n- b', '1. a\n2. b', '- [ ] todo', '```\ncode\n```'])
+      expect(looksLikeMarkdown(md), md).toBe(true)
+    // An unclosed fence or an indented "#" isn't enough either.
+    expect(looksLikeMarkdown('```\nnot closed')).toBe(false)
+    expect(looksLikeMarkdown('    # code')).toBe(false)
+  })
+
+  it('keeps line breaks of text lines and does not turn "2024." into a list', () => {
+    const blocks = markdownToBlocks('# T\nDear Bob,\nthanks.\n2024. A great year\n7) and so on')
+    expect(blocks.map(b => b.type)).toEqual(['heading', 'paragraph', 'paragraph', 'paragraph', 'paragraph'])
+    expect(blocks.slice(1).map(b => b.content![0]!.text)).toEqual(['Dear Bob,', 'thanks.', '2024. A great year', '7) and so on'])
+  })
+
+  it('no emphasis inside words', () => {
+    for (const plain of ['__init__.py', '2*3*4', 'snake_case_name', 'a_b_', 'file__name__x'])
+      expect(parseInline(plain), plain).toEqual([{ type: 'text', text: plain }])
+    expect(parseInline('(**b**), _i_.')).toEqual([
+      { type: 'text', text: '(' },
+      { type: 'text', text: 'b', marks: [{ type: 'bold' }] },
+      { type: 'text', text: '), ' },
+      { type: 'text', text: 'i', marks: [{ type: 'italic' }] },
+      { type: 'text', text: '.' },
+    ])
+  })
+
+  it('Shift+Mod+V (paste as plain text) is never converted', () => {
+    const e = editor()
+    expect(paste(e, SAMPLE, '', true)).toBe(false)
+  })
+
+  it('runs paste rules on the converted content (bare URLs become links)', () => {
+    const e = editor()
+    expect(paste(e, '- see https://example.com/a\n- two')).toBe(true)
+    expect(JSON.stringify(e.getJSON())).toContain('"href":"https://example.com/a"')
+  })
+
+  it('stays fast on adversarial input (linear parsers, bounded nesting)', () => {
+    const size = 200_000
+    const inputs = {
+      'heading spaces': `# a${' '.repeat(size)}b`,
+      'heading hashes': `# a${' #'.repeat(size / 2)}b`,
+      'open brackets': `${'['.repeat(size)}]`,
+      'link starts': '[a]('.repeat(size / 4),
+      'link titles': '[x](a "'.repeat(size / 7),
+      'stars': '*x '.repeat(size / 3),
+      'underscores': '__a '.repeat(size / 4),
+      'tildes': '~~a '.repeat(size / 4),
+      'backticks': '`a '.repeat(size / 3),
+      'deep quote': `${'>'.repeat(size)} x`,
+      'deep list': Array.from({ length: 2000 }, (_, i) => `${' '.repeat(i)}- x`).join('\n'),
+      'list spaces': `${' '.repeat(size / 2)}-${' '.repeat(size / 2)}x`,
+      'prose': (`${'lorem ipsum dolor sit amet '.repeat(3)}\n`).repeat(size / 82),
+    }
+    for (const [name, input] of Object.entries(inputs)) {
+      const start = performance.now()
+      looksLikeMarkdown(input)
+      markdownToBlocks(input)
+      expect(performance.now() - start, name).toBeLessThan(200)
+    }
+  })
+
+  it('very long pastes stay plain', () => {
+    expect(looksLikeMarkdown(`# big\n${'x'.repeat(MARKDOWN_PASTE_MAX)}`)).toBe(false)
   })
 })
