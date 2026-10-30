@@ -101,8 +101,10 @@ export function indentCode(editor: Editor, type: NodeType, direction: 1 | -1): b
   // Start offsets of the lines touched by the selection.
   const from = $from.parentOffset
   const to = $to.parentOffset
-  const lines: number[] = [text.lastIndexOf('\n', from - 1) + 1]
-  for (let i = text.indexOf('\n', from); i !== -1 && i < to; i = text.indexOf('\n', i + 1)) lines.push(i + 1)
+  // (lastIndexOf with -1 would look at index 0.) A selection ending right at a line start
+  // doesn't touch that line.
+  const lines: number[] = [from === 0 ? 0 : text.lastIndexOf('\n', from - 1) + 1]
+  for (let i = text.indexOf('\n', from); i !== -1 && i + 1 < to; i = text.indexOf('\n', i + 1)) lines.push(i + 1)
   // Right to left, so earlier positions stay valid.
   for (const line of lines.reverse()) {
     if (direction === 1) {

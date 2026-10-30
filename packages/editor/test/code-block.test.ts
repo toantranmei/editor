@@ -86,4 +86,18 @@ describe('Tab in a code block (KS-BUG-5)', () => {
     e.commands.setTextSelection(2)
     expect(press(e, 'Tab')).toBe(false)
   })
+
+  it('a block starting with a newline, selection at offset 0, indents only the first (empty) line', () => {
+    const e = editor({ type: 'doc', content: [code('\nb')] })
+    e.commands.setTextSelection({ from: 1, to: 2 }) // the leading newline
+    expect(press(e, 'Tab')).toBe(true)
+    expect(codeText(e)).toBe(`${CODE_INDENT}\nb`)
+  })
+
+  it('a selection ending at the start of a line does not indent that line', () => {
+    const e = editor({ type: 'doc', content: [code('a\nb\nc')] })
+    e.commands.setTextSelection({ from: 1, to: 1 + 'a\nb\n'.length })
+    expect(press(e, 'Tab')).toBe(true)
+    expect(codeText(e)).toBe(`${CODE_INDENT}a\n${CODE_INDENT}b\nc`)
+  })
 })
