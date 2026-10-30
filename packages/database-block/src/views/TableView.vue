@@ -214,9 +214,17 @@ watch(rendered, (list) => {
   if (pendingEdit.value) {
     const hit = list.find(r => r.row?.id === pendingEdit.value)
     if (hit) {
+      const { text, enter } = typedAhead
+      stopTypeAhead()
       pendingEdit.value = null
       sel.value = { anchor: { row: hit.v.index, col: 0 }, focus: { row: hit.v.index, col: 0 } }
-      nextTick(() => startEdit(null))
+      const title = cols.value[0]
+      // Enter typed before the row showed up: commit what was typed, like a finished edit.
+      if (enter && text && title && hit.row) {
+        db.source.setCell(hit.row.id, title.id, text)
+        focusGrid()
+      }
+      else nextTick(() => startEdit(text || null))
     }
   }
 })
@@ -467,21 +475,51 @@ function newRow(seg?: number, top = false) {
   const last = !top && !store.value?.grouped && !db.view.value?.config.sorts?.length && itemCount.value ? rowOfItem(itemCount.value - 1)?.id : undefined
   const id = db.source.createRow(top ? { values, after: null } : last ? { values, after: last } : { values })
   pendingEdit.value = id
+  startTypeAhead()
   clearTimeout(pendingTimer)
   pendingTimer = setTimeout(() => {
-    if (pendingEdit.value === id) pendingEdit.value = null
+    if (pendingEdit.value === id) {
+      pendingEdit.value = null
+      stopTypeAhead()
+    }
   }, 5000)
   if (top) rowVirtualizer.value.scrollToIndex(0, { align: 'start' })
   else followEnd()
 }
 let pendingTimer: ReturnType<typeof setTimeout> | undefined
+/**
+ * Keys typed between "+ New" and the row showing up (worker round trip) would otherwise be lost: buffer them and
+ * hand them to the title editor once it opens (Enter commits them directly).
+ */
+let typedAhead = { text: '', enter: false }
+function onTypeAhead(e: KeyboardEvent) {
+  if (e.isComposing || e.metaKey || e.ctrlKey || e.altKey) return
+  if (e.key === 'Escape') return stopTypeAhead()
+  if (e.key === 'Enter') typedAhead.enter = true
+  else if (e.key === 'Backspace') typedAhead.text = typedAhead.text.slice(0, -1)
+  else if (e.key.length === 1 && !typedAhead.enter) typedAhead.text += e.key
+  else return
+  e.preventDefault()
+  e.stopPropagation()
+}
+function startTypeAhead() {
+  stopTypeAhead()
+  window.addEventListener('keydown', onTypeAhead, true)
+}
+function stopTypeAhead() {
+  typedAhead = { text: '', enter: false }
+  window.removeEventListener('keydown', onTypeAhead, true)
+}
 /** While a new row is pending in an unsorted, ungrouped table, keep the end in view (it lands there). */
 function followEnd() {
   if (!pendingEdit.value || store.value?.grouped || db.view.value?.config.sorts?.length) return
   nextTick(() => rowVirtualizer.value.scrollToIndex(Math.max(0, itemCount.value - 1), { align: 'end' }))
 }
 watch(itemCount, followEnd)
-onBeforeUnmount(() => clearTimeout(pendingTimer))
+onBeforeUnmount(() => {
+  clearTimeout(pendingTimer)
+  stopTypeAhead()
+})
 function deleteChecked() {
   if (!db.canEditContent.value || !checked.value.size) return
   db.source.deleteRows([...checked.value])
