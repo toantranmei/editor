@@ -107,7 +107,7 @@
     "@tiptap/starter-kit": "3.32.0",
     "@tiptap/suggestion": "3.32.0",
     "@tiptap/vue-3": "3.32.0",
-    "@tiptap/y-tiptap": "^3.0.11",
+    "@tiptap/y-tiptap": "3.0.11",
     "emojibase-data": "^18.0.0",
     "highlight.js": "^11.11.0",
     "lowlight": "^3.3.0",
