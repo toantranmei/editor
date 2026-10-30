@@ -1,25 +1,41 @@
 <script setup lang="ts">
-/** Column header menu: rename, edit property, change type (warns when lossy), hide, sort, filter, delete. */
-import { ArrowDown, ArrowUp, ChevronRight, EyeOff, ListFilter, Settings2, Trash2, TriangleAlert } from '@lucide/vue'
+/**
+ * Column header menu: rename, edit property, change type (warns when lossy), sort, filter, hide, wrap text, freeze,
+ * insert left / right, duplicate, delete. Table-only items (wrap, freeze, insert) show when `column` is given.
+ */
+import {
+  ArrowDown, ArrowUp, BetweenVerticalEnd, Check, BetweenVerticalStart, ChevronRight, Copy, EyeOff, ListFilter, Settings2,
+  Snowflake, Trash2, TriangleAlert, WrapText,
+} from '@lucide/vue'
 import { computed, ref } from 'vue'
 import { useDb } from '../context'
 import { defaultCondition, groupItems, groupMode, makeGroup } from '../filters'
 import { fmt } from '../messages'
 import type { Prop, PropType } from '../types'
-import { CREATABLE_TYPES, visibleIds } from '../util'
+import { clone, CREATABLE_TYPES, placeColumn, positionAfter, uuidv7, visibleIds } from '../util'
 import { isLossyChange } from '../values'
 import DbPopover from './DbPopover.vue'
 import PropertyEditor from './PropertyEditor.vue'
 import PropIcon from './PropIcon.vue'
 
-const props = defineProps<{ prop: Prop, anchor: HTMLElement | null }>()
+const props = defineProps<{
+  prop: Prop
+  anchor: HTMLElement | null
+  /** Table column index (0 = title): enables wrap, freeze and insert left / right. */
+  column?: number | null
+}>()
 const emit = defineEmits<{ close: [] }>()
 const db = useDb()
 const m = computed(() => db.m.value)
 const structure = computed(() => db.canEditStructure.value)
 const isTitle = computed(() => props.prop.type === 'title')
 const name = ref(props.prop.name)
-const panel = ref<'menu' | 'types' | 'confirmType' | 'confirmDelete' | 'edit'>('menu')
+const panel = ref<'menu' | 'types' | 'confirmType' | 'confirmDelete' | 'edit' | 'insert'>('menu')
+const insertSide = ref<'left' | 'right'>('right')
+const isTable = computed(() => props.column !== null && props.column !== undefined)
+const config = computed(() => db.view.value?.config ?? {})
+const wrapped = computed(() => config.value.wraps?.[props.prop.id] ?? !!config.value.wrap)
+const frozenHere = computed(() => isTable.value && (config.value.freeze ?? 1) === props.column! + 1)
 const pendingType = ref<PropType | null>(null)
 const root = ref<HTMLElement | null>(null)
 
@@ -45,6 +61,34 @@ function hide() {
   db.updateView({ visible: visibleIds(view, db.props.value).filter(id => id !== props.prop.id && db.props.value.find(p => p.id === id)?.type !== 'title') })
   emit('close')
 }
+function toggleWrap() {
+  const next = !wrapped.value
+  db.updateView(c => ({ ...c, wraps: { ...c.wraps, [props.prop.id]: next } }))
+  emit('close')
+}
+function freeze() {
+  db.updateView({ freeze: frozenHere.value ? 0 : props.column! + 1 })
+  emit('close')
+}
+function insert(side: 'left' | 'right') {
+  insertSide.value = side
+  panel.value = 'insert'
+}
+function duplicate() {
+  const all = db.props.value
+  const copy: Prop = {
+    ...clone(props.prop),
+    id: uuidv7(),
+    name: fmt(m.value.copyOf, { name: props.prop.name }),
+    // There is one title property: its copy is a text property.
+    type: props.prop.type === 'title' ? 'text' : props.prop.type,
+    position: positionAfter(all[all.length - 1]?.position),
+  }
+  db.source.upsertProp(copy)
+  const view = db.view.value
+  if (view) db.updateView({ visible: placeColumn(view, all, copy.id, props.prop.id, 'right') })
+  emit('close')
+}
 function chooseType(t: PropType) {
   if (t === props.prop.type) return emit('close')
   pendingType.value = t
@@ -67,7 +111,7 @@ function remove() {
 </script>
 
 <template>
-  <DbPopover v-if="panel !== 'edit'" :anchor="anchor" :scope="db.scope.value" :label="prop.name" @close="rename(); emit('close')">
+  <DbPopover v-if="panel !== 'edit' && panel !== 'insert'" :anchor="anchor" :scope="db.scope.value" :label="prop.name" @close="rename(); emit('close')">
     <div ref="root" class="me-menu me-db-menu" role="menu">
       <template v-if="panel === 'menu'">
         <input v-model="name" class="me-input" :readonly="!structure" :aria-label="m.rename" @keydown.enter.prevent="rename(); emit('close')" @blur="rename">
@@ -80,8 +124,25 @@ function remove() {
         <button type="button" class="me-menu-item" role="menuitem" @click="sort('asc')"><ArrowUp class="me-db-menu-icon" />{{ m.sortAscending }}</button>
         <button type="button" class="me-menu-item" role="menuitem" @click="sort('desc')"><ArrowDown class="me-db-menu-icon" />{{ m.sortDescending }}</button>
         <button v-if="prop.type !== 'files'" type="button" class="me-menu-item" role="menuitem" @click="filter"><ListFilter class="me-db-menu-icon" />{{ m.filterBy }}</button>
-        <button v-if="!isTitle" type="button" class="me-menu-item" role="menuitem" @click="hide"><EyeOff class="me-db-menu-icon" />{{ m.hide }}</button>
-        <button v-if="structure && !isTitle" type="button" class="me-menu-item is-danger" role="menuitem" @click="panel = 'confirmDelete'"><Trash2 class="me-db-menu-icon" />{{ m.deleteProperty }}</button>
+        <div class="me-db-separator" role="separator" />
+        <button v-if="!isTitle" type="button" class="me-menu-item" role="menuitem" data-action="hide" @click="hide"><EyeOff class="me-db-menu-icon" />{{ m.hide }}</button>
+        <template v-if="isTable">
+          <button type="button" class="me-menu-item" role="menuitemcheckbox" :aria-checked="wrapped" data-action="wrap" @click="toggleWrap">
+            <WrapText class="me-db-menu-icon" /><span class="me-menu-title">{{ m.wrapText }}</span><span class="me-db-menu-end me-db-check-slot"><Check v-if="wrapped" /></span>
+          </button>
+          <button type="button" class="me-menu-item" role="menuitem" data-action="freeze" @click="freeze">
+            <Snowflake class="me-db-menu-icon" />{{ frozenHere ? m.unfreezeColumns : m.freezeColumn }}
+          </button>
+        </template>
+        <template v-if="structure">
+          <div class="me-db-separator" role="separator" />
+          <template v-if="isTable">
+            <button v-if="!isTitle" type="button" class="me-menu-item" role="menuitem" data-action="insert-left" @click="insert('left')"><BetweenVerticalStart class="me-db-menu-icon" />{{ m.insertLeft }}</button>
+            <button type="button" class="me-menu-item" role="menuitem" data-action="insert-right" @click="insert('right')"><BetweenVerticalEnd class="me-db-menu-icon" />{{ m.insertRight }}</button>
+          </template>
+          <button type="button" class="me-menu-item" role="menuitem" data-action="duplicate" @click="duplicate"><Copy class="me-db-menu-icon" />{{ m.duplicateProperty }}</button>
+          <button v-if="!isTitle" type="button" class="me-menu-item is-danger" role="menuitem" data-action="delete" @click="panel = 'confirmDelete'"><Trash2 class="me-db-menu-icon" />{{ m.deleteProperty }}</button>
+        </template>
       </template>
 
       <template v-else-if="panel === 'types'">
@@ -118,5 +179,6 @@ function remove() {
       </div>
     </div>
   </DbPopover>
+  <PropertyEditor v-else-if="panel === 'insert'" :anchor="anchor" :place="{ next: prop.id, side: insertSide }" @close="emit('close')" />
   <PropertyEditor v-else :anchor="anchor" :prop="prop" @close="emit('close')" />
 </template>

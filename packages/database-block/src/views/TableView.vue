@@ -4,7 +4,7 @@
  * Only the rows in view (+ overscan) are requested from the source, in chunk-aligned windows (`RowStore`).
  * Rows have a fixed height and move with `transform`, so scrolling never triggers layout of off-screen rows.
  */
-import { ChevronDown, ChevronRight, GripVertical, Maximize2, Plus } from '@lucide/vue'
+import { ChevronDown, ChevronRight, GripVertical, Plus, Trash2, X } from '@lucide/vue'
 import { type ColumnDef, type ColumnSizingState, getCoreRowModel, useVueTable } from '@tanstack/vue-table'
 import { useVirtualizer } from '@tanstack/vue-virtual'
 import { componentTokens } from '@toantranmei/editor'
@@ -13,6 +13,7 @@ import { aggregatesFor, formatAggregate } from '../aggregates'
 import CellEditor from '../components/CellEditor.vue'
 import CellValue from '../components/CellValue.vue'
 import DbPopover from '../components/DbPopover.vue'
+import OpenModeIcon from '../components/OpenModeIcon.vue'
 import PropertyEditor from '../components/PropertyEditor.vue'
 import PropertyMenu from '../components/PropertyMenu.vue'
 import PropIcon from '../components/PropIcon.vue'
@@ -83,16 +84,39 @@ const leaf = computed(() => {
   return table.getVisibleLeafColumns()
 })
 const widthOf = (i: number) => leaf.value[i]?.getSize() ?? sizes.value.def
-const firstWidth = computed(() => widthOf(0))
-/** Starts of the scrollable columns (all but the sticky first one). */
+/** Leading columns kept in view while scrolling sideways (`config.freeze`, default 1: the title). */
+const frozen = computed(() => Math.max(0, Math.min(db.view.value?.config.freeze ?? 1, leaf.value.length)))
+/** `left` of each frozen column (sticky), after the gutter. */
+const frozenLefts = computed(() => {
+  const out: number[] = []
+  let x = gutter.value
+  for (let i = 0; i < frozen.value; i++) {
+    out.push(x)
+    x += widthOf(i)
+  }
+  return out
+})
+const frozenWidth = computed(() => {
+  let w = 0
+  for (let i = 0; i < frozen.value; i++) w += widthOf(i)
+  return w
+})
+/** Starts of the scrollable columns (all but the frozen ones). */
 const restStarts = computed(() => {
   const out: number[] = [0]
-  for (let i = 1; i < leaf.value.length; i++) out.push(out[out.length - 1]! + widthOf(i))
+  for (let i = frozen.value; i < leaf.value.length; i++) out.push(out[out.length - 1]! + widthOf(i))
   return out
 })
 const restWidth = computed(() => restStarts.value[restStarts.value.length - 1]!)
 const addColWidth = computed(() => sizes.value.def / 2)
-const totalWidth = computed(() => gutter.value + firstWidth.value + restWidth.value + addColWidth.value)
+const totalWidth = computed(() => gutter.value + frozenWidth.value + restWidth.value + addColWidth.value)
+
+// ── Text wrapping (per column, `config.wraps` over `config.wrap`): rows then grow and are measured ──
+const wraps = computed(() => {
+  const c = db.view.value?.config
+  return cols.value.map(p => c?.wraps?.[p.id] ?? !!c?.wrap)
+})
+const anyWrap = computed(() => wraps.value.some(Boolean))
 
 // Persist widths when a resize ends.
 const resizing = computed(() => table.getState().columnSizingInfo.isResizingColumn)
@@ -123,24 +147,45 @@ const rowVirtualizer = useVirtualizer(computed(() => ({
 })))
 const colVirtualizer = useVirtualizer(computed(() => ({
   horizontal: true,
-  count: Math.max(0, leaf.value.length - 1),
+  count: Math.max(0, leaf.value.length - frozen.value),
   getScrollElement: () => scroller.value,
-  estimateSize: (i: number) => widthOf(i + 1),
+  estimateSize: (i: number) => widthOf(i + frozen.value),
   overscan: 3,
-  scrollMargin: gutter.value + firstWidth.value,
+  scrollMargin: gutter.value + frozenWidth.value,
   observeElementRect: observeRect,
   initialRect: { width: 1200, height: 520 },
 })))
-watch([sizing, () => cols.value.map(c => c.id).join()], () => colVirtualizer.value.measure())
+watch([sizing, frozen, () => cols.value.map(c => c.id).join()], () => colVirtualizer.value.measure())
+watch(anyWrap, () => rowVirtualizer.value.measure())
+/** Measures a rendered row (only while some column wraps; fixed heights otherwise). */
+function measureRow(el: unknown) {
+  if (anyWrap.value && el instanceof Element) rowVirtualizer.value.measureElement(el)
+}
 watch(() => store.value?.collapsed.value, () => rowVirtualizer.value.measure())
 watch(() => store.value?.segments.value, () => rowVirtualizer.value.measure())
 
 const vRows = computed(() => rowVirtualizer.value.getVirtualItems())
 /** Height of everything in the scroller; the token `max-height` caps it, so short tables don't leave a gap. */
 const contentHeight = computed(() => sizes.value.header * 2 + rowVirtualizer.value.getTotalSize() + (!store.value?.grouped && db.canEditContent.value ? sizes.value.row : 0) + 2)
-const vCols = computed(() => colVirtualizer.value.getVirtualItems().map(v => ({ ...v, col: v.index + 1 })))
+const vCols = computed(() => colVirtualizer.value.getVirtualItems().map(v => ({ ...v, col: v.index + frozen.value })))
 const padLeft = computed(() => (vCols.value.length ? restStarts.value[vCols.value[0]!.index]! : 0))
 const padRight = computed(() => (vCols.value.length ? restWidth.value - restStarts.value[vCols.value[vCols.value.length - 1]!.index + 1]! : restWidth.value))
+/**
+ * Cells of a line, left to right: frozen columns (sticky), a spacer, the columns in view, a spacer. Header, rows and
+ * footer all render this list.
+ */
+type Slot = { kind: 'col', col: number, key: string, left?: number, last?: boolean } | { kind: 'pad', key: string, width: number }
+const slots = computed<Slot[]>(() => {
+  const out: Slot[] = []
+  for (let i = 0; i < frozen.value; i++) out.push({ kind: 'col', col: i, key: cols.value[i]?.id ?? `f${i}`, left: frozenLefts.value[i], last: i === frozen.value - 1 })
+  out.push({ kind: 'pad', key: 'pad-left', width: padLeft.value })
+  for (const vc of vCols.value) out.push({ kind: 'col', col: vc.col, key: cols.value[vc.col]?.id ?? `c${vc.col}` })
+  out.push({ kind: 'pad', key: 'pad-right', width: padRight.value })
+  return out
+})
+const slotStyle = (sl: Slot) => (sl.kind === 'pad'
+  ? { width: `${sl.width}px` }
+  : sl.left !== undefined ? { left: `${sl.left}px`, width: `${widthOf(sl.col)}px` } : { width: `${widthOf(sl.col)}px` })
 
 // Ask the store for what's in view whenever the range moves.
 watch(() => {
@@ -222,7 +267,7 @@ function cellEl(row: number, col: number): HTMLElement | null {
 }
 function scrollToCell(row: number, col: number) {
   rowVirtualizer.value.scrollToIndex(row, { align: 'auto' })
-  if (col > 0) colVirtualizer.value.scrollToIndex(col - 1, { align: 'auto' })
+  if (col >= frozen.value) colVirtualizer.value.scrollToIndex(col - frozen.value, { align: 'auto' })
 }
 
 function startEdit(text: string | null) {
@@ -414,19 +459,20 @@ async function pasteMatrix(matrix: string[][], seg: number, index: number, col: 
  * trip), so the row shows up only after `version` bumps and the window is re-read. We wait for it (scrolling to the
  * end meanwhile) and then open its title editor, so typing goes into the cell.
  */
-function newRow(seg?: number) {
+function newRow(seg?: number, top = false) {
   if (!db.canEditContent.value) return
   const key = seg === undefined ? undefined : segment(seg)?.key
   const gv = groupValue(key)
   const values = gv !== undefined && groupProp.value ? { [groupProp.value.id]: gv } : {}
-  const last = !store.value?.grouped && !db.view.value?.config.sorts?.length && itemCount.value ? rowOfItem(itemCount.value - 1)?.id : undefined
-  const id = db.source.createRow(last ? { values, after: last } : { values })
+  const last = !top && !store.value?.grouped && !db.view.value?.config.sorts?.length && itemCount.value ? rowOfItem(itemCount.value - 1)?.id : undefined
+  const id = db.source.createRow(top ? { values, after: null } : last ? { values, after: last } : { values })
   pendingEdit.value = id
   clearTimeout(pendingTimer)
   pendingTimer = setTimeout(() => {
     if (pendingEdit.value === id) pendingEdit.value = null
   }, 5000)
-  followEnd()
+  if (top) rowVirtualizer.value.scrollToIndex(0, { align: 'start' })
+  else followEnd()
 }
 let pendingTimer: ReturnType<typeof setTimeout> | undefined
 /** While a new row is pending in an unsorted, ungrouped table, keep the end in view (it lands there). */
@@ -441,10 +487,21 @@ function deleteChecked() {
   db.source.deleteRows([...checked.value])
   checked.value = new Set()
 }
-function toggleChecked(id: string) {
+let lastChecked: number | null = null
+/** Checkbox click; Shift-click checks every loaded row between the last clicked one and this one. */
+function toggleChecked(id: string, index?: number, e?: MouseEvent) {
   const next = new Set(checked.value)
-  if (next.has(id)) next.delete(id)
-  else next.add(id)
+  const on = !next.has(id)
+  if (e?.shiftKey && lastChecked !== null && index !== undefined) {
+    const [a, b] = lastChecked < index ? [lastChecked, index] : [index, lastChecked]
+    for (let i = a; i <= b; i++) {
+      const row = rowOfItem(i)
+      if (row) on ? next.add(row.id) : next.delete(row.id)
+    }
+  }
+  else if (on) next.add(id)
+  else next.delete(id)
+  if (index !== undefined) lastChecked = index
   checked.value = next
 }
 const loadedIds = computed(() => rendered.value.map(r => r.row?.id).filter((x): x is string => !!x))
@@ -487,13 +544,14 @@ function onRowDrop(e: DragEvent) {
 }
 
 // ── Column header: menu, add property, reorder ──
-const headerMenu = shallowRef<{ prop: Prop, anchor: HTMLElement } | null>(null)
+const headerMenu = shallowRef<{ prop: Prop, anchor: HTMLElement, col: number } | null>(null)
 const addProp = shallowRef<HTMLElement | null>(null)
 const colDrag = ref<{ id: string, over: string | null, after: boolean } | null>(null)
 let colResizeStarted = false
-function onHeaderClick(p: Prop, e: MouseEvent) {
-  if (colResizeStarted) return
-  headerMenu.value = { prop: p, anchor: e.currentTarget as HTMLElement }
+function onHeaderClick(col: number, e: MouseEvent) {
+  const p = cols.value[col]
+  if (colResizeStarted || !p) return
+  headerMenu.value = { prop: p, anchor: e.currentTarget as HTMLElement, col }
 }
 function onColDragStart(e: DragEvent, p: Prop) {
   if (!db.canEditStructure.value || p.type === 'title' || resizing.value) return e.preventDefault()
@@ -501,7 +559,7 @@ function onColDragStart(e: DragEvent, p: Prop) {
   e.dataTransfer?.setData('application/x-me-db-col', p.id)
 }
 function onColDragOver(e: DragEvent, p: Prop) {
-  if (!colDrag.value || p.type === 'title') return
+  if (!colDrag.value || p.type === 'title' || p.id === colDrag.value.id) return
   e.preventDefault()
   const r = (e.currentTarget as HTMLElement).getBoundingClientRect()
   colDrag.value = { ...colDrag.value, over: p.id, after: e.clientX > r.left + r.width / 2 }
@@ -568,7 +626,7 @@ defineExpose({ sel, checked, startEdit, pasteMatrix, store, rowVirtualizer, colV
     <div
       ref="scroller"
       class="me-db-table"
-      :class="{ 'is-full': props.full, 'is-resizing': !!resizing }"
+      :class="{ 'is-full': props.full, 'is-resizing': !!resizing, 'is-wrap': anyWrap }"
       :style="{ height: `${contentHeight}px` }"
       tabindex="0"
       role="grid"
@@ -584,44 +642,41 @@ defineExpose({ sel, checked, startEdit, pasteMatrix, store, rowVirtualizer, colV
           <div class="me-db-th me-db-gutter" :style="{ width: `${gutter}px` }">
             <input type="checkbox" class="me-db-row-check" :checked="allChecked" :aria-label="m.selectAll" @change="toggleAll">
           </div>
-          <div
-            v-if="cols[0]"
-            class="me-db-th is-first"
-            role="columnheader"
-            :style="{ left: `${gutter}px`, width: `${firstWidth}px` }"
-            @click="onHeaderClick(cols[0]!, $event)"
-          >
-            <PropIcon :type="cols[0]!.type" />
-            <span class="me-db-th-name">{{ cols[0]!.name }}</span>
-            <span class="me-db-resize" :class="{ 'is-active': resizing === cols[0]!.id }" draggable="false" @mousedown.stop.prevent="startResize($event, 0)" @touchstart.stop="startResize($event, 0)" @click.stop />
-          </div>
-          <div class="me-db-spacer" :style="{ width: `${padLeft}px` }" />
-          <div
-            v-for="vc in vCols"
-            :key="cols[vc.col]?.id ?? vc.index"
-            class="me-db-th"
-            role="columnheader"
-            :class="{ 'is-drop-before': colDrag?.over === cols[vc.col]?.id && !colDrag?.after, 'is-drop-after': colDrag?.over === cols[vc.col]?.id && colDrag?.after }"
-            :style="{ width: `${widthOf(vc.col)}px` }"
-            :draggable="db.canEditStructure.value && !resizing"
-            :data-col-id="cols[vc.col]?.id"
-            @click="onHeaderClick(cols[vc.col]!, $event)"
-            @dragstart="onColDragStart($event, cols[vc.col]!)"
-            @dragover="onColDragOver($event, cols[vc.col]!)"
-            @drop.prevent="onColDrop"
-            @dragend="colDrag = null"
-          >
-            <PropIcon :type="cols[vc.col]!.type" />
-            <span class="me-db-th-name">{{ cols[vc.col]!.name }}</span>
-            <span class="me-db-resize" :class="{ 'is-active': resizing === cols[vc.col]!.id }" draggable="false" @mousedown.stop.prevent="startResize($event, vc.col)" @touchstart.stop="startResize($event, vc.col)" @click.stop @dragstart.prevent />
-          </div>
-          <div class="me-db-spacer" :style="{ width: `${padRight}px` }" />
+          <template v-for="sl in slots" :key="sl.key">
+            <div v-if="sl.kind === 'pad'" class="me-db-spacer" :style="slotStyle(sl)" />
+            <div
+              v-else-if="cols[sl.col]"
+              class="me-db-th"
+              role="columnheader"
+              :class="{
+                'is-first': sl.col === 0,
+                'is-frozen': sl.left !== undefined,
+                'is-frozen-last': sl.last,
+                'is-drop-before': colDrag?.over === cols[sl.col]!.id && !colDrag?.after,
+                'is-drop-after': colDrag?.over === cols[sl.col]!.id && colDrag?.after,
+                'is-dragging': colDrag?.id === cols[sl.col]!.id,
+              }"
+              :style="slotStyle(sl)"
+              :draggable="db.canEditStructure.value && !resizing && cols[sl.col]!.type !== 'title'"
+              :data-col-id="cols[sl.col]!.id"
+              @click="onHeaderClick(sl.col, $event)"
+              @dragstart="onColDragStart($event, cols[sl.col]!)"
+              @dragover="onColDragOver($event, cols[sl.col]!)"
+              @drop.prevent="onColDrop"
+              @dragend="colDrag = null"
+            >
+              <PropIcon :type="cols[sl.col]!.type" />
+              <span class="me-db-th-name">{{ cols[sl.col]!.name }}</span>
+              <span class="me-db-resize" :class="{ 'is-active': resizing === cols[sl.col]!.id }" draggable="false" @mousedown.stop.prevent="startResize($event, sl.col)" @touchstart.stop="startResize($event, sl.col)" @click.stop @dragstart.prevent />
+            </div>
+          </template>
           <button
             v-if="db.canEditStructure.value"
             type="button"
             class="me-db-th me-db-add-col"
             :style="{ width: `${addColWidth}px` }"
             :aria-label="m.addProperty"
+            :title="m.addProperty"
             @click="addProp = $event.currentTarget as HTMLElement"
           >
             <Plus />
@@ -633,6 +688,7 @@ defineExpose({ sel, checked, startEdit, pasteMatrix, store, rowVirtualizer, colV
           <div
             v-for="r in rendered"
             :key="r.v.index"
+            :ref="measureRow"
             class="me-db-tr"
             :class="{
               'is-group': r.item?.kind === 'group',
@@ -640,11 +696,13 @@ defineExpose({ sel, checked, startEdit, pasteMatrix, store, rowVirtualizer, colV
               'is-checked': !!r.row && checked.has(r.row.id),
               'is-drop-before': drag?.over === r.v.index && !drag?.after,
               'is-drop-after': drag?.over === r.v.index && drag?.after,
+              'is-dragging': !!r.row && drag?.id === r.row.id,
             }"
             role="row"
             :data-row="r.v.index"
+            :data-index="r.v.index"
             :aria-rowindex="r.v.index + 1"
-            :style="{ transform: `translateY(${r.top}px)`, height: `${r.v.size}px`, width: `${totalWidth}px` }"
+            :style="{ transform: `translateY(${r.top}px)`, [anyWrap && r.item?.kind === 'row' ? 'minHeight' : 'height']: `${anyWrap && r.item?.kind === 'row' ? sizes.row : r.v.size}px`, width: `${totalWidth}px` }"
             @dragover="onRowDragOver($event, r.v.index)"
             @drop="onRowDrop"
           >
@@ -657,7 +715,7 @@ defineExpose({ sel, checked, startEdit, pasteMatrix, store, rowVirtualizer, colV
                 <span v-if="groupOption(segment(r.item.seg)?.key)" class="me-db-tag" :data-color="groupOption(segment(r.item.seg)?.key)!.color === 'default' ? undefined : groupOption(segment(r.item.seg)?.key)!.color">{{ segment(r.item.seg)?.label }}</span>
                 <span v-else class="me-db-group-label">{{ segment(r.item.seg)?.label || fmt(m.noValue, { name: groupProp?.name ?? '' }) }}</span>
                 <span class="me-db-group-count">{{ segment(r.item.seg)?.count }}</span>
-                <button v-if="db.canEditContent.value" type="button" class="me-db-icon-button" :aria-label="m.newRow" @click="newRow(r.item.seg)"><Plus /></button>
+                <button v-if="db.canEditContent.value" type="button" class="me-db-icon-button" :aria-label="m.newRow" :title="m.newRow" @click="newRow(r.item.seg)"><Plus /></button>
               </div>
             </template>
             <!-- "+ New" in a group -->
@@ -677,78 +735,82 @@ defineExpose({ sel, checked, startEdit, pasteMatrix, store, rowVirtualizer, colV
                   @dragstart="onRowDragStart($event, r.row)"
                   @dragend="drag = null"
                 ><GripVertical /></span>
-                <input v-if="r.row" type="checkbox" class="me-db-row-check" :checked="checked.has(r.row.id)" :aria-label="m.selectRow" @change="toggleChecked(r.row.id)">
+                <input v-if="r.row" type="checkbox" class="me-db-row-check" :checked="checked.has(r.row.id)" :aria-label="m.selectRow" @click="toggleChecked(r.row.id, r.v.index, $event)">
               </div>
               <template v-if="r.row">
-                <div
-                  class="me-db-td is-first"
-                  role="gridcell"
-                  data-col="0"
-                  :class="{ 'is-active': sel?.focus.row === r.v.index && sel?.focus.col === 0, 'is-selected': inSelection(sel, r.v.index, 0) }"
-                  :style="{ left: `${gutter}px`, width: `${firstWidth}px` }"
-                  @mousedown="selectCell(r.v.index, 0, $event)"
-                  @dblclick="startEdit(null)"
-                >
-                  <CellValue v-if="cols[0]" :prop="cols[0]!" :value="valueAt(r.row, 0)" />
-                  <button type="button" class="me-db-open" :aria-label="m.open" @mousedown.stop @click.stop="db.source.openRow(r.row.id)"><Maximize2 />{{ m.open }}</button>
-                </div>
-                <div class="me-db-spacer" :style="{ width: `${padLeft}px` }" />
-                <div
-                  v-for="vc in vCols"
-                  :key="vc.index"
-                  class="me-db-td"
-                  role="gridcell"
-                  :data-col="vc.col"
-                  :class="{
-                    'is-active': sel?.focus.row === r.v.index && sel?.focus.col === vc.col,
-                    'is-selected': inSelection(sel, r.v.index, vc.col),
-                  }"
-                  :style="{ width: `${widthOf(vc.col)}px` }"
-                  @mousedown="selectCell(r.v.index, vc.col, $event)"
-                  @dblclick="startEdit(null)"
-                  @click="cols[vc.col]?.type === 'checkbox' && sel?.focus.col === vc.col && !$event.shiftKey && startEdit(null)"
-                >
-                  <CellValue v-if="cols[vc.col]" :prop="cols[vc.col]!" :value="valueAt(r.row, vc.col)" />
-                </div>
+                <template v-for="sl in slots" :key="sl.key">
+                  <div v-if="sl.kind === 'pad'" class="me-db-spacer" :style="slotStyle(sl)" />
+                  <div
+                    v-else
+                    class="me-db-td"
+                    role="gridcell"
+                    :data-col="sl.col"
+                    :class="{
+                      'is-first': sl.col === 0,
+                      'is-frozen': sl.left !== undefined,
+                      'is-frozen-last': sl.last,
+                      'is-wrap': wraps[sl.col],
+                      'is-active': sel?.focus.row === r.v.index && sel?.focus.col === sl.col,
+                      'is-selected': inSelection(sel, r.v.index, sl.col),
+                    }"
+                    :style="slotStyle(sl)"
+                    @mousedown="selectCell(r.v.index, sl.col, $event)"
+                    @dblclick="startEdit(null)"
+                    @click="sl.col > 0 && cols[sl.col]?.type === 'checkbox' && sel?.focus.col === sl.col && !$event.shiftKey && startEdit(null)"
+                  >
+                    <CellValue v-if="cols[sl.col]" :prop="cols[sl.col]!" :value="valueAt(r.row, sl.col)" />
+                    <button
+                      v-if="sl.col === 0"
+                      type="button"
+                      class="me-db-open"
+                      :aria-label="`${m.open} (${m.openModes[db.openMode.value]})`"
+                      :title="m.openModes[db.openMode.value]"
+                      :data-open-mode="db.openMode.value"
+                      @mousedown.stop
+                      @click.stop="db.openRow(r.row.id, $event)"
+                    >
+                      <OpenModeIcon :mode="db.openMode.value" />{{ m.open }}
+                    </button>
+                  </div>
+                </template>
               </template>
-              <div v-else class="me-db-td is-placeholder" :style="{ left: `${gutter}px`, width: `${firstWidth + restWidth}px` }">
+              <div v-else class="me-db-td is-placeholder" :style="{ left: `${gutter}px`, width: `${frozenWidth + restWidth}px` }">
                 <span class="me-db-skeleton" />
               </div>
             </template>
           </div>
         </div>
 
-        <button v-if="!store?.grouped && db.canEditContent.value" type="button" class="me-db-new-row is-static" :style="{ left: `${gutter}px` }" @click="newRow()">
+        <button v-if="!store?.grouped && db.canEditContent.value" type="button" class="me-db-new-row is-static" :style="{ left: `${gutter}px` }" :title="m.addRowBelow" @click="newRow()">
           <Plus /> {{ m.newRow }}
         </button>
 
-        <!-- Footer -->
+        <!-- Footer: calculations -->
         <div class="me-db-tfoot" :style="{ width: `${totalWidth}px` }">
           <div class="me-db-tf me-db-gutter" :style="{ width: `${gutter}px` }" />
-          <button v-if="cols[0]" type="button" class="me-db-tf is-first" :style="{ left: `${gutter}px`, width: `${firstWidth}px` }" @click="aggMenu = { prop: cols[0]!, anchor: $event.currentTarget as HTMLElement }">
-            <span v-if="aggLabel(cols[0]!)" class="me-db-agg"><span class="me-db-agg-fn">{{ m.aggregates[db.view.value?.config.aggregates?.[cols[0]!.id] ?? ''] }}</span> {{ aggLabel(cols[0]!) }}</span>
-            <span v-else class="me-db-agg-empty">{{ m.calculate }}</span>
-          </button>
-          <div class="me-db-spacer" :style="{ width: `${padLeft}px` }" />
-          <button
-            v-for="vc in vCols"
-            :key="vc.index"
-            type="button"
-            class="me-db-tf"
-            :style="{ width: `${widthOf(vc.col)}px` }"
-            :data-agg="cols[vc.col]?.id"
-            @click="aggMenu = { prop: cols[vc.col]!, anchor: $event.currentTarget as HTMLElement }"
-          >
-            <span v-if="aggLabel(cols[vc.col]!)" class="me-db-agg"><span class="me-db-agg-fn">{{ m.aggregates[db.view.value?.config.aggregates?.[cols[vc.col]!.id] ?? ''] }}</span> {{ aggLabel(cols[vc.col]!) }}</span>
-            <span v-else class="me-db-agg-empty">{{ m.calculate }}</span>
-          </button>
+          <template v-for="sl in slots" :key="sl.key">
+            <div v-if="sl.kind === 'pad'" class="me-db-spacer" :style="slotStyle(sl)" />
+            <button
+              v-else-if="cols[sl.col]"
+              type="button"
+              class="me-db-tf"
+              :class="{ 'is-first': sl.col === 0, 'is-frozen': sl.left !== undefined, 'is-frozen-last': sl.last }"
+              :style="slotStyle(sl)"
+              :data-agg="cols[sl.col]!.id"
+              @click="aggMenu = { prop: cols[sl.col]!, anchor: $event.currentTarget as HTMLElement }"
+            >
+              <span v-if="aggLabel(cols[sl.col]!)" class="me-db-agg"><span class="me-db-agg-fn">{{ m.aggregates[db.view.value?.config.aggregates?.[cols[sl.col]!.id] ?? ''] }}</span> {{ aggLabel(cols[sl.col]!) }}</span>
+              <span v-else class="me-db-agg-empty">{{ m.calculate }}<ChevronDown /></span>
+            </button>
+          </template>
         </div>
       </div>
     </div>
 
-    <div v-if="checked.size" class="me-db-selection-bar">
-      <span>{{ fmt(m.selected, { count: checked.size }) }}</span>
-      <button v-if="db.canEditContent.value" type="button" class="me-btn me-db-danger" @click="deleteChecked">{{ m.deleteRows }}</button>
+    <div v-if="checked.size" class="me-db-selection-bar" role="toolbar" :aria-label="fmt(m.selected, { count: checked.size })">
+      <span class="me-db-selection-count">{{ fmt(m.selected, { count: checked.size }) }}</span>
+      <button v-if="db.canEditContent.value" type="button" class="me-db-text-button me-db-danger" data-bulk="delete" @click="deleteChecked"><Trash2 />{{ m.deleteRows }}</button>
+      <button type="button" class="me-db-text-button" data-bulk="clear" @click="checked = new Set()"><X />{{ m.clearSelection }}</button>
     </div>
 
     <CellEditor
@@ -760,7 +822,7 @@ defineExpose({ sel, checked, startEdit, pasteMatrix, store, rowVirtualizer, colV
       :initial-text="editing.text"
       @close="endEdit"
     />
-    <PropertyMenu v-if="headerMenu" :prop="headerMenu.prop" :anchor="headerMenu.anchor" @close="headerMenu = null" />
+    <PropertyMenu v-if="headerMenu" :prop="headerMenu.prop" :anchor="headerMenu.anchor" :column="headerMenu.col" @close="headerMenu = null" />
     <PropertyEditor v-if="addProp" :anchor="addProp" @close="addProp = null" />
     <DbPopover v-if="aggMenu" :anchor="aggMenu.anchor" :scope="db.scope.value" @close="aggMenu = null">
       <div class="me-menu me-db-menu" role="menu">

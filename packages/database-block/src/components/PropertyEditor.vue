@@ -6,12 +6,18 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useDb } from '../context'
 import type { DateDisplay, FormulaCheck, NumberFormat, Prop, PropConfig, PropType, RollupFn, SelectOption } from '../types'
-import { clone, CREATABLE_TYPES, OPTION_TYPES, positionAfter, uuidv7 } from '../util'
+import { clone, CREATABLE_TYPES, OPTION_TYPES, placeColumn, positionAfter, uuidv7 } from '../util'
 import DbPopover from './DbPopover.vue'
 import OptionsList from './OptionsList.vue'
 import PropIcon from './PropIcon.vue'
 
-const props = defineProps<{ anchor: HTMLElement | DOMRect | null, prop?: Prop, initialType?: PropType }>()
+const props = defineProps<{
+  anchor: HTMLElement | DOMRect | null
+  prop?: Prop
+  initialType?: PropType
+  /** New property: put it next to this column of the current view ("Insert left / right"). */
+  place?: { next: string, side: 'left' | 'right' } | null
+}>()
 const emit = defineEmits<{ close: [], saved: [prop: Prop] }>()
 
 const db = useDb()
@@ -98,9 +104,10 @@ function save() {
     : { id: uuidv7(), name: name.value.trim(), type: type.value, position: positionAfter(all[all.length - 1]?.position), config: c }
   if (!Object.keys(c).length) delete prop.config
   db.source.upsertProp(prop)
-  // A new property shows up in the current view.
+  // A new property shows up in the current view (next to a column when inserted from its menu).
   const view = db.view.value
-  if (!props.prop && view?.config.visible) db.updateView({ visible: [...view.config.visible, prop.id] })
+  if (!props.prop && view && props.place) db.updateView({ visible: placeColumn(view, db.props.value, prop.id, props.place.next, props.place.side) })
+  else if (!props.prop && view?.config.visible) db.updateView({ visible: [...view.config.visible, prop.id] })
   emit('saved', prop)
   emit('close')
 }
