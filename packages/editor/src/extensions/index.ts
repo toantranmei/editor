@@ -5,6 +5,7 @@ import { collectExtensions, type BlockDefinition } from '../define-block'
 import { BlockDrop } from './block-drop'
 import { BlockId } from './block-id'
 import { BlockSelection } from './block-selection'
+import { MarkdownPaste } from './markdown-paste'
 import { Placeholder } from './placeholder'
 import { BgColor, BlockColor, TextColor } from './color-marks'
 import { SlashCommand } from './slash-command'
@@ -54,6 +55,7 @@ export function createExtensions({ blocks, undoRedo = true, ...config }: MeiExte
     BgColor,
     BlockColor,
     SlashCommand,
+    MarkdownPaste,
     BlockDrop,
     BlockSelection,
     UnknownBlock,
