@@ -4,8 +4,8 @@ import { Copy, Pencil, Plus, Trash2 } from '@lucide/vue'
 import { computed, nextTick, ref, shallowRef } from 'vue'
 import { useDb } from '../context'
 import { fmt } from '../messages'
-import type { View, ViewConfig, ViewType } from '../types'
-import { byPosition, clone, positionAfter, uuidv7 } from '../util'
+import type { View, ViewType } from '../types'
+import { byPosition, clone, positionAfter, uuidv7, viewDefaults } from '../util'
 import DbPopover from './DbPopover.vue'
 import PropIcon from './PropIcon.vue'
 
@@ -19,28 +19,9 @@ const menu = shallowRef<{ view: View, anchor: HTMLElement } | null>(null)
 const renaming = ref<string | null>(null)
 const draft = ref('')
 
-/** Sensible starting config per type, from the database's properties. */
-function defaults(type: ViewType): ViewConfig {
-  const props = db.props.value
-  const first = (...types: string[]) => props.find(p => types.includes(p.type))?.id
-  switch (type) {
-    case 'board': {
-      const g = first('status', 'select', 'person')
-      return g ? { group_by: { prop: g }, card: { props: [] } } : { card: { props: [] } }
-    }
-    case 'calendar': return { date_prop: first('date', 'created_time') }
-    case 'timeline': return { start_prop: first('date', 'created_time'), scale: 'day' }
-    case 'gallery': return { cover: first('files'), size: 'm', card: { props: [] } }
-    case 'list': return { card: { props: [] } }
-    case 'chart': return { chart: 'bar', x: { prop: first('status', 'select', 'date') ?? props[0]?.id ?? '' }, y: [{ fn: 'count' }] }
-    case 'pivot': return { rows: [first('status', 'select') ?? ''].filter(Boolean), cols: [], values: [{ fn: 'count' }], totals: true }
-    default: return {}
-  }
-}
-
 function add(type: ViewType) {
   adding.value = null
-  const view: View = { id: uuidv7(), name: m.value.viewTypes[type], type, position: positionAfter(views.value[views.value.length - 1]?.position), config: defaults(type) }
+  const view: View = { id: uuidv7(), name: m.value.viewTypes[type], type, position: positionAfter(views.value[views.value.length - 1]?.position), config: viewDefaults(type, db.props.value) }
   db.source.upsertView(view)
   emit('select', view.id)
 }

@@ -89,6 +89,9 @@ export type AggregateFn =
   | 'sum' | 'avg' | 'min' | 'max' | 'median' | 'range' | 'earliest' | 'latest' | 'checked' | 'unchecked'
   | 'percent_checked'
 
+/** How a row opens (per view, `config.open_in`): a panel on the right, a centered dialog, or the whole page. */
+export type OpenMode = 'side_peek' | 'center_peek' | 'full_page'
+
 export type ChartKind = 'bar' | 'line' | 'area' | 'pie' | 'donut' | 'scatter'
 export type ValueFn = 'count' | 'sum' | 'avg' | 'min' | 'max'
 
@@ -99,10 +102,25 @@ export interface ViewConfig {
   /** Visible property ids, in column order. Missing: every property, by position. */
   visible?: string[]
   widths?: Record<string, number>
+  /** Wrap every column's text (table); `wraps` per column overrides it. */
   wrap?: boolean
+  /** Per-column text wrapping (table): property id → wrap. */
+  wraps?: Record<string, boolean>
+  /** Table: number of leading columns kept in view while scrolling sideways. Default 1 (the title). */
+  freeze?: number
+  /** How rows open from this view. Default `side_peek`. */
+  open_in?: OpenMode
   aggregates?: Record<string, AggregateFn | string>
-  /** board */
-  card?: { cover?: string, props?: string[] }
+  /** board / gallery / list / calendar / timeline: card cover (board), shown properties, card size (board). */
+  card?: { cover?: string, props?: string[], size?: 's' | 'm' | 'l' }
+  /** board: tint columns with their option color. */
+  color_columns?: boolean
+  /** gallery / board: fit the cover image instead of cropping it. */
+  fit_image?: boolean
+  /** calendar: show Saturday and Sunday (default true). */
+  show_weekends?: boolean
+  /** timeline: show the title column next to the bars (default true). */
+  show_table?: boolean
   /** calendar */
   date_prop?: string
   /** timeline */
@@ -190,7 +208,11 @@ export interface DatabaseSource {
   upsertView: (view: View) => void
   deleteView: (id: string) => void
   setMeta: (meta: { title?: string, icon?: string | null }) => void
-  openRow: (rowId: string) => void
+  /**
+   * Opens a row. `mode` is the view's "Open pages in" setting (`config.open_in`, default `side_peek`), passed since
+   * 0.2; older sources simply ignore it. `DatabaseBlockOptions.openRow` (when set) is called instead.
+   */
+  openRow: (rowId: string, mode?: OpenMode) => void
   searchRows: (databaseId: string, query: string) => Promise<Array<{ id: string, title: string }>>
   people: (query: string) => Promise<Person[]>
   upload?: (file: File) => Promise<FileValue>
@@ -216,6 +238,11 @@ export interface DatabaseBlockOptions {
   createDatabase: ((kind: DatabaseKind) => Promise<string>) | null
   /** Opens a database as a page ("Database – full page" links, "Open as full page"). */
   open?: ((databaseId: string, event?: MouseEvent | KeyboardEvent) => void) | null
+  /**
+   * Opens a row in the given mode (the host renders the side / center peek or navigates). When set, the block calls
+   * it instead of `source.openRow`. `event`: the click, e.g. to open a new tab on Cmd / Ctrl-click.
+   */
+  openRow?: ((databaseId: string, rowId: string, mode: OpenMode, event?: MouseEvent | KeyboardEvent) => void) | null
   /** Called when `createDatabase` or a source call fails. Default: `console.error`. */
   onError?: ((error: unknown) => void) | null
   /** Override any string, per locale. */

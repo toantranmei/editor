@@ -151,6 +151,30 @@ export interface DatabaseMessages {
   /** Slash menu (also in block messages). */
   inline: string
   fullPage: string
+  /** Layout / view settings (0.2). */
+  layout: string
+  openPagesIn: string
+  openModes: Record<'side_peek' | 'center_peek' | 'full_page', string>
+  openModeHints: Record<'side_peek' | 'center_peek' | 'full_page', string>
+  wrapText: string
+  wrapAll: string
+  freezeColumn: string
+  unfreezeColumns: string
+  insertLeft: string
+  insertRight: string
+  duplicateProperty: string
+  clearSelection: string
+  newRowOptions: string
+  newAtTop: string
+  newAtBottom: string
+  colorColumns: string
+  cardSize: string
+  fitImage: string
+  showWeekends: string
+  showTable: string
+  tableOptions: string
+  viewOptions: string
+  addRowBelow: string
 }
 
 type Shared = Pick<DatabaseMessages, 'ops' | 'types'>
@@ -326,6 +350,29 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     next: 'Next',
     more: 'More',
     loadMore: 'Load more',
+    layout: 'Layout',
+    openPagesIn: 'Open pages in',
+    openModes: { side_peek: 'Side peek', center_peek: 'Center peek', full_page: 'Full page' },
+    openModeHints: { side_peek: 'Open pages on the side, keeping the view in sight', center_peek: 'Open pages in a focused, centered panel', full_page: 'Open pages as a full page' },
+    wrapText: 'Wrap text',
+    wrapAll: 'Wrap all columns',
+    freezeColumn: 'Freeze up to this column',
+    unfreezeColumns: 'Unfreeze columns',
+    insertLeft: 'Insert left',
+    insertRight: 'Insert right',
+    duplicateProperty: 'Duplicate property',
+    clearSelection: 'Clear selection',
+    newRowOptions: 'More ways to add',
+    newAtTop: 'Add to top',
+    newAtBottom: 'Add to bottom',
+    colorColumns: 'Color columns',
+    cardSize: 'Card size',
+    fitImage: 'Fit image',
+    showWeekends: 'Show weekends',
+    showTable: 'Show table',
+    tableOptions: 'Table',
+    viewOptions: 'View options',
+    addRowBelow: 'Click to add below',
     inline: 'Database – inline',
     fullPage: 'Database – full page',
   },
@@ -497,6 +544,29 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     next: 'Sau',
     more: 'Thêm',
     loadMore: 'Tải thêm',
+    layout: 'Bố cục',
+    openPagesIn: 'Mở trang trong',
+    openModes: { side_peek: 'Xem bên cạnh', center_peek: 'Xem ở giữa', full_page: 'Toàn trang' },
+    openModeHints: { side_peek: 'Mở trang ở cạnh phải, vẫn thấy chế độ xem', center_peek: 'Mở trang trong khung tập trung ở giữa', full_page: 'Mở trang như một trang đầy đủ' },
+    wrapText: 'Xuống dòng',
+    wrapAll: 'Xuống dòng mọi cột',
+    freezeColumn: 'Cố định đến cột này',
+    unfreezeColumns: 'Bỏ cố định cột',
+    insertLeft: 'Chèn bên trái',
+    insertRight: 'Chèn bên phải',
+    duplicateProperty: 'Nhân bản thuộc tính',
+    clearSelection: 'Bỏ chọn',
+    newRowOptions: 'Thêm cách tạo khác',
+    newAtTop: 'Thêm lên đầu',
+    newAtBottom: 'Thêm xuống cuối',
+    colorColumns: 'Tô màu cột',
+    cardSize: 'Cỡ thẻ',
+    fitImage: 'Vừa khung ảnh',
+    showWeekends: 'Hiện cuối tuần',
+    showTable: 'Hiện bảng',
+    tableOptions: 'Bảng',
+    viewOptions: 'Tùy chọn chế độ xem',
+    addRowBelow: 'Bấm để thêm bên dưới',
     inline: 'Cơ sở dữ liệu – trong trang',
     fullPage: 'Cơ sở dữ liệu – toàn trang',
   },
@@ -668,6 +738,29 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     next: '下一个',
     more: '更多',
     loadMore: '加载更多',
+    layout: '布局',
+    openPagesIn: '页面打开方式',
+    openModes: { side_peek: '侧边预览', center_peek: '居中预览', full_page: '整页' },
+    openModeHints: { side_peek: '在侧边打开页面，视图保持可见', center_peek: '在居中的聚焦面板中打开页面', full_page: '以整页打开页面' },
+    wrapText: '自动换行',
+    wrapAll: '所有列自动换行',
+    freezeColumn: '冻结至此列',
+    unfreezeColumns: '取消冻结列',
+    insertLeft: '在左侧插入',
+    insertRight: '在右侧插入',
+    duplicateProperty: '复制属性',
+    clearSelection: '取消选择',
+    newRowOptions: '更多添加方式',
+    newAtTop: '添加到顶部',
+    newAtBottom: '添加到底部',
+    colorColumns: '列着色',
+    cardSize: '卡片大小',
+    fitImage: '适应图片',
+    showWeekends: '显示周末',
+    showTable: '显示表格',
+    tableOptions: '表格',
+    viewOptions: '视图选项',
+    addRowBelow: '点击在下方添加',
     inline: '数据库 – 内嵌',
     fullPage: '数据库 – 整页',
   },

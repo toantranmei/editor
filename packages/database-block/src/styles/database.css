@@ -16,6 +16,9 @@
     line-height: var(--me-font-line-height);
   }
   .me-db-header { display: flex; align-items: center; gap: var(--me-space-3); }
+  .me-db-header-action { opacity: 0; }
+  .me-db-header:hover .me-db-header-action, .me-db-header-action:focus-visible { opacity: 1; }
+  .me-db-title:focus-visible { box-shadow: 0 var(--me-border-width-medium) 0 var(--me-input-focus-ring); }
   .me-db-icon { font-size: var(--me-database-title-size); line-height: 1; }
   .me-db-title {
     flex: 1;
@@ -34,13 +37,24 @@
 
   .me-db-topbar {
     display: flex;
-    flex-wrap: wrap;
     align-items: center;
     justify-content: space-between;
     gap: var(--me-database-toolbar-gap);
+    min-width: 0;
     border-bottom: var(--me-border-width-thin) solid var(--me-database-border);
+    container-type: inline-size;
   }
-  .me-db-tabs { display: flex; flex-wrap: wrap; align-items: center; gap: var(--me-database-tab-gap); min-width: 0; }
+  /* Tabs stay on one line and scroll sideways (no scrollbar), like Notion's view bar. */
+  .me-db-tabs {
+    display: flex;
+    flex: 1 1 auto;
+    align-items: center;
+    gap: var(--me-database-tab-gap);
+    min-width: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .me-db-tabs::-webkit-scrollbar { display: none; }
   .me-db-tab {
     display: inline-flex;
     align-items: center;
@@ -62,13 +76,15 @@
   }
 
   /* ── Toolbar ─────────────────────────────────────────────────── */
-  .me-db-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--me-database-toolbar-gap); padding: var(--me-space-1) 0; }
+  .me-db-toolbar { display: flex; flex: none; align-items: center; gap: var(--me-space-1); padding: var(--me-space-1) 0; }
   .me-db-tool {
     display: inline-flex;
     align-items: center;
+    justify-content: center;
     gap: var(--me-space-2);
+    min-width: var(--me-toolbar-button-size);
     height: var(--me-toolbar-button-size);
-    padding: 0 var(--me-space-3);
+    padding: 0 var(--me-space-2);
     border-radius: var(--me-database-radius);
     color: var(--me-database-muted-color);
     white-space: nowrap;
@@ -95,7 +111,43 @@
     font: inherit;
     color: var(--me-color-text);
   }
-  .me-db-new { display: inline-flex; align-items: center; gap: var(--me-space-2); height: var(--me-toolbar-button-size); }
+  .me-db-new-split { display: inline-flex; flex: none; align-items: stretch; margin-left: var(--me-space-2); }
+  .me-db-new, .me-db-new-more { display: inline-flex; align-items: center; gap: var(--me-space-2); height: var(--me-toolbar-button-size); }
+  .me-db-new { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+  .me-db-new-more {
+    padding: 0 var(--me-space-2);
+    border-left: var(--me-border-width-thin) solid color-mix(in srgb, var(--me-button-primary-text) 35%, transparent);
+    border-top-left-radius: 0;
+    border-bottom-left-radius: 0;
+  }
+  .me-db-new-more svg { width: var(--me-font-size-sm); height: var(--me-font-size-sm); }
+  .me-db-separator { height: var(--me-border-width-thin); margin: var(--me-space-2) 0; background: var(--me-database-border); }
+  .me-db-check-slot { display: inline-flex; }
+  .me-db-check-slot svg { width: var(--me-font-size-sm); height: var(--me-font-size-sm); }
+  /* Layout picker in "View options". */
+  .me-db-layouts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--me-space-1); }
+  .me-db-layout {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--me-space-1);
+    padding: var(--me-space-2) var(--me-space-1);
+    border: var(--me-border-width-thin) solid var(--me-database-border);
+    border-radius: var(--me-database-radius);
+    color: var(--me-database-muted-color);
+    font-size: var(--me-font-size-xs);
+  }
+  .me-db-layout:hover { background: var(--me-database-hover-bg); color: var(--me-color-text); }
+  .me-db-layout.is-on { border-color: var(--me-database-toolbar-button-active); color: var(--me-database-toolbar-button-active); }
+  .me-db-layout .me-db-prop-icon { width: var(--me-font-size-md); height: var(--me-font-size-md); color: inherit; }
+  .me-db-layout:disabled { opacity: var(--me-button-disabled-opacity); }
+  /* Narrow databases: labels go, icons stay; the search box shrinks. */
+  /* me-allow-literal: container query breakpoints cannot read custom properties */
+  @container (max-width: 560px) {
+    .me-db-tool-label { display: none; }
+    .me-db-search-input { width: calc(var(--me-database-search-width) / 2); }
+    .me-db-tab-name { max-width: calc(var(--me-database-cell-min-width) * 2); overflow: hidden; text-overflow: ellipsis; }
+  }
 
   /* ── Shared bits ─────────────────────────────────────────────── */
   .me-db-icon-button {
@@ -140,8 +192,8 @@
   }
   .me-db-scroll { position: relative; overflow: auto; max-height: var(--me-database-max-height); }
   .me-db-scroll.is-full { max-height: var(--me-database-full-height); }
-  .me-db-list, .me-db-gallery { height: var(--me-database-max-height); }
-  .me-db-list.is-full, .me-db-gallery.is-full { height: var(--me-database-full-height); }
+  /* List / gallery: as tall as their content (inline height), capped by the scroll area's max-height. */
+  .me-db-list, .me-db-gallery { min-height: var(--me-database-row-height); }
   .me-db-virtual { position: relative; width: 100%; }
 
   /* ── Values ──────────────────────────────────────────────────── */
@@ -237,7 +289,9 @@
   }
   .me-db-th:hover { background: var(--me-database-hover-bg); }
   .me-db-th-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .me-db-th.is-first, .me-db-td.is-first, .me-db-tf.is-first { position: sticky; z-index: 2; }
+  .me-db-th.is-frozen, .me-db-td.is-frozen, .me-db-tf.is-frozen { position: sticky; z-index: 2; }
+  .me-db-th.is-frozen-last, .me-db-td.is-frozen-last, .me-db-tf.is-frozen-last { box-shadow: var(--me-border-width-thin) 0 0 var(--me-database-border); }
+  .me-db-th.is-dragging, .me-db-tr.is-dragging { opacity: 0.5; }
   .me-db-gutter { position: sticky; left: 0; z-index: 2; justify-content: flex-end; gap: 0; padding: 0; border-right: 0; cursor: default; }
   .me-db-th.me-db-gutter:hover { background: var(--me-database-bg); }
   .me-db-th.is-drop-before { box-shadow: inset var(--me-database-drop-indicator-width) 0 0 var(--me-database-drop-indicator); }
@@ -272,7 +326,10 @@
   .me-db-open {
     position: absolute;
     right: var(--me-space-3);
+    z-index: 1;
     display: none;
+    text-transform: uppercase;
+    box-shadow: var(--me-database-card-shadow);
     align-items: center;
     gap: var(--me-space-1);
     height: var(--me-database-tag-height);
@@ -283,7 +340,12 @@
     color: var(--me-database-muted-color);
     font-size: var(--me-font-size-xs);
   }
-  .me-db-tr:hover .me-db-open { display: inline-flex; }
+  .me-db-tr:hover .me-db-open, .me-db-open:focus-visible { display: inline-flex; }
+  .me-db-open:hover { background: var(--me-database-hover-bg); color: var(--me-color-text); }
+  /* Wrapped text: rows grow (measured by the virtualizer), cells align to the top. */
+  .me-db-table.is-wrap .me-db-tr:not(.is-group, .is-add) .me-db-td { align-items: flex-start; padding-top: var(--me-space-3); padding-bottom: var(--me-space-3); }
+  .me-db-td.is-wrap .me-db-value { flex-wrap: wrap; overflow: visible; }
+  .me-db-td.is-wrap .me-db-text, .me-db-td.is-wrap .me-db-link { overflow-wrap: anywhere; white-space: normal; }
   .me-db-group-head { position: sticky; left: 0; display: flex; align-items: center; gap: var(--me-space-3); padding: 0 var(--me-space-2); }
   .me-db-group-label { font-weight: var(--me-font-weight-medium); }
   .me-db-group-count { color: var(--me-database-faint-color); }
@@ -305,9 +367,25 @@
   .me-db-tf:hover { background: var(--me-database-hover-bg); }
   .me-db-agg { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .me-db-agg-fn { color: var(--me-database-faint-color); font-size: var(--me-font-size-xs); }
-  .me-db-agg-empty { opacity: 0; font-size: var(--me-font-size-xs); }
+  .me-db-agg-empty { display: inline-flex; align-items: center; gap: var(--me-space-1); opacity: 0; font-size: var(--me-font-size-xs); }
+  .me-db-agg-empty svg { width: var(--me-font-size-xs); height: var(--me-font-size-xs); }
   .me-db-tf:hover .me-db-agg-empty { opacity: 1; }
-  .me-db-selection-bar { display: flex; align-items: center; gap: var(--me-space-4); padding: var(--me-space-2) var(--me-space-4); color: var(--me-database-muted-color); }
+  .me-db-selection-bar {
+    position: absolute;
+    top: var(--me-space-1);
+    left: var(--me-database-select-col-width);
+    z-index: 4;
+    display: flex;
+    align-items: center;
+    gap: var(--me-space-2);
+    padding: var(--me-space-1) var(--me-space-3);
+    border-radius: var(--me-database-radius);
+    background: var(--me-database-card-bg);
+    box-shadow: var(--me-database-card-shadow);
+    color: var(--me-database-muted-color);
+  }
+  .me-db-selection-count { padding-right: var(--me-space-2); color: var(--me-database-toolbar-button-active); font-weight: var(--me-font-weight-medium); }
+  .me-db-selection-bar svg { width: var(--me-font-size-sm); height: var(--me-font-size-sm); }
 
   /* ── Popovers: menus, editors, builders ──────────────────────── */
   .me-db-popover { position: fixed; z-index: 60; overflow: auto; font-size: var(--me-database-font-size); color: var(--me-color-text); }
@@ -463,6 +541,24 @@
   }
   .me-db-cover-img { width: 100%; height: 100%; object-fit: cover; }
 
+  .me-db-board[data-size="s"] .me-db-column { width: calc(var(--me-database-column-width) * 0.8); }
+  .me-db-board[data-size="l"] .me-db-column { width: calc(var(--me-database-column-width) * 1.25); }
+  .me-db-column.is-colored { background: var(--me-tint-bg, var(--me-database-column-bg)); }
+  .me-db-column.is-colored.is-over { background: var(--me-database-drop-bg); }
+  .is-fit .me-db-cover-img { object-fit: contain; }
+  .me-db-cover-empty { width: 100%; height: var(--me-font-size-lg); margin-top: calc(var(--me-database-cover-height) / 2 - var(--me-font-size-md)); color: var(--me-database-faint-color); }
+  .me-db-card.is-new {
+    align-items: center;
+    justify-content: center;
+    flex-direction: row;
+    border: var(--me-border-width-thin) dashed var(--me-database-border);
+    background: none;
+    box-shadow: none;
+    color: var(--me-database-muted-color);
+  }
+  .me-db-card.is-new:hover { background: var(--me-database-hover-bg); color: var(--me-color-text); }
+  .me-db-card.is-new svg { width: var(--me-font-size-sm); height: var(--me-font-size-sm); }
+
   /* ── Gallery & list ──────────────────────────────────────────── */
   .me-db-gallery-line { position: absolute; top: 0; left: 0; display: grid; gap: var(--me-database-column-gap); }
   .me-db-list-item {
@@ -481,6 +577,8 @@
   .me-db-list-open { display: flex; flex: 1; align-items: center; gap: var(--me-space-3); min-width: 0; text-align: left; }
   .me-db-list-title { overflow: hidden; font-weight: var(--me-font-weight-medium); text-overflow: ellipsis; white-space: nowrap; }
   .me-db-list-props { display: flex; flex: none; gap: var(--me-space-4); max-width: 60%; overflow: hidden; }
+  .me-db-list-wrap { display: flex; flex-direction: column; min-width: 0; }
+  .me-db-new-row.is-list { position: static; padding: 0 var(--me-space-2); }
 
   /* ── Calendar ────────────────────────────────────────────────── */
   .me-db-calendar-head { display: flex; align-items: center; gap: var(--me-space-2); padding-bottom: var(--me-space-3); }
@@ -498,6 +596,7 @@
     color: var(--me-database-muted-color);
     font-size: var(--me-font-size-xs);
   }
+  .me-db-calendar-grid.is-weekdays { grid-template-columns: repeat(5, minmax(0, 1fr)); }
   .me-db-calendar-day {
     position: relative;
     display: flex;

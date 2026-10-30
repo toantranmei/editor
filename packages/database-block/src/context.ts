@@ -1,6 +1,6 @@
 import { computed, type ComputedRef, inject, type InjectionKey, reactive, type Ref, shallowReactive } from 'vue'
 import type { DatabaseMessages } from './messages'
-import type { DatabaseBlockOptions, DatabaseSource, Prop, RowQuery, View, ViewConfig } from './types'
+import type { DatabaseBlockOptions, DatabaseSource, OpenMode, Prop, RowQuery, View, ViewConfig } from './types'
 import { normalizeFilter } from './filters'
 import type { ValueContext } from './values'
 import { byPosition, visibleProps } from './util'
@@ -30,6 +30,13 @@ export interface DbContext {
   remember: (people: Array<{ id: string, name: string, avatar?: string }>, rows?: Array<{ id: string, title: string }>) => void
   /** Cross-component UI requests (e.g. a header menu asking the toolbar to open the filter builder). */
   ui: { openFilter: number }
+  /** "Open pages in" of the current view (default `side_peek`). */
+  openMode: ComputedRef<OpenMode>
+  /**
+   * Opens a row with the view's mode (or `mode`): `options.openRow(databaseId, rowId, mode, event)` when set, else
+   * `source.openRow(rowId, mode)`. Cmd / Ctrl-click asks for `full_page`.
+   */
+  openRow: (rowId: string, event?: MouseEvent | KeyboardEvent | null, mode?: OpenMode) => void
   updateView: (patch: Partial<ViewConfig> | ((config: ViewConfig) => ViewConfig)) => void
   report: (error: unknown) => void
 }
@@ -52,6 +59,8 @@ export function createContext(input: {
   editable: () => boolean
   scope: () => Record<string, unknown>
   search: Ref<string>
+  /** Told about every opened row (DatabaseView re-emits it as `open-row`). */
+  onOpenRow?: (rowId: string, mode: OpenMode, event?: MouseEvent | KeyboardEvent) => void
 }): DbContext {
   const { source } = input
   const names = { people: new Map<string, string>(), avatars: new Map<string, string>(), rows: new Map<string, string>() }
@@ -72,6 +81,8 @@ export function createContext(input: {
   }
   // Prime the name caches once (person / relation cells show names, not ids).
   source.people('').then(list => remember(list)).catch(() => {})
+
+  const openMode = computed<OpenMode>(() => view.value?.config.open_in ?? 'side_peek')
 
   const ctx: DbContext = {
     source,
@@ -98,6 +109,19 @@ export function createContext(input: {
     names,
     remember,
     ui: reactive({ openFilter: 0 }),
+    openMode,
+    openRow(rowId, event, mode) {
+      const wanted: OpenMode = mode ?? (event && (event.metaKey || event.ctrlKey) ? 'full_page' : openMode.value)
+      const e = event ?? undefined
+      input.onOpenRow?.(rowId, wanted, e)
+      try {
+        if (input.options.openRow) input.options.openRow(input.databaseId, rowId, wanted, e)
+        else source.openRow(rowId, wanted)
+      }
+      catch (error) {
+        report(error)
+      }
+    },
     updateView(patch) {
       const v = view.value
       if (!v) return

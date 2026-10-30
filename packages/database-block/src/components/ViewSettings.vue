@@ -1,13 +1,15 @@
 <script setup lang="ts">
 /**
- * Toolbar panels that edit the current view's config: grouping, property visibility and per-type settings
- * (board cover, calendar / timeline dates, gallery size, chart and pivot setup).
+ * Toolbar panels that edit the current view's config: grouping, property visibility and "View options" (layout
+ * switcher, per-layout settings such as wrap / freeze, card cover and size, dates, chart and pivot setup, and
+ * "Open pages in").
  */
-import { Eye, EyeOff } from '@lucide/vue'
+import { Check, Eye, EyeOff } from '@lucide/vue'
 import { computed } from 'vue'
 import { useDb } from '../context'
-import type { ChartKind, Prop, ValueFn, ViewConfig } from '../types'
-import { visibleIds } from '../util'
+import type { ChartKind, OpenMode, Prop, ValueFn, ViewConfig, ViewType } from '../types'
+import { switchLayout, visibleIds } from '../util'
+import OpenModeIcon from './OpenModeIcon.vue'
 import PropIcon from './PropIcon.vue'
 
 const props = defineProps<{ panel: 'group' | 'properties' | 'settings' }>()
@@ -54,6 +56,18 @@ function setY(patch: { prop?: string, fn?: ValueFn }) {
 const xProp = computed(() => all.value.find(p => p.id === c.value.x?.prop))
 const isDateX = computed(() => !!xProp.value && ['date', 'created_time', 'last_edited_time'].includes(xProp.value.type))
 const pivotValue = computed(() => c.value.values?.[0] ?? { fn: 'count' })
+
+// ── Layout ──
+const LAYOUTS: ViewType[] = ['table', 'board', 'calendar', 'timeline', 'gallery', 'list', 'chart', 'pivot']
+const MODES: OpenMode[] = ['side_peek', 'center_peek', 'full_page']
+const opensRows = computed(() => !['chart', 'pivot'].includes(view.value?.type ?? ''))
+function setLayout(type: ViewType) {
+  const v = view.value
+  if (!v || !editable.value || v.type === type) return
+  db.source.upsertView({ ...v, type, config: switchLayout(v, type, all.value) })
+}
+const checked = (e: Event) => (e.target as HTMLInputElement).checked
+const value = (e: Event) => (e.target as HTMLSelectElement).value
 </script>
 
 <template>
@@ -95,48 +109,94 @@ const pivotValue = computed(() => c.value.values?.[0] ?? { fn: 'count' })
       </button>
     </template>
 
-    <!-- Per-type settings -->
+    <!-- View options: layout, per-layout settings, open mode -->
     <template v-else>
+      <div class="me-menu-label">{{ m.layout }}</div>
+      <div class="me-db-layouts" role="radiogroup" :aria-label="m.layout">
+        <button
+          v-for="t in LAYOUTS"
+          :key="t"
+          type="button"
+          class="me-db-layout"
+          role="radio"
+          :aria-checked="view?.type === t"
+          :class="{ 'is-on': view?.type === t }"
+          :disabled="!editable"
+          :data-layout="t"
+          @click="setLayout(t)"
+        >
+          <PropIcon :view="t" /><span>{{ m.viewTypes[t] }}</span>
+        </button>
+      </div>
+
+      <template v-if="view?.type === 'table'">
+        <label class="me-db-toggle-row">
+          <span>{{ m.wrapAll }}</span>
+          <input type="checkbox" class="me-db-switch" data-setting="wrap" :checked="!!c.wrap" :disabled="!editable" @change="set({ wrap: checked($event) || undefined, wraps: undefined })">
+        </label>
+        <label class="me-db-toggle-row">
+          <span>{{ m.freezeColumn }}</span>
+          <input type="checkbox" class="me-db-switch" data-setting="freeze" :checked="(c.freeze ?? 1) > 0" :disabled="!editable" @change="set({ freeze: checked($event) ? undefined : 0 })">
+        </label>
+      </template>
       <template v-if="view?.type === 'board' || view?.type === 'gallery'">
         <label class="me-db-field">
           <span class="me-menu-label">{{ m.cover }}</span>
-          <select class="me-input me-db-select" :value="(view.type === 'board' ? c.card?.cover : c.cover) ?? ''" :disabled="!editable" @change="view.type === 'board' ? set({ card: { ...c.card, cover: ($event.target as HTMLSelectElement).value || undefined } }) : set({ cover: ($event.target as HTMLSelectElement).value || undefined })">
+          <select class="me-input me-db-select" data-setting="cover" :value="(view.type === 'board' ? c.card?.cover : c.cover) ?? ''" :disabled="!editable" @change="view.type === 'board' ? set({ card: { ...c.card, cover: value($event) || undefined } }) : set({ cover: value($event) || undefined })">
             <option value="">{{ m.coverNone }}</option>
             <option v-for="p in fileProps" :key="p.id" :value="p.id">{{ p.name }}</option>
           </select>
         </label>
-        <label v-if="view.type === 'gallery'" class="me-db-field">
-          <span class="me-menu-label">{{ m.size }}</span>
-          <select class="me-input me-db-select" :value="c.size ?? 'm'" :disabled="!editable" @change="set({ size: ($event.target as HTMLSelectElement).value as 's' | 'm' | 'l' })">
+        <label class="me-db-field">
+          <span class="me-menu-label">{{ m.cardSize }}</span>
+          <select class="me-input me-db-select" data-setting="size" :value="(view.type === 'board' ? c.card?.size : c.size) ?? 'm'" :disabled="!editable" @change="view.type === 'board' ? set({ card: { ...c.card, size: value($event) as 's' | 'm' | 'l' } }) : set({ size: value($event) as 's' | 'm' | 'l' })">
             <option v-for="s in (['s', 'm', 'l'] as const)" :key="s" :value="s">{{ m.sizes[s] }}</option>
           </select>
         </label>
+        <label class="me-db-toggle-row">
+          <span>{{ m.fitImage }}</span>
+          <input type="checkbox" class="me-db-switch" data-setting="fit" :checked="!!c.fit_image" :disabled="!editable" @change="set({ fit_image: checked($event) || undefined })">
+        </label>
+        <label v-if="view.type === 'board'" class="me-db-toggle-row">
+          <span>{{ m.colorColumns }}</span>
+          <input type="checkbox" class="me-db-switch" data-setting="color-columns" :checked="!!c.color_columns" :disabled="!editable" @change="set({ color_columns: checked($event) || undefined })">
+        </label>
       </template>
-      <label v-if="view?.type === 'calendar'" class="me-db-field">
-        <span class="me-menu-label">{{ m.dateProperty }}</span>
-        <select class="me-input me-db-select" :value="c.date_prop ?? ''" :disabled="!editable" @change="set({ date_prop: ($event.target as HTMLSelectElement).value })">
-          <option v-for="p in dateProps" :key="p.id" :value="p.id">{{ p.name }}</option>
-        </select>
-      </label>
+      <template v-if="view?.type === 'calendar'">
+        <label class="me-db-field">
+          <span class="me-menu-label">{{ m.dateProperty }}</span>
+          <select class="me-input me-db-select" :value="c.date_prop ?? ''" :disabled="!editable" @change="set({ date_prop: value($event) })">
+            <option v-for="p in dateProps" :key="p.id" :value="p.id">{{ p.name }}</option>
+          </select>
+        </label>
+        <label class="me-db-toggle-row">
+          <span>{{ m.showWeekends }}</span>
+          <input type="checkbox" class="me-db-switch" data-setting="weekends" :checked="c.show_weekends !== false" :disabled="!editable" @change="set({ show_weekends: checked($event) ? undefined : false })">
+        </label>
+      </template>
       <template v-if="view?.type === 'timeline'">
         <label class="me-db-field">
           <span class="me-menu-label">{{ m.startProperty }}</span>
-          <select class="me-input me-db-select" :value="c.start_prop ?? ''" :disabled="!editable" @change="set({ start_prop: ($event.target as HTMLSelectElement).value })">
+          <select class="me-input me-db-select" :value="c.start_prop ?? ''" :disabled="!editable" @change="set({ start_prop: value($event) })">
             <option v-for="p in dateProps" :key="p.id" :value="p.id">{{ p.name }}</option>
           </select>
         </label>
         <label class="me-db-field">
           <span class="me-menu-label">{{ m.endProperty }}</span>
-          <select class="me-input me-db-select" :value="c.end_prop ?? ''" :disabled="!editable" @change="set({ end_prop: ($event.target as HTMLSelectElement).value || undefined })">
+          <select class="me-input me-db-select" :value="c.end_prop ?? ''" :disabled="!editable" @change="set({ end_prop: value($event) || undefined })">
             <option value="">–</option>
             <option v-for="p in dateProps" :key="p.id" :value="p.id">{{ p.name }}</option>
           </select>
         </label>
         <label class="me-db-field">
           <span class="me-menu-label">{{ m.scale }}</span>
-          <select class="me-input me-db-select" :value="c.scale ?? 'day'" :disabled="!editable" @change="set({ scale: ($event.target as HTMLSelectElement).value as 'day' | 'week' | 'month' })">
+          <select class="me-input me-db-select" :value="c.scale ?? 'day'" :disabled="!editable" @change="set({ scale: value($event) as 'day' | 'week' | 'month' })">
             <option v-for="s in (['day', 'week', 'month'] as const)" :key="s" :value="s">{{ m.scales[s] }}</option>
           </select>
+        </label>
+        <label class="me-db-toggle-row">
+          <span>{{ m.showTable }}</span>
+          <input type="checkbox" class="me-db-switch" data-setting="show-table" :checked="c.show_table !== false" :disabled="!editable" @change="set({ show_table: checked($event) ? undefined : false })">
         </label>
       </template>
       <template v-if="view?.type === 'chart'">
@@ -212,6 +272,26 @@ const pivotValue = computed(() => c.value.values?.[0] ?? { fn: 'count' })
           <span>{{ m.totals }}</span>
           <input type="checkbox" class="me-db-switch" :checked="c.totals !== false" :disabled="!editable" @change="set({ totals: ($event.target as HTMLInputElement).checked })">
         </label>
+      </template>
+
+      <template v-if="opensRows">
+        <div class="me-db-separator" role="separator" />
+        <div class="me-menu-label">{{ m.openPagesIn }}</div>
+        <button
+          v-for="mode in MODES"
+          :key="mode"
+          type="button"
+          class="me-menu-item"
+          role="menuitemradio"
+          :aria-checked="db.openMode.value === mode"
+          :disabled="!editable"
+          :data-open-mode="mode"
+          :title="m.openModeHints[mode]"
+          @click="set({ open_in: mode })"
+        >
+          <OpenModeIcon :mode="mode" class="me-db-menu-icon" /><span class="me-menu-title">{{ m.openModes[mode] }}</span>
+          <Check v-if="db.openMode.value === mode" class="me-db-menu-end" />
+        </button>
       </template>
     </template>
   </div>

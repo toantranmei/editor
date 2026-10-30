@@ -1,4 +1,4 @@
-import type { Prop, PropType, View } from './types'
+import type { FileValue, Prop, PropType, View, ViewConfig, ViewType } from './types'
 
 /** UUIDv7 (time-ordered), as the contract's ids: clients may create them. */
 export function uuidv7(now = Date.now()): string {
@@ -75,4 +75,53 @@ export function cssPx(el: Element | null | undefined, name: string, fallback: st
   const raw = el && typeof getComputedStyle === 'function' ? getComputedStyle(el).getPropertyValue(name).trim() : ''
   const n = Number.parseFloat(raw || fallback)
   return Number.isFinite(n) ? n : Number.parseFloat(fallback)
+}
+
+/** Sensible starting config per view type, from the database's properties. */
+export function viewDefaults(type: ViewType, props: Prop[]): ViewConfig {
+  const first = (...types: string[]) => props.find(p => types.includes(p.type))?.id
+  switch (type) {
+    case 'board': {
+      const g = first('status', 'select', 'person')
+      return g ? { group_by: { prop: g }, card: { props: [] } } : { card: { props: [] } }
+    }
+    case 'calendar': return { date_prop: first('date', 'created_time') }
+    case 'timeline': return { start_prop: first('date', 'created_time'), scale: 'day' }
+    case 'gallery': return { cover: first('files'), size: 'm', card: { props: [] } }
+    case 'list': return { card: { props: [] } }
+    case 'chart': return { chart: 'bar', x: { prop: first('status', 'select', 'date') ?? props[0]?.id ?? '' }, y: [{ fn: 'count' }] }
+    case 'pivot': return { rows: [first('status', 'select') ?? ''].filter(Boolean), cols: [], values: [{ fn: 'count' }], totals: true }
+    default: return {}
+  }
+}
+
+/**
+ * Config after switching a view to another layout: keeps what both share (filter, sorts, open mode, widths, …) and
+ * fills what the new layout needs from its defaults. A board needs a group; other layouts keep theirs.
+ */
+export function switchLayout(view: View, type: ViewType, props: Prop[]): ViewConfig {
+  const defaults = viewDefaults(type, props)
+  const next: ViewConfig = { ...defaults, ...view.config }
+  if (type === 'board' && !view.config.group_by && defaults.group_by) next.group_by = defaults.group_by
+  return next
+}
+
+/**
+ * `config.visible` with `id` placed left / right of the column `next` (title excluded: it is always first). A
+ * property that is not visible yet (just created) is added.
+ */
+export function placeColumn(view: View, props: Prop[], id: string, next: string, side: 'left' | 'right'): string[] {
+  const titleId = props.find(p => p.type === 'title')?.id
+  const ids = visibleIds(view, props).filter(x => x !== id && x !== titleId)
+  const at = ids.indexOf(next)
+  const index = at < 0 ? (next === titleId ? 0 : ids.length) : at + (side === 'right' ? 1 : 0)
+  ids.splice(index, 0, id)
+  return ids
+}
+
+/** First image of a files value (cover of board / gallery cards), or null. */
+export function coverImage(value: unknown): string | null {
+  if (!Array.isArray(value)) return null
+  const img = (value as FileValue[]).find(f => !!f?.url && (/\.(png|jpe?g|gif|webp|avif|svg)(\?|#|$)/i.test(f.url) || f.url.startsWith('blob:') || f.url.startsWith('data:image')))
+  return img?.url ?? null
 }

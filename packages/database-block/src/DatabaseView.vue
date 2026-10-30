@@ -5,12 +5,12 @@
  */
 import { Maximize2 } from '@lucide/vue'
 import { baseTokensCss, type LocaleName } from '@toantranmei/editor'
-import { computed, provide, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, provide, ref, watch } from 'vue'
 import Toolbar from './components/Toolbar.vue'
 import ViewTabs from './components/ViewTabs.vue'
 import { createContext, DB_KEY } from './context'
 import { type DatabaseMessages, databaseMessages } from './messages'
-import type { DatabaseBlockOptions, DatabaseSource } from './types'
+import type { DatabaseBlockOptions, DatabaseSource, OpenMode } from './types'
 import BoardView from './views/BoardView.vue'
 import CalendarView from './views/CalendarView.vue'
 import ChartView from './views/ChartView.vue'
@@ -29,12 +29,24 @@ const props = withDefaults(defineProps<{
   messages?: Partial<Record<LocaleName, Partial<DatabaseMessages>>> | null
   options?: Partial<DatabaseBlockOptions>
   editable?: boolean
-  /** Full-page layout (taller scroll area, bigger title). */
+  /** Full-page layout (taller scroll area, no block title by default: the host page header shows it). */
   full?: boolean
+  /**
+   * Show the database title above the tabs. Default: inline yes, `full` no (the page header already shows the
+   * title). The title reads `source.meta.title` and writes `source.setMeta({ title })`.
+   */
+  showTitle?: boolean | null
   /** Theme scope for popovers teleported to <body>. Default: a plain `.me-scope`. */
   scope?: Record<string, unknown> | null
-}>(), { viewId: null, locale: 'vi', messages: null, options: () => ({}), editable: true, full: false, scope: null })
-const emit = defineEmits<{ 'update:viewId': [viewId: string], 'open': [databaseId: string, event?: MouseEvent] }>()
+}>(), { viewId: null, locale: 'vi', messages: null, options: () => ({}), editable: true, full: false, showTitle: null, scope: null })
+const emit = defineEmits<{
+  'update:viewId': [viewId: string]
+  'open': [databaseId: string, event?: MouseEvent]
+  /** A row was opened (also sent to `options.openRow` / `source.openRow`). */
+  'openRow': [rowId: string, mode: OpenMode, event?: MouseEvent | KeyboardEvent]
+  /** The title was edited here (already written with `source.setMeta`). */
+  'update:title': [title: string]
+}>()
 
 // Standalone use (outside <MeiEditor>): make sure the design tokens exist.
 if (typeof document !== 'undefined' && !document.getElementById('mei-editor-tokens')) {
@@ -58,6 +70,7 @@ const db = createContext({
   editable: () => props.editable,
   scope: () => props.scope ?? { class: ['me-scope'] },
   search,
+  onOpenRow: (rowId, mode, event) => emit('openRow', rowId, mode, event),
 })
 provide(DB_KEY, db)
 
@@ -67,27 +80,48 @@ function select(id: string) {
 }
 const type = computed(() => db.view.value?.type ?? 'table')
 const VIEWS = { table: TableView, board: BoardView, calendar: CalendarView, timeline: TimelineView, gallery: GalleryView, list: ListView, chart: ChartView, pivot: PivotView }
-const viewRef = ref<{ newRow?: () => void } | null>(null)
+const viewRef = ref<{ newRow?: (seg?: number, top?: boolean) => void } | null>(null)
 
-// ── Title ──
-const title = ref(props.source.meta.value?.title ?? '')
-watch(() => props.source.meta.value?.title, t => (title.value = t ?? ''))
+// ── Title: `source.meta.title`, saved while typing (debounced) and on blur / Enter ──
+const titleShown = computed(() => props.showTitle ?? !props.full)
+const metaTitle = computed(() => props.source.meta.value?.title ?? '')
+const title = ref(metaTitle.value)
+const titleFocused = ref(false)
+// Remote / host renames show up unless the user is typing here.
+watch(metaTitle, (t) => {
+  if (!titleFocused.value) title.value = t
+})
+let titleTimer: ReturnType<typeof setTimeout> | undefined
 function saveTitle() {
-  if (db.canEditStructure.value && title.value !== (props.source.meta.value?.title ?? '')) props.source.setMeta({ title: title.value })
+  clearTimeout(titleTimer)
+  if (!db.canEditStructure.value || title.value === metaTitle.value) return
+  props.source.setMeta({ title: title.value })
+  emit('update:title', title.value)
 }
+function onTitleInput() {
+  clearTimeout(titleTimer)
+  titleTimer = setTimeout(saveTitle, 400)
+}
+function onTitleBlur() {
+  titleFocused.value = false
+  saveTitle()
+}
+onBeforeUnmount(saveTitle)
 
-function newRow() {
-  if (type.value === 'table' && viewRef.value?.newRow) return viewRef.value.newRow()
-  const id = props.source.createRow({})
-  props.source.openRow(id)
+function newRow(where: 'top' | 'bottom' = 'bottom') {
+  if (!db.canEditContent.value) return
+  const view = viewRef.value
+  if (type.value === 'table' && view?.newRow) return view.newRow(undefined, where === 'top')
+  const id = props.source.createRow(where === 'top' ? { after: null } : {})
+  db.openRow(id)
 }
 
 defineExpose({ db, view: viewRef })
 </script>
 
 <template>
-  <div class="me-db" :class="{ 'is-full': full, 'is-readonly': !db.canEditContent.value }" :data-view-type="type">
-    <div class="me-db-header">
+  <div class="me-db" :class="{ 'is-full': full, 'is-readonly': !db.canEditContent.value, 'has-title': titleShown }" :data-view-type="type">
+    <div v-if="titleShown" class="me-db-header">
       <span v-if="source.meta.value?.icon" class="me-db-icon" aria-hidden="true">{{ source.meta.value.icon }}</span>
       <input
         v-model="title"
@@ -95,10 +129,14 @@ defineExpose({ db, view: viewRef })
         :readonly="!db.canEditStructure.value"
         :placeholder="m.titlePlaceholder"
         :aria-label="m.titlePlaceholder"
-        @blur="saveTitle"
+        data-db-title
+        @focus="titleFocused = true"
+        @input="onTitleInput"
+        @blur="onTitleBlur"
         @keydown.enter.prevent="($event.target as HTMLInputElement).blur()"
+        @keydown.esc="title = metaTitle; ($event.target as HTMLInputElement).blur()"
       >
-      <button v-if="options.open && !full" type="button" class="me-db-icon-button" :aria-label="m.openFullPage" :title="m.openFullPage" @click="emit('open', databaseId, $event); options.open?.(databaseId, $event)">
+      <button v-if="options.open && !full" type="button" class="me-db-icon-button me-db-header-action" :aria-label="m.openFullPage" :title="m.openFullPage" @click="emit('open', databaseId, $event); options.open?.(databaseId, $event)">
         <Maximize2 />
       </button>
     </div>
