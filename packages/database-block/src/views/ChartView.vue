@@ -20,6 +20,13 @@ async function load() {
   const view = db.view.value
   if (!view) return
   const mine = ++seq
+  // Switching views runs this watcher once more, with the next view, before this one unmounts
+  // (KS-BUG-12): never query a view that isn't a chart, or a chart without an x axis yet.
+  if (view.type !== 'chart' || !view.config?.x?.prop) {
+    data.value = { x: [], series: [] }
+    loading.value = false
+    return
+  }
   try {
     const res = await db.source.chart(view.id)
     if (mine === seq) data.value = res

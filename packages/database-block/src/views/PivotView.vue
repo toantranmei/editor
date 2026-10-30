@@ -20,6 +20,12 @@ async function load() {
   const view = db.view.value
   if (!view) return
   const mine = ++seq
+  // Switching views runs this watcher once more, with the next view, before this one unmounts
+  // (KS-BUG-12): never query a view that isn't a pivot, or a pivot without rows or columns yet.
+  if (view.type !== 'pivot' || !(view.config?.rows?.length || view.config?.cols?.length)) {
+    data.value = { rows: [], cols: [], cells: [] }
+    return
+  }
   try {
     const res = await db.source.pivot(view.id)
     if (mine === seq) data.value = res
