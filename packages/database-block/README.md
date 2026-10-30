@@ -112,7 +112,7 @@ The interface of the notes contract (section 1.7): reactive `meta`, `props`, `vi
 `canEditStructure`; reads `rows`, `groups`, `rowsInGroup`, `aggregate`, `chart`, `pivot`; writes `setCell`,
 `createRow`, `deleteRows`, `moveRow`, `upsertProp`, `deleteProp`, `upsertView`, `deleteView`, `setMeta`;
 `openRow(rowId, mode?)` (`mode` since 0.2, ignore it to keep the old behavior), `searchRows`, `people`, `upload?`.
-`createRow({ after: null })` must put the row first ("New → Add to top"); without `after` it goes at the end. Cell values are the contract's JSON (`select` → option id, `date` →
+`createRow({ after: null })` should put the row first ("New → Add to top"); "Add to bottom" passes the last row id. Cell values are the contract's JSON (`select` → option id, `date` →
 `{ start, end? }`, clearing → `null`). This block adds, all optional:
 
 - `rows` / `groups` / `rowsInGroup` / `aggregate` take a third argument `{ search?: string }` (the toolbar search box;
