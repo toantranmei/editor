@@ -6,7 +6,9 @@ import { safeUrl } from '../safe-url'
 /**
  * Pasting Markdown as plain text (from a chat, a README, an LLM answer…) gives blocks instead of
  * one paragraph per line (KS-BUG-11): headings, bullet / numbered / task lists (nested by
- * indentation), quotes, fenced code, dividers, and inline bold, italic, strike, code and links.
+ * indentation), quotes, fenced code, dividers, and inline bold, italic, strike, code and links
+ * (bare http(s) URLs too). Tiptap's paste rules are not run on the result: they would undo
+ * escapes (`\\*x\\*`) and the word rules (`__init__.py`).
  *
  * Converted only when the text clearly is Markdown (`looksLikeMarkdown`), at most
  * `MARKDOWN_PASTE_MAX` characters, never inside a code block, never for "paste as plain text"
@@ -15,8 +17,8 @@ import { safeUrl } from '../safe-url'
  */
 
 /** Longer plain-text pastes are never converted. */
-export const MARKDOWN_PASTE_MAX = 256 * 1024
-/** Deeper quote / list nesting is flattened to this depth. */
+export const MARKDOWN_PASTE_MAX = 100 * 1024
+/** Deeper quote / list / emphasis nesting is flattened (or kept as text) at this depth. */
 const MAX_DEPTH = 8
 
 // ---------------------------------------------------------------------------------------------
@@ -183,8 +185,23 @@ function finder(text: string) {
   }
 }
 
-/** Inline Markdown → text nodes with marks (bold, italic, strike, code, link). Linear time. */
-export function parseInline(text: string, marks: Mark[] = [], inLink = false): JSONContent[] {
+/** End of a bare URL starting at `start`: up to whitespace, without trailing punctuation. */
+function urlEnd(text: string, start: number): number {
+  let end = start
+  while (end < text.length && !isWs(text[end]) && text[end] !== '<') end++
+  while (end > start && CLOSE_BEFORE.includes(text[end - 1]!)) {
+    // Keep a closing parenthesis that belongs to the URL (`…/Foo_(bar)`).
+    if (text[end - 1] === ')' && text.slice(start, end).split('(').length > text.slice(start, end).split(')').length - 1) break
+    end--
+  }
+  return end
+}
+
+/**
+ * Inline Markdown → text nodes with marks (bold, italic, strike, code, link), bare http(s) URLs
+ * linked. Linear time; emphasis nested deeper than MAX_DEPTH stays text.
+ */
+export function parseInline(text: string, marks: Mark[] = [], inLink = false, depth = 0): JSONContent[] {
   const out: JSONContent[] = []
   let buf = ''
   const flush = () => {
@@ -229,22 +246,36 @@ export function parseInline(text: string, marks: Mark[] = [], inLink = false): J
           if (url && (!title || (title.length > 1 && title[0] === '"' && title.at(-1) === '"' && !title.slice(1, -1).includes('"')))) {
             flush()
             const href = safeUrl(url)
-            out.push(...parseInline(text.slice(i + 1, close), href ? [...marks, { type: 'link', attrs: { href } }] : marks, true))
+            out.push(...parseInline(text.slice(i + 1, close), href ? [...marks, { type: 'link', attrs: { href } }] : marks, true, depth + 1))
             i = paren + 1
             continue
           }
         }
       }
     }
+    // Bare URLs become links here (paste rules aren't run: they'd undo escapes and word rules).
+    if (c === 'h' && !inLink && (i === 0 || !isWord(text[i - 1])) && (text.startsWith('https://', i) || text.startsWith('http://', i))) {
+      const end = urlEnd(text, i)
+      const url = text.slice(i, end)
+      const href = /^https?:\/\/[^/?#\s]/.test(url) ? safeUrl(url) : null
+      if (href) {
+        flush()
+        out.push({ type: 'text', text: url, marks: [...marks, { type: 'link', attrs: { href } }] })
+        i = end
+        continue
+      }
+    }
     if (c === '*' || c === '_' || c === '~') {
-      const delimiter = EMPHASIS.find(([d]) => text.startsWith(d, i))
+      const delimiter = depth < MAX_DEPTH ? EMPHASIS.find(([d]) => text.startsWith(d, i)) : undefined
       // Opens at a word start, before a non-space.
       if (delimiter && (i === 0 || isWs(text[i - 1]) || OPEN_AFTER.includes(text[i - 1]!)) && !isWs(text[i + delimiter[0].length])) {
         const [d, type] = delimiter
         const end = next(`em${d}`, d, i + d.length + 1, closer(d.length))
         if (end !== -1) {
           flush()
-          out.push(...parseInline(text.slice(i + d.length, end), [...marks, { type }], inLink))
+          // `*_*x*_*`: a mark already applied isn't added twice (ProseMirror refuses that).
+          const inner = marks.some(m => m.type === type) ? marks : [...marks, { type }]
+          out.push(...parseInline(text.slice(i + d.length, end), inner, inLink, depth + 1))
           i = end + d.length
           continue
         }
@@ -416,17 +447,23 @@ export const MarkdownPaste = Extension.create({
           const data = event.clipboardData
           const text = data?.getData('text/plain')
           if (!text || data!.getData('text/html')) return false
-          // Shift+Mod+V, "paste as plain text": ProseMirror tracks Shift for its own plain paste.
-          if ((view as unknown as { input?: { shiftKey?: boolean } }).input?.shiftKey) return false
+          // Shift+Mod+V, "paste as plain text". Same test as ProseMirror's own plain paste:
+          // Shift+Insert (key code 45) is a normal paste.
+          const input = (view as unknown as { input?: { shiftKey?: boolean, lastKeyCode?: number | null } }).input
+          if (input?.shiftKey && input.lastKeyCode !== 45) return false
           if (view.state.selection.$from.parent.type.spec.code) return false
-          if (!looksLikeMarkdown(text)) return false
-          const blocks = markdownToBlocks(text).map(b => fitToSchema(b, view.state.schema))
+          let blocks: JSONContent[]
+          try {
+            if (!looksLikeMarkdown(text)) return false
+            blocks = markdownToBlocks(text).map(b => fitToSchema(b, view.state.schema))
+          }
+          catch (error) {
+            // Whatever goes wrong, the paste still happens, as plain text.
+            console.warn('[MeiEditor] Markdown paste failed, pasting as plain text:', error)
+            return false
+          }
           if (!blocks.length) return false
-          // Marked as a paste so paste rules run like on a normal paste (bare URLs become links).
-          return editor.chain().command(({ tr }) => {
-            tr.setMeta('uiEvent', 'paste')
-            return true
-          }).insertContent(blocks).run()
+          return editor.commands.insertContent(blocks)
         },
       },
     })]

@@ -1,4 +1,4 @@
-import { Editor } from '@tiptap/vue-3'
+import { Editor, type JSONContent } from '@tiptap/vue-3'
 import { afterEach, describe, expect, it } from 'vitest'
 import { createExtensions } from '../src/extensions'
 import { defaultBlocks } from '../src/blocks'
@@ -17,8 +17,10 @@ function editor(blocks = [text, ...defaultBlocks]) {
 }
 
 /** A real paste event through ProseMirror's handlePaste props. */
-function paste(e: Editor, plain: string, html = '', shift = false) {
-  ;(e.view as unknown as { input: { shiftKey: boolean } }).input.shiftKey = shift
+function paste(e: Editor, plain: string, html = '', shift = false, lastKeyCode: number | null = null) {
+  const input = (e.view as unknown as { input: { shiftKey: boolean, lastKeyCode: number | null } }).input
+  input.shiftKey = shift
+  input.lastKeyCode = lastKeyCode
   const event = new Event('paste') as ClipboardEvent
   Object.defineProperty(event, 'clipboardData', { value: { getData: (type: string) => (type === 'text/plain' ? plain : type === 'text/html' ? html : '') } })
   return e.view.someProp('handlePaste', f => f(e.view, event, e.state.doc.slice(0, 0))) ?? false
@@ -114,10 +116,30 @@ describe('markdown paste (KS-BUG-11)', () => {
     expect(paste(e, SAMPLE, '', true)).toBe(false)
   })
 
-  it('runs paste rules on the converted content (bare URLs become links)', () => {
+  it('bare URLs become links, without running paste rules over escapes and words', () => {
     const e = editor()
-    expect(paste(e, '- see https://example.com/a\n- two')).toBe(true)
-    expect(JSON.stringify(e.getJSON())).toContain('"href":"https://example.com/a"')
+    expect(paste(e, '- see https://example.com/a_(b), then.\n- see __init__.py and \\*lit\\* and \\_x\\_')).toBe(true)
+    const list: JSONContent = e.getJSON().content![0]!
+    const items = list.content!.map(li => li.content![0]!.content!)
+    expect(items[0]).toEqual([
+      { type: 'text', text: 'see ' },
+      { type: 'text', text: 'https://example.com/a_(b)', marks: [{ type: 'link', attrs: expect.objectContaining({ href: 'https://example.com/a_(b)' }) }] },
+      { type: 'text', text: ', then.' },
+    ])
+    expect(items[1]).toEqual([{ type: 'text', text: 'see __init__.py and *lit* and _x_' }])
+  })
+
+  it('Shift+Insert converts like a normal paste (only Shift+Mod+V is plain)', () => {
+    const e = editor()
+    expect(paste(e, SAMPLE, '', true, 45)).toBe(true)
+  })
+
+  it('deeply nested emphasis does not overflow; deeper delimiters stay text', () => {
+    const deep = `${'*_'.repeat(2000)}x${'_*'.repeat(2000)}`
+    expect(() => parseInline(deep)).not.toThrow()
+    const e = editor()
+    expect(paste(e, `- ${deep}\n- b`)).toBe(true)
+    expect(e.getText()).toContain('x')
   })
 
   it('stays fast on adversarial input (linear parsers, bounded nesting)', () => {
@@ -143,6 +165,15 @@ describe('markdown paste (KS-BUG-11)', () => {
       markdownToBlocks(input)
       expect(performance.now() - start, name).toBeLessThan(200)
     }
+  })
+
+  it('a paste near the size cap converts in reasonable time', () => {
+    const e = editor()
+    const md = '# Title\n\n- item with **bold** and `code`\n- [link](https://example.com)\n\n'
+    const text = md.repeat(Math.floor(MARKDOWN_PASTE_MAX / md.length))
+    const start = performance.now()
+    expect(paste(e, text)).toBe(true)
+    expect(performance.now() - start).toBeLessThan(1500)
   })
 
   it('very long pastes stay plain', () => {
