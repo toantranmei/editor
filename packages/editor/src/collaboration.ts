@@ -54,13 +54,18 @@ const firstRender = Extension.create({
     const editor = this.editor
     // The view each binding was rendered into: render once per binding and view.
     const rendered = new WeakMap<SyncBinding, unknown>()
+    // Set when the document can't be loaded. Sticky: the `editable` prop below wins over any
+    // later setEditable(true) (e.g. MeiEditor's `editable` watcher).
+    let broken = false
     return [new Plugin({
       key: new PluginKey('meiCollaborationFirstRender'),
+      props: { editable: () => !broken },
       view: (view) => {
         const binding = syncBinding(view)
         if (!binding || binding.prosemirrorView !== view) {
           // Nothing would ever load the document, and the first edit would overwrite the shared
           // one with this empty editor: refuse to edit.
+          broken = true
           console.error('[MeiEditor] Collaboration: the Yjs sync plugin was not found (two copies of @tiptap/y-tiptap?). The editor is read-only.')
           queueMicrotask(() => !editor.isDestroyed && editor.setEditable(false))
           return {}

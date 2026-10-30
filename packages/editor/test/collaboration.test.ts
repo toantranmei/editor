@@ -174,6 +174,10 @@ describe('collaboration', () => {
     await Promise.resolve()
     expect(error).toHaveBeenCalledWith(expect.stringContaining('sync plugin was not found'))
     expect(a.isEditable).toBe(false)
+    // Sticky: an app (or MeiEditor's `editable` prop) turning editing back on doesn't win.
+    a.setEditable(true)
+    expect(a.isEditable).toBe(false)
+    expect(a.view.dom.getAttribute('contenteditable')).toBe('false')
     error.mockRestore()
   })
 
