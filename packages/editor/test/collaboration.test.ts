@@ -149,6 +149,34 @@ describe('collaboration', () => {
     expect(a.getText()).toBe('kept undone')
   })
 
+  it('unmount + mount again: the new view gets the document and stays in sync', () => {
+    const doc = new Y.Doc()
+    const seed = collabEditor(doc)
+    seed.commands.setContent({ type: 'doc', content: [p('hello')] })
+    const element = document.createElement('div')
+    const a = new Editor({ element, extensions: [...createExtensions({ blocks, undoRedo: false }), ...collaborationExtensions({ document: doc })] })
+    editors.push(a)
+    expect(a.getText()).toBe('hello')
+    a.unmount()
+    a.mount(element)
+    expect(a.getText()).toBe('hello')
+    a.commands.insertContentAt(1, 'X')
+    expect(seed.getText()).toBe('Xhello')
+    seed.commands.insertContentAt(1, 'Y')
+    expect(a.getText()).toBe('YXhello')
+  })
+
+  it('without the sync plugin (e.g. two y-tiptap copies) the editor says so and turns read-only', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const firstRenderOnly = collaborationExtensions({ document: new Y.Doc() }).filter(e => e.name !== 'collaboration')
+    const a = new Editor({ element: document.createElement('div'), extensions: [...createExtensions({ blocks }), ...firstRenderOnly] })
+    editors.push(a)
+    await Promise.resolve()
+    expect(error).toHaveBeenCalledWith(expect.stringContaining('sync plugin was not found'))
+    expect(a.isEditable).toBe(false)
+    error.mockRestore()
+  })
+
   it('renders an existing Y.Doc once, and plugin re-registration does not re-render it', () => {
     const doc = new Y.Doc()
     const seed = collabEditor(doc)

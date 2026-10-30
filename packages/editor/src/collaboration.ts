@@ -1,7 +1,8 @@
 import { type AnyExtension, Extension, type JSONContent } from '@tiptap/core'
 import Collaboration from '@tiptap/extension-collaboration'
 import type { Schema } from '@tiptap/pm/model'
-import { Plugin, PluginKey } from '@tiptap/pm/state'
+import { type EditorState, Plugin, PluginKey } from '@tiptap/pm/state'
+import type { EditorView } from '@tiptap/pm/view'
 import { prosemirrorJSONToYXmlFragment, yXmlFragmentToProsemirrorJSON, ySyncPluginKey } from '@tiptap/y-tiptap'
 import type * as Y from 'yjs'
 
@@ -31,17 +32,42 @@ export interface MeiCollaboration {
  * edit after mount was reverted). Passing our own `mapping` turns those re-renders off; this
  * plugin does the first render instead.
  */
+interface SyncBinding { prosemirrorView: unknown, _forceRerender: () => void }
+
+/**
+ * The binding of the sync plugin in `view`. Read from the plugin itself: when the editor is
+ * mounted again (`editor.unmount(); editor.mount(el)`) the plugins are re-created but the
+ * state keeps the old plugin state, whose binding has no view any more.
+ */
+function syncBinding(view: EditorView): SyncBinding | null {
+  const plugin = view.state.plugins.find(p => p.spec.key === ySyncPluginKey)
+    // A second copy of y-tiptap in the app has its own key object: match by name too.
+    ?? view.state.plugins.find(p => (p as unknown as { key: string }).key === 'y-sync$')
+  const init = plugin?.spec.state?.init as ((config: object, state: EditorState) => { binding?: SyncBinding }) | undefined
+  const binding = init?.call(plugin, {}, view.state)?.binding
+  return binding && typeof binding._forceRerender === 'function' ? binding : null
+}
+
 const firstRender = Extension.create({
   name: 'meiCollaborationFirstRender',
   addProseMirrorPlugins() {
-    let rendered = false
+    const editor = this.editor
+    // The view each binding was rendered into: render once per binding and view.
+    const rendered = new WeakMap<SyncBinding, unknown>()
     return [new Plugin({
       key: new PluginKey('meiCollaborationFirstRender'),
       view: (view) => {
-        if (!rendered) {
-          rendered = true
-          const binding = (ySyncPluginKey.getState(view.state) as { binding?: { _forceRerender?: () => void } } | undefined)?.binding
-          binding?._forceRerender?.()
+        const binding = syncBinding(view)
+        if (!binding || binding.prosemirrorView !== view) {
+          // Nothing would ever load the document, and the first edit would overwrite the shared
+          // one with this empty editor: refuse to edit.
+          console.error('[MeiEditor] Collaboration: the Yjs sync plugin was not found (two copies of @tiptap/y-tiptap?). The editor is read-only.')
+          queueMicrotask(() => !editor.isDestroyed && editor.setEditable(false))
+          return {}
+        }
+        if (rendered.get(binding) !== view) {
+          rendered.set(binding, view)
+          binding._forceRerender()
         }
         return {}
       },
