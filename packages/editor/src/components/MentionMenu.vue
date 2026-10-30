@@ -4,6 +4,7 @@ import { Calendar, FileText, User } from '@lucide/vue'
 import { computed, nextTick, ref, watch } from 'vue'
 import { useScope } from '../composables/useScope'
 import type { MentionItem } from '../extensions/mention'
+import { usePointerMoved } from '../composables/usePointerMoved'
 
 const props = defineProps<{ editor: Editor, items: MentionItem[], command: (item: MentionItem) => void }>()
 const scope = useScope(() => props.editor)
@@ -41,6 +42,9 @@ function onKeyDown(e: KeyboardEvent) {
   return false
 }
 defineExpose({ onKeyDown })
+
+// Hover selects a row only after a real pointer move (KS-BUG-3).
+const pointerMoved = usePointerMoved()
 </script>
 
 <template>
@@ -56,7 +60,7 @@ defineExpose({ onKeyDown })
         class="me-menu-item"
         :class="{ 'is-active': index === selected }"
         :data-index="index"
-        @mouseenter="selected = index"
+        @mousemove="pointerMoved($event) && (selected = index)"
         @mousedown.prevent="command(item)"
       >
         <img v-if="item.avatar" class="me-menu-icon me-avatar" :src="item.avatar" alt="">
