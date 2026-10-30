@@ -6,7 +6,7 @@
 import { ref } from 'vue'
 import type {
   ChartResult, DatabaseSource, DateValue, FilterCondition, FilterGroup, FilterNode, FormulaCheck, Group, Person,
-  PivotResult, Prop, Row, RowQuery, View, ViewConfig,
+  OpenMode, PivotResult, Prop, Row, RowQuery, View, ViewConfig,
 } from './types'
 import { byPosition, fold, isEmptyValue, uuidv7 } from './util'
 
@@ -38,7 +38,7 @@ export interface MemorySourceInit {
   userId?: string
   canEditContent?: boolean
   canEditStructure?: boolean
-  openRow?: (rowId: string) => void
+  openRow?: (rowId: string, mode?: OpenMode) => void
 }
 
 export interface MemorySource extends DatabaseSource {
@@ -823,9 +823,9 @@ export function createMemorySource(init: MemorySourceInit): MemorySource {
       record('setMeta', [m])
       meta.value = { ...meta.value, ...m, title: m.title ?? meta.value.title }
     },
-    openRow(rowId) {
-      record('openRow', [rowId])
-      init.openRow?.(rowId)
+    openRow(rowId, mode) {
+      record('openRow', mode ? [rowId, mode] : [rowId])
+      init.openRow?.(rowId, mode)
     },
     async searchRows(dbId, q) {
       record('searchRows', [dbId, q])
