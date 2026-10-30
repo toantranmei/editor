@@ -1,4 +1,6 @@
 import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight'
+import type { Editor } from '@tiptap/core'
+import type { NodeType } from '@tiptap/pm/model'
 import { Plugin, PluginKey } from '@tiptap/pm/state'
 import type { EditorView } from '@tiptap/pm/view'
 import { createLowlight } from 'lowlight'
@@ -75,6 +77,45 @@ function refresh(view: EditorView, language: string) {
   if (tr.docChanged) view.dispatch(tr.setMeta('addToHistory', false))
 }
 
+/** What Tab inserts in a code block. */
+export const CODE_INDENT = '  '
+
+/**
+ * Tab / Shift-Tab in a code block: indent / outdent. A collapsed selection gets an indent at
+ * the cursor; a selection indents (outdents) every line it touches. Always handled inside a
+ * code block, so focus never leaves the editor (KS-BUG-5).
+ */
+export function indentCode(editor: Editor, type: NodeType, direction: 1 | -1): boolean {
+  const { state } = editor
+  const { $from, $to, empty } = state.selection
+  if ($from.parent.type !== type) return false
+  if (!$to.sameParent($from)) return true
+  if (!editor.isEditable) return true
+  const tr = state.tr
+  if (empty && direction === 1) {
+    editor.view.dispatch(tr.insertText(CODE_INDENT).scrollIntoView())
+    return true
+  }
+  const start = $from.start()
+  const text = $from.parent.textContent
+  // Start offsets of the lines touched by the selection.
+  const from = $from.parentOffset
+  const to = $to.parentOffset
+  const lines: number[] = [text.lastIndexOf('\n', from - 1) + 1]
+  for (let i = text.indexOf('\n', from); i !== -1 && i < to; i = text.indexOf('\n', i + 1)) lines.push(i + 1)
+  // Right to left, so earlier positions stay valid.
+  for (const line of lines.reverse()) {
+    if (direction === 1) {
+      tr.insertText(CODE_INDENT, start + line)
+      continue
+    }
+    const lead = /^(\t| {1,2})/.exec(text.slice(line))?.[0]
+    if (lead) tr.delete(start + line, start + line + lead.length)
+  }
+  if (tr.docChanged) editor.view.dispatch(tr.scrollIntoView())
+  return true
+}
+
 export const CodeBlock = CodeBlockLowlight.extend({
   addAttributes() {
     const parent: Record<string, object> = this.parent?.() ?? {}
@@ -82,6 +123,13 @@ export const CodeBlock = CodeBlockLowlight.extend({
     // a Yjs document (it doesn't store null attributes), turning a pure view into an edit (KS-BUG-4).
     // Highlighting still falls back to `defaultLanguage`.
     return { ...parent, language: { ...parent.language, default: null } }
+  },
+  addKeyboardShortcuts() {
+    return {
+      ...this.parent?.(),
+      'Tab': () => indentCode(this.editor, this.type, 1),
+      'Shift-Tab': () => indentCode(this.editor, this.type, -1),
+    }
   },
   addProseMirrorPlugins() {
     // One load + one re-highlight per language (not per code block: that was O(n²)).
