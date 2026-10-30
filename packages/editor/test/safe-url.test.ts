@@ -3,7 +3,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import MeiEditor from '../src/components/MeiEditor.vue'
 import { createExtensions } from '../src/extensions'
-import { defaultBlocks, file } from '../src/blocks'
+import { defaultBlocks, file, mention } from '../src/blocks'
 import { text } from '../src/blocks/basic'
 import { isSameOrigin, isWebUrl, safeUrl } from '../src/safe-url'
 
@@ -14,8 +14,8 @@ afterEach(() => {
 })
 
 /** A full <MeiEditor> (node views render through its EditorContent). */
-async function mountEditor(content: JSONContent) {
-  const wrapper = mount(MeiEditor, { props: { modelValue: content, outline: false, blocks: [...defaultBlocks, file] }, attachTo: document.body })
+async function mountEditor(content: JSONContent, editable = true) {
+  const wrapper = mount(MeiEditor, { props: { modelValue: content, outline: false, editable, blocks: [...defaultBlocks, file, mention] }, attachTo: document.body })
   await flushPromises()
   await vi.waitFor(() => expect(wrapper.emitted('ready')).toBeTruthy())
   await flushPromises()
@@ -23,7 +23,7 @@ async function mountEditor(content: JSONContent) {
 }
 
 function editor(content: string) {
-  const e = new Editor({ extensions: createExtensions({ blocks: [text, ...defaultBlocks, file] }), content })
+  const e = new Editor({ extensions: createExtensions({ blocks: [text, ...defaultBlocks, file, mention] }), content })
   editors.push(e)
   return e
 }
@@ -83,5 +83,27 @@ describe('image block (KS-BUG-7)', () => {
     expect(images.map(n => n.attrs!.src)).toEqual([null, 'data:image/png;base64,iVBORw0KGgo='])
     e.commands.setContent({ type: 'doc', content: [{ type: 'image', attrs: { src: 'javascript:alert(1)' } }] })
     expect(e.getHTML()).not.toContain('javascript')
+  })
+})
+
+describe('mention links', () => {
+  it('pasted HTML drops javascript: hrefs and avatars', () => {
+    const e = editor('<p><span data-type="mention" data-id="p1" data-label="Page" data-kind="page" data-href="javascript:alert(1)"></span> <span data-type="mention" data-id="u1" data-label="U" data-kind="user" data-avatar="javascript:x" data-href="/notes/p2"></span></p>')
+    const mentions: JSONContent[] = e.getJSON().content![0]!.content!.filter(n => n.type === 'mention')
+    expect(mentions.map(m => [m.attrs!.href, m.attrs!.avatar])).toEqual([[null, null], ['/notes/p2', null]])
+  })
+
+  it('a read-only click never opens an unsafe href', async () => {
+    const open = vi.spyOn(window, 'open').mockImplementation(() => null)
+    const { element, wrapper } = await mountEditor({ type: 'doc', content: [{ type: 'paragraph', content: [
+      { type: 'mention', attrs: { id: 'p1', label: 'Bad', kind: 'page', href: 'javascript:alert(1)' } },
+      { type: 'mention', attrs: { id: 'p2', label: 'Good', kind: 'page', href: '/notes/p2' } },
+    ] }] }, false)
+    const chips = [...element.querySelectorAll<HTMLElement>('.me-mention')]
+    expect(chips.length).toBe(2)
+    for (const chip of chips) chip.click()
+    expect(open.mock.calls.map(c => c[0])).toEqual(['/notes/p2'])
+    open.mockRestore()
+    wrapper.unmount()
   })
 })

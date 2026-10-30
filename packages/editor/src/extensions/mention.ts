@@ -9,6 +9,7 @@ import { type DateValue, isoDate, reminderTime } from '../date-utils'
 
 export { formatDateValue, formatMentionDate, isoDate, parseIsoDate, reminderTime, type DateFormat, type DateValue, type TimeFormat } from '../date-utils'
 import { suggestionRenderer } from './suggestion-renderer'
+import { safeUrl } from '../safe-url'
 
 export type MentionKind = 'user' | 'page' | 'date'
 
@@ -107,8 +108,9 @@ export const MentionNode = Mention.extend<MentionOptions & Record<string, any>>(
     return {
       ...this.parent?.(),
       kind: attr('kind'),
-      href: attr('href'),
-      avatar: attr('avatar'),
+      // Pasted HTML can carry any data-href / data-avatar: only web, blob and relative URLs.
+      href: { ...attr('href'), parseHTML: (el: HTMLElement) => safeUrl(el.getAttribute('data-href')) },
+      avatar: { ...attr('avatar'), parseHTML: (el: HTMLElement) => safeUrl(el.getAttribute('data-avatar'), 'image') },
       // Date mentions (id = start date): see DateValue.
       end: attr('end'),
       time: attr('time'),
