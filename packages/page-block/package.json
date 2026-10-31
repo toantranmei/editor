@@ -1,6 +1,6 @@
 {
   "name": "@toantranmei/page-block",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Notion-style sub-page and link-to-page block for @toantranmei/editor.",
   "keywords": [
     "vue",
