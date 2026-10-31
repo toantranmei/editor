@@ -3,6 +3,7 @@ import type { Editor } from '@tiptap/core'
 import { computed, nextTick, ref, watch } from 'vue'
 import { useScope } from '../composables/useScope'
 import type { SlashItem } from '../slash-items'
+import { usePointerMoved } from '../composables/usePointerMoved'
 
 const props = defineProps<{
   editor: Editor
@@ -57,6 +58,9 @@ function onKeyDown(event: KeyboardEvent) {
 }
 
 defineExpose({ onKeyDown })
+
+// Hover selects a row only after a real pointer move (KS-BUG-3).
+const pointerMoved = usePointerMoved()
 </script>
 
 <template>
@@ -73,7 +77,7 @@ defineExpose({ onKeyDown })
           :data-index="index"
           class="me-menu-item"
           :class="{ 'is-active': index === selected }"
-          @mouseenter="selected = index"
+          @mousemove="pointerMoved($event) && (selected = index)"
           @mousedown.prevent="select(index)"
         >
           <span v-if="item.swatch" class="me-menu-icon" :class="item.swatch.kind === 'text' ? 'me-swatch--text' : 'me-swatch--bg'" :data-color="item.swatch.color">A</span>

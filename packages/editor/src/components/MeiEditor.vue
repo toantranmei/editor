@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { AnyExtension } from '@tiptap/core'
-import { type Editor, EditorContent, type JSONContent, useEditor } from '@tiptap/vue-3'
+import { Editor, EditorContent, type EditorOptions, type JSONContent } from '@tiptap/vue-3'
 import { DragHandle } from '@tiptap/extension-drag-handle-vue-3'
 import type { NestedOptions } from '@tiptap/extension-drag-handle'
 import type { Node as PMNode } from '@tiptap/pm/model'
@@ -9,6 +9,7 @@ import { GripVertical, Plus } from '@lucide/vue'
 import { computed, inject, onBeforeUnmount, onMounted, ref, shallowRef, toRaw, useId, watch, watchEffect } from 'vue'
 import type { ImageUploader } from '../config'
 import { createExtensions } from '../extensions'
+import type { MeiCollaboration } from '../collaboration'
 import { type BlockRange, currentRange, isBlockSelection, rangeOfBlock, selectBlocks } from '../block-ops'
 import { handleAnchorRect } from '../handle-anchor'
 import { kbd } from '../keys'
@@ -55,6 +56,13 @@ const props = withDefaults(defineProps<{
    * `minHeadings` headings (default 2). `false` turns it off.
    */
   outline?: boolean | { minHeadings?: number }
+  /**
+   * Edit a shared Yjs document (read once, at mount). The `Y.Doc` is the source of truth:
+   * `modelValue` is ignored and `update:modelValue` is not emitted — listen to `change`
+   * (cheap, no payload to serialize) and read the document yourself when needed.
+   * Undo / redo become Yjs undo (only your own changes).
+   */
+  collaboration?: MeiCollaboration
 }>(), {
   outline: true,
   theme: 'auto',
@@ -66,7 +74,13 @@ const props = withDefaults(defineProps<{
 })
 
 const emit = defineEmits<{
+  /** Document after each change (not emitted in collaboration mode). */
   'update:modelValue': [content: JSONContent]
+  /**
+   * Fired on every document change, local or remote, without serializing it. Debounce
+   * your own work (saving, title extraction…) and call `editor.getJSON()` when you need it.
+   */
+  'change': [info: { editor: Editor }]
   'ready': [editor: Editor]
   /**
    * Problems found while loading content. `fatal` means the input isn't a document:
@@ -143,34 +157,60 @@ function load(ed: Editor, doc: JSONContent | null | undefined) {
 // The last value we emitted, so an echoed v-model update doesn't reset the doc.
 let lastEmitted: JSONContent | null = null
 
-const editor = useEditor({
-  extensions: [
-    ...createExtensions({
-      blocks,
-      messages: messages.value,
-      locale: props.locale,
-      uploadImage: props.uploadImage ?? null,
-      maxImageSize: props.maxImageSize,
-      scope: scope.value,
-    }),
-    ...(props.extensions ?? []),
-  ],
-  content: null,
-  editable: props.editable,
-  autofocus: props.autofocus,
-  editorProps: {
-    attributes: { class: 'me-content', spellcheck: 'false' },
-  },
-  onCreate: ({ editor }) => {
-    // Load content after the schema exists, so unknown block types can be wrapped.
-    load(editor as Editor, toRaw(props.modelValue))
-    emit('ready', editor as Editor)
-  },
-  onUpdate: ({ editor }) => {
-    if (contentFailed.value) return
-    lastEmitted = unwrapUnknown(editor.getJSON())
-    emit('update:modelValue', lastEmitted)
-  },
+// Read once, like `blocks`. With it the Y.Doc owns the content: never setContent / v-model.
+const collaboration = props.collaboration ? toRaw(props.collaboration) : undefined
+
+const editor = shallowRef<Editor>()
+let unmounted = false
+
+function createEditor(extra: AnyExtension[]) {
+  const options: Partial<EditorOptions> = {
+    extensions: [
+      ...createExtensions({
+        blocks,
+        messages: messages.value,
+        locale: props.locale,
+        uploadImage: props.uploadImage ?? null,
+        maxImageSize: props.maxImageSize,
+        scope: scope.value,
+        // Collaboration brings Yjs undo (Mod-z / Mod-Shift-z); two histories would fight.
+        undoRedo: !collaboration,
+      }),
+      ...extra,
+      ...(props.extensions ?? []),
+    ],
+    content: null,
+    editable: props.editable,
+    autofocus: props.autofocus,
+    editorProps: {
+      attributes: { class: 'me-content', spellcheck: 'false' },
+    },
+    onCreate: ({ editor }) => {
+      // Load content after the schema exists, so unknown block types can be wrapped.
+      if (!collaboration) load(editor as Editor, toRaw(props.modelValue))
+      emit('ready', editor as Editor)
+    },
+    onUpdate: ({ editor }) => {
+      if (contentFailed.value) return
+      emit('change', { editor: editor as Editor })
+      // getJSON() is O(document): skip it when nobody needs the JSON (collaboration).
+      if (collaboration) return
+      lastEmitted = unwrapUnknown(editor.getJSON())
+      emit('update:modelValue', lastEmitted)
+    },
+  }
+  editor.value = new Editor(options)
+}
+
+onMounted(() => {
+  if (!collaboration) {
+    createEditor([])
+    return
+  }
+  // Yjs + the sync plugin load only for collaborative editors.
+  import('../collaboration').then(({ collaborationExtensions }) => {
+    if (!unmounted) createEditor(collaborationExtensions(collaboration))
+  }).catch(error => console.error('[MeiEditor] Collaboration could not be loaded:', error))
 })
 
 // Only reload the document for real external changes. `v-model` on a `ref()` hands
@@ -178,7 +218,7 @@ const editor = useEditor({
 watch(() => props.modelValue, (value) => {
   const ed = editor.value
   const raw = value ? toRaw(value) : null
-  if (!ed || raw === lastEmitted) return
+  if (!ed || collaboration || raw === lastEmitted) return
   if (raw && JSON.stringify(raw) === JSON.stringify(unwrapUnknown(ed.getJSON()))) return
   load(ed, raw)
 })
@@ -369,6 +409,7 @@ watch(editor, (ed) => {
 }, { immediate: true })
 onMounted(() => window.addEventListener('hashchange', revealHashBlock))
 onBeforeUnmount(() => {
+  unmounted = true
   window.removeEventListener('hashchange', revealHashBlock)
   clearTimeout(toastTimer)
   clearTimeout(tooltipTimer)

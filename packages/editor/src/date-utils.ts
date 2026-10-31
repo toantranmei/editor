@@ -81,10 +81,13 @@ export function formatMentionDate(id: string, locale: string): string {
   return formatDate(id, locale, 'short')
 }
 
-/** Parses what users type in the date box: 24/10/2026, 2026-10-24, 10/24/2026 (en), "Oct 24, 2026". */
+/** Parses what users type in the date box: 24/10/2026, 2026-10-24, 10/24/2026 (en), "Oct 24, 2026", 2026年10月24日. */
 export function parseDateInput(text: string, locale: string): string | null {
   const t = text.trim()
-  let m = /^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$/.exec(t)
+  // Chinese: 2026年10月24日 / 10月24日
+  let m = /^(?:(\d{4})\s*年\s*)?(\d{1,2})\s*月\s*(\d{1,2})\s*[日号]?$/.exec(t)
+  if (m) return valid(m[1] ? Number(m[1]) : new Date().getFullYear(), Number(m[2]), Number(m[3]))
+  m = /^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$/.exec(t)
   if (m) return valid(Number(m[1]), Number(m[2]), Number(m[3]))
   m = /^(\d{1,2})[-/.](\d{1,2})(?:[-/.](\d{2,4}))?$/.exec(t)
   if (m) {
@@ -102,13 +105,16 @@ function valid(y: number, mo: number, d: number): string | null {
   return date.getFullYear() === y && date.getMonth() === mo - 1 && date.getDate() === d ? isoDate(date) : null
 }
 
-/** Parses "14:30", "9", "2:30 pm", "9am" → `HH:mm`. */
+/** Parses "14:30", "9", "2:30 pm", "9am", "下午2:30", "14点" → `HH:mm`. */
 export function parseTimeInput(text: string): string | null {
-  const m = /^(\d{1,2})(?:[:.h](\d{2}))?\s*(am|pm|sa|ch)?$/i.exec(text.trim())
+  const t = text.trim()
+  // Chinese puts the period first: 上午 / 下午 / 晚上 9:30.
+  const zh = /^(上午|早上|中午|下午|晚上)\s*/.exec(t)
+  const m = /^(\d{1,2})(?:[:.h点時时](\d{2})?分?)?\s*(am|pm|sa|ch)?$/i.exec(zh ? t.slice(zh[0].length) : t)
   if (!m) return null
   let h = Number(m[1])
   const min = Number(m[2] ?? 0)
-  const suffix = m[3]?.toLowerCase()
+  const suffix = zh ? (zh[1] === '上午' || zh[1] === '早上' ? 'am' : zh[1] === '中午' ? (h < 11 ? 'pm' : undefined) : 'pm') : m[3]?.toLowerCase()
   if (suffix === 'pm' || suffix === 'ch') h = h % 12 + 12
   else if (suffix === 'am' || suffix === 'sa') h = h % 12
   return h < 24 && min < 60 ? `${pad(h)}:${pad(min)}` : null

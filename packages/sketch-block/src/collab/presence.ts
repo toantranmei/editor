@@ -4,6 +4,7 @@
  * pulls it into a bundle; with no awareness the board never constructs any of this.
  */
 import type { Awareness } from 'y-protocols/awareness'
+import type { SketchLocale } from '../messages'
 import { cornersBox, elementCorners } from '../geometry/bounds'
 import type { Box, Point } from '../geometry/math'
 import type { Scene } from '../model/scene'
@@ -55,10 +56,10 @@ export function guestColor(clientId: number): string {
   return GUEST_COLORS[hashId(clientId) % GUEST_COLORS.length]!
 }
 
-/** `Khách N` / `Guest N` with a palette color, both stable for a client id. */
-export function defaultUser(clientId: number, locale: 'vi' | 'en'): PresenceUser {
+/** `Khách N` / `Guest N` / `访客 N` with a palette color, both stable for a client id. */
+export function defaultUser(clientId: number, locale: SketchLocale): PresenceUser {
   const n = (clientId >>> 0) % 1000
-  return { name: `${locale === 'en' ? 'Guest' : 'Khách'} ${n}`, color: guestColor(clientId) }
+  return { name: `${locale === 'en' ? 'Guest' : locale === 'zh' ? '访客' : 'Khách'} ${n}`, color: guestColor(clientId) }
 }
 
 const HEX_COLOR = /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i
@@ -82,7 +83,7 @@ const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFin
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v)
 
 /** The local identity: the `user` option (a function is called; failures fall back), else a guest. */
-export function resolveUser(option: UserOption | null | undefined, clientId: number, locale: 'vi' | 'en'): PresenceUser {
+export function resolveUser(option: UserOption | null | undefined, clientId: number, locale: SketchLocale): PresenceUser {
   const guest = defaultUser(clientId, locale)
   let raw: unknown = option
   if (typeof option === 'function') {
@@ -194,7 +195,7 @@ export class PresencePublisher {
 interface ReaderOptions {
   /** Our clock (the one the laser fade uses), ms. */
   now: () => number
-  locale: () => 'vi' | 'en'
+  locale: () => SketchLocale
   /** A remote peer appeared, changed or left. */
   onChange: () => void
 }

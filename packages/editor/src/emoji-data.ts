@@ -6,6 +6,7 @@ const normalize = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').repl
 interface Compact { hexcode: string, label: string, unicode: string, tags?: string[], group?: number }
 const LOCALES: Record<string, () => Promise<{ default: Compact[] }>> = {
   vi: () => import('emojibase-data/vi/compact.json'),
+  zh: () => import('emojibase-data/zh/compact.json'),
 }
 
 let cache: Promise<EmojiEntry[]> | null = null

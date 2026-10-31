@@ -18,6 +18,7 @@ export { filterBlocks, isNode, type BlockType } from './block-items'
 export { collectExtensions, defineBlock, type BlockDefinition, type BlockSpec } from './define-block'
 export * from './blocks'
 export { ContentError, sanitizeContent, unwrapUnknown, wrapUnknown, type ContentIssue } from './content'
+export { isSameOrigin, isWebUrl, safeUrl, type DataUrlPolicy } from './safe-url'
 export { GLOBAL_BLOCKS_KEY, GLOBAL_TOKENS_KEY } from './plugin-key'
 export { TableOfContents } from './extensions/toc'
 export { MathBlock, MathInline } from './extensions/math'
@@ -48,7 +49,7 @@ export {
   type ThemeMode,
   type ThemeTokens,
 } from './theme'
-export { en, locales, resolveMessages, vi, type BlockGroup, type EditorMessages, type LocaleName, type PartialMessages } from './locale'
+export { en, locales, resolveMessages, vi, zh, type BlockGroup, type EditorMessages, type LocaleName, type PartialMessages } from './locale'
 
 export { blockNodeView } from './nodeviews/renderer'
 export { useClickOutside } from './composables/useClickOutside'

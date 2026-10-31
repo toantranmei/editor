@@ -12,6 +12,7 @@ import { useScope } from '../composables/useScope'
 import { readTokenPx } from '../theme/read'
 import { pushRecentColor, recent } from '../recent'
 import { blocksIn, currentRange, isBlockSelection, rangeColors, turnBlocksInto } from '../block-ops'
+import type { FormatAction } from '../define-block'
 import ColorList from './ColorList.vue'
 
 const props = defineProps<{ editor: Editor }>()
@@ -23,13 +24,34 @@ const m = computed(() => props.editor.storage.meiConfig.messages)
 const scope = useScope(() => props.editor)
 const offset = readTokenPx(props.editor.view.dom, 'popover.offset')
 
+/** Bubble-menu buttons from blocks (e.g. "Comment"); read-only editors show only `readOnly` ones. */
+const actionsFor = (editor: CoreEditor) => (editor.storage.meiConfig?.formatActions ?? [])
+  .filter(a => (editor.isEditable || a.readOnly) && (a.isVisible?.(editor) ?? true))
+
 const shouldShow = ({ editor, state, from, to }: { editor: CoreEditor, state: EditorState, from: number, to: number }) => {
-  if (!editor.isEditable || from === to) return false
+  if (from === to) return false
+  if (!editor.isEditable && !actionsFor(editor).length) return false
   // Whole-block selections use the ⋮⋮ menu instead, like Notion.
   // Whole cells use the table toolbar.
   if (state.selection instanceof NodeSelection || state.selection instanceof CellSelection || isBlockSelection(state)) return false
   if (editor.isActive('codeBlock')) return false
   return state.doc.textBetween(from, to).length > 0
+}
+
+// `isEditable` isn't reactive; reading the (reactive) state re-evaluates it on each transaction.
+const editable = computed(() => {
+  void props.editor.state
+  return props.editor.isEditable
+})
+// Re-read on every render of the menu (selection changes re-render it).
+const actions = computed(() => {
+  void props.editor.state.selection
+  return actionsFor(props.editor as CoreEditor)
+})
+const actionTitle = (a: FormatAction) => (typeof a.title === 'function' ? a.title(props.editor as CoreEditor) : a.title)
+function runAction(a: FormatAction) {
+  panel.value = null
+  a.run(props.editor as CoreEditor)
 }
 
 const targets = computed(() => turnIntoBlocks(props.editor))
@@ -92,55 +114,69 @@ const activeTextColor = computed(() => props.editor.getAttributes('textColor').c
     plugin-key="formatMenu"
   >
     <div v-bind="scope" class="me-popover me-toolbar" @mousedown="panel !== 'link' && $event.preventDefault()">
-      <template v-if="current">
-        <button type="button" class="me-tool-btn" @click="toggle('turn')">
-          {{ blockTitle(m, current) }} <ChevronDown class="me-chevron" />
+      <template v-if="!editable">
+        <button v-for="a in actions" :key="a.id" type="button" class="me-tool-btn" :title="actionTitle(a)" @click="runAction(a)">
+          <component :is="a.icon" /> {{ actionTitle(a) }}
         </button>
-        <span class="me-toolbar-divider" />
       </template>
+      <template v-else>
+        <template v-if="current">
+          <button type="button" class="me-tool-btn" @click="toggle('turn')">
+            {{ blockTitle(m, current) }} <ChevronDown class="me-chevron" />
+          </button>
+          <span class="me-toolbar-divider" />
+        </template>
 
-      <button
-        v-for="mark in marks"
-        :key="mark.name"
-        type="button"
-        class="me-tool-btn"
-        :class="{ 'is-active': editor.isActive(mark.name) }"
-        :title="mark.title"
-        @click="mark.run"
-      >
-        <component :is="mark.icon" />
-      </button>
-
-      <span class="me-toolbar-divider" />
-      <button type="button" class="me-tool-btn" :class="{ 'is-active': editor.isActive('link') }" :title="m.format.link" @click="toggle('link')">
-        <Link />
-      </button>
-      <button type="button" class="me-tool-btn" :title="m.format.color" @click="toggle('color')">
-        <Baseline class="me-swatch--text" :data-color="activeTextColor" />
-        <ChevronDown class="me-chevron" />
-      </button>
-
-      <div v-if="panel === 'turn'" class="me-popover me-toolbar-panel me-menu">
-        <button v-for="b in targets" :key="b.id" type="button" class="me-menu-item" @click="turnInto(b.id)">
-          <span class="me-menu-icon"><component :is="b.icon" /></span>
-          <span class="me-menu-title me-menu-text">{{ blockTitle(m, b) }}</span>
-          <Check v-if="current?.id === b.id" class="me-menu-check" />
+        <button
+          v-for="mark in marks"
+          :key="mark.name"
+          type="button"
+          class="me-tool-btn"
+          :class="{ 'is-active': editor.isActive(mark.name) }"
+          :title="mark.title"
+          @click="mark.run"
+        >
+          <component :is="mark.icon" />
         </button>
-      </div>
 
-      <form v-if="panel === 'link'" class="me-popover me-toolbar-panel me-link-form" @submit.prevent="applyLink()">
-        <input ref="linkInput" v-model="linkUrl" class="me-input" :placeholder="m.format.linkPlaceholder" @keydown.esc="panel = null">
-        <button type="submit" class="me-btn me-btn--primary">
-          {{ m.format.apply }}
+        <span class="me-toolbar-divider" />
+        <button type="button" class="me-tool-btn" :class="{ 'is-active': editor.isActive('link') }" :title="m.format.link" @click="toggle('link')">
+          <Link />
         </button>
-        <button v-if="editor.isActive('link')" type="button" class="me-btn" :title="m.format.removeLink" @click="applyLink('')">
-          <Unlink />
+        <button type="button" class="me-tool-btn" :title="m.format.color" @click="toggle('color')">
+          <Baseline class="me-swatch--text" :data-color="activeTextColor" />
+          <ChevronDown class="me-chevron" />
         </button>
-      </form>
 
-      <div v-if="panel === 'color'" class="me-popover me-toolbar-panel me-toolbar-panel--end me-menu">
-        <ColorList :messages="m" :recent="recent.colors" :current="selectionColors" @pick="setColor" />
-      </div>
+        <template v-if="actions.length">
+          <span class="me-toolbar-divider" />
+          <button v-for="a in actions" :key="a.id" type="button" class="me-tool-btn" :title="actionTitle(a)" @click="runAction(a)">
+            <component :is="a.icon" /> {{ actionTitle(a) }}
+          </button>
+        </template>
+
+        <div v-if="panel === 'turn'" class="me-popover me-toolbar-panel me-menu">
+          <button v-for="b in targets" :key="b.id" type="button" class="me-menu-item" @click="turnInto(b.id)">
+            <span class="me-menu-icon"><component :is="b.icon" /></span>
+            <span class="me-menu-title me-menu-text">{{ blockTitle(m, b) }}</span>
+            <Check v-if="current?.id === b.id" class="me-menu-check" />
+          </button>
+        </div>
+
+        <form v-if="panel === 'link'" class="me-popover me-toolbar-panel me-link-form" @submit.prevent="applyLink()">
+          <input ref="linkInput" v-model="linkUrl" class="me-input" :placeholder="m.format.linkPlaceholder" @keydown.esc="panel = null">
+          <button type="submit" class="me-btn me-btn--primary">
+            {{ m.format.apply }}
+          </button>
+          <button v-if="editor.isActive('link')" type="button" class="me-btn" :title="m.format.removeLink" @click="applyLink('')">
+            <Unlink />
+          </button>
+        </form>
+
+        <div v-if="panel === 'color'" class="me-popover me-toolbar-panel me-toolbar-panel--end me-menu">
+          <ColorList :messages="m" :recent="recent.colors" :current="selectionColors" @pick="setColor" />
+        </div>
+      </template>
     </div>
   </BubbleMenu>
 </template>

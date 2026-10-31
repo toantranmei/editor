@@ -10,7 +10,7 @@ Notion-style block editor for **Vue 3** and **Nuxt**, built on [Tiptap](https://
   callout, toggle, toggle headings, table, columns — plus opt-in table of contents, math (KaTeX),
   Mermaid diagrams, emoji picker, file/audio/video uploads and @mentions
 - Pick the blocks each app loads; heavy libraries load only when a document needs them
-- Vietnamese and English UI, themable with CSS variables, ships its own CSS (no Tailwind needed)
+- Vietnamese, English and Simplified Chinese UI, themable with CSS variables, ships its own CSS (no Tailwind needed)
 
 ## Install
 
@@ -124,6 +124,11 @@ App-wide: `app.use(MeiEditorPlugin, { blocks })`, or in Nuxt `meiEditor: { block
 | `file` | – | File, audio, video; `upload`, `maxSize` (MB, base64 when no `upload`) |
 | `mention` | – | `@` people/pages via `search`; dates (today, 25/12…) built in. Click a date for a Notion-style picker (typed date/time, end date, date & time formats, reminders, clear); click a person/page to search and switch (read-only: `onClick` / page link). Reminders: `onRemind`, `getMentionReminders(doc)`, `reminderHelpUrl` |
 
+Separate packages add more blocks: [`@toantranmei/page-block`](https://www.npmjs.com/package/@toantranmei/page-block)
+(sub-pages), [`@toantranmei/database-block`](https://www.npmjs.com/package/@toantranmei/database-block) (Notion-style
+databases: table, board, calendar, timeline, gallery, list, chart, pivot) and
+[`@toantranmei/chart-block`](https://www.npmjs.com/package/@toantranmei/chart-block) (charts, ECharts loaded lazily).
+
 ### Custom blocks
 
 ```ts
@@ -136,6 +141,10 @@ export const invoice = defineBlock({
   extensions: () => [InvoiceNode], // your Tiptap node
   items: () => [{ id: 'invoice', icon: Receipt, group: 'advanced', keywords: ['bill'], insert: c => c.insertInvoice() }],
   messages: { vi: { blocks: { invoice: { title: 'Hoá đơn', description: 'Chèn hoá đơn' } } } },
+  // Optional: static HTML for `renderHTML` (see "Server-side rendering"); must not touch the DOM.
+  render: () => ({ nodes: { invoice: (node, ctx) => `<div class="invoice"${ctx.blockAttrs(node)}>${ctx.escape(node.attrs?.total)}</div>` } }),
+  // Optional: buttons in the selection bubble menu; `readOnly: true` also shows them in read-only editors.
+  formatActions: () => [{ id: 'cite', icon: Quote, title: 'Cite', run: editor => cite(editor) }],
 })
 ```
 
@@ -152,7 +161,7 @@ the original JSON comes back unchanged in `v-model`. (Unknown *marks* are droppe
 | `modelValue`   | `JSONContent \| null`             | `null`  | Document as Tiptap JSON (`v-model`)                      |
 | `editable`     | `boolean`                         | `true`  | Read-only when `false`                                   |
 | `autofocus`    | `boolean \| 'start' \| 'end'`     | `false` | Focus on mount                                           |
-| `locale`       | `'vi' \| 'en'`                    | `'vi'`  | UI language                                              |
+| `locale`       | `'vi' \| 'en' \| 'zh'`            | `'vi'`  | UI language (`zh`: Simplified Chinese)                   |
 | `messages`     | `PartialMessages`                 | –       | Override any UI string                                   |
 | `blocks`       | `BlockDefinition[]`               | `defaultBlocks` | Blocks to load (read at mount), see "Choosing blocks" |
 | `uploadImage`  | `(file: File) => Promise<string>` | –       | Upload an image and return its URL (default: base64)     |
@@ -162,8 +171,103 @@ the original JSON comes back unchanged in `v-model`. (Unknown *marks* are droppe
 | `tokens`       | `ThemeTokens`                     | –       | Design token overrides for this editor (see Theming)     |
 | `blockLink`    | `(id: string) => string`          | –       | URL for "Copy link to block" (default: page URL + `#id`) |
 | `outline`      | `boolean \| { minHeadings }`      | `true`  | Floating outline on the right (shown from 2 headings)    |
+| `collaboration` | `{ document: Y.Doc, field?: string }` | – | Edit a shared Yjs document (read at mount). `field` defaults to `'default'`. See "Collaboration (Yjs)" |
 
-Events: `update:modelValue`, `ready(editor)`, `content-error({ fatal, issues, error })`. The Tiptap editor is also exposed via a template ref (`ref.editor`).
+Events: `update:modelValue` (not in collaboration mode), `change({ editor })` (every local or remote change, nothing serialized), `ready(editor)`, `content-error({ fatal, issues, error })`. The Tiptap editor is also exposed via a template ref (`ref.editor`).
+
+## Collaboration (Yjs)
+
+Pass a `Y.Doc` and the editor reads and writes it directly (Tiptap's `Collaboration` extension):
+
+- The `Y.Doc` is the source of truth: `modelValue` is never loaded (it would overwrite the shared
+  document) and `update:modelValue` is not emitted. Listen to `change` instead. It fires on every
+  change and doesn't serialize anything, so debounce your own work and call `editor.getJSON()` there.
+- Undo / redo is Yjs undo (only your own changes), with the same keys: `Mod-z`, `Mod-Shift-z`, `Mod-y`.
+- Block ids and every built-in block work as usual in a shared document.
+- The prop is read once at mount: to switch documents, re-mount the editor (`:key="pageId"`).
+- Yjs loads only for collaborative editors (`@toantranmei/editor/collaboration` is a separate chunk).
+  Install `yjs` (`^13.6`, an optional peer) in your app, and keep a single copy of it: two copies
+  of Yjs break the sync.
+
+```bash
+npm i yjs y-indexeddb
+```
+
+```vue
+<script setup lang="ts">
+import { onBeforeUnmount } from 'vue'
+import * as Y from 'yjs'
+import { IndexeddbPersistence } from 'y-indexeddb'
+import { MeiEditor, type Editor } from '@toantranmei/editor'
+
+const props = defineProps<{ pageId: string }>()
+const doc = new Y.Doc()
+const local = new IndexeddbPersistence(`page:${props.pageId}`, doc) // offline copy in this browser
+// const remote = new WebsocketProvider(url, props.pageId, doc)     // + any provider for live sync
+
+const saveTitle = (title: string) => { /* your API */ }
+let timer: ReturnType<typeof setTimeout> | undefined
+function onChange({ editor }: { editor: Editor }) {
+  clearTimeout(timer)
+  timer = setTimeout(() => saveTitle(editor.state.doc.firstChild?.textContent ?? ''), 1000)
+}
+onBeforeUnmount(() => { local.destroy(); doc.destroy() })
+</script>
+
+<template>
+  <MeiEditor :collaboration="{ document: doc, field: 'default' }" @change="onChange" />
+</template>
+```
+
+For a headless setup use `createExtensions({ blocks, undoRedo: false })` together with
+`collaborationExtensions({ document, field })` from `@toantranmei/editor/collaboration`.
+The same entry has `fillDocument(doc, json, editor.schema, field?)` (seed / replace a shared document's
+content in one Yjs transaction) and `documentToJSON(doc, field?)` (its content as editor JSON).
+
+## Server-side rendering
+
+`@toantranmei/editor/render` turns editor JSON into static HTML, in Node (no DOM, no Vue, no
+ProseMirror) or the browser. The markup and `me-*` classes are the editor's, so
+`@toantranmei/editor/style.css` styles it like a read-only editor: heading anchors (block id, or a slug),
+the table of contents as links, code highlighted with lowlight, equations with KaTeX, toggles as
+`<details>`, images with width / alignment / crop / caption, tables, columns, callouts, files, audio,
+video, mentions as links, embeds and HTML blocks as sandboxed iframes.
+
+```ts
+// server/routes/p/[slug].get.ts (Nuxt / Nitro)
+import { defaultBlocks, math, mention, toc } from '@toantranmei/editor' // or only render hooks, see below
+import { renderHTMLAsync, renderTokensStyle } from '@toantranmei/editor/render'
+import { pageBlockRender } from '@toantranmei/page-block/render'
+
+const html = await renderHTMLAsync(page.doc, {
+  locale: page.lang,                       // 'vi' | 'en' | 'zh'
+  blocks: [pageBlockRender],                // render hooks of non-built-in blocks
+  resolveLink: id => ({ href: `/notes/p/${slug}/${id}`, title: titles[id], icon: icons[id] }), // null = missing
+})
+// <head>: '@toantranmei/editor/style.css' (+ 'katex/dist/katex.min.css' with math) and renderTokensStyle()
+```
+
+| Option | Description |
+| --- | --- |
+| `blocks` | Blocks whose `render` hooks are used (BlockDefinitions or `{ name, render }`). Built-in blocks always render |
+| `locale`, `messages` | UI strings (TOC label, "Untitled"…) and date formats |
+| `resolveLink(pageId)` | `{ href, title?, icon? }` or `null` for page links (`@toantranmei/page-block`) |
+| `mentionHref(mention)` | Link for person / page mentions (default: the stored `href`) |
+| `katex` | `import katex from 'katex'` to render equations synchronously; `renderHTMLAsync` loads it when a document has math. Without it: the TeX source |
+| `wrap` | Default `true`: `<div class="me-scope me-root me-render"><div class="me-content">…</div></div>` |
+| `theme`, `className` | `'light'` / `'dark'` force a mode (default follows `<html class="dark">`), extra wrapper classes |
+| `externalLinksInNewTab` | Default `true` (`target="_blank" rel="noopener noreferrer nofollow"`) |
+| `data` | Anything custom renderers need (e.g. `syncedBlocks`, database rows) |
+
+Safety: every text and attribute is escaped; link URLs are limited to `http:`, `https:`, `mailto:` and
+relative URLs (`safeUrl`), media also to `data:image|audio|video`; embeds need an absolute http(s) URL and
+keep the editor's sandbox; HTML blocks run in `sandbox` without `allow-same-origin` (code kept in `srcdoc`).
+
+Also exported: `renderHTML` (sync), `hasMath`, `escapeHtml`, `attr`, `safeUrl`, `highlightCode`,
+`renderTokensStyle(overrides?)` (`<style id="mei-editor-tokens">` with the default tokens, which the editor
+otherwise injects at runtime), and `hydrateMermaid(root?)`: a browser helper that turns
+`<pre class="mermaid">` into diagrams (loads the optional `mermaid` peer). A 1,000-block document renders in
+~5 ms.
 
 
 ## Keyboard & mouse
@@ -242,7 +346,7 @@ callouts and tables. Key latency includes two animation frames (~33ms floor).
 
 Up to ~10k blocks per page the editor stays smooth. For larger content, split it into
 sub-pages (Notion's approach): keep each document small and link pages together, e.g. with
-`mention` page links or your own "page" block. Run `pnpm bench` in the repo to measure.
+`mention` page links or [`@toantranmei/page-block`](https://www.npmjs.com/package/@toantranmei/page-block) (Notion-style sub-pages). Run `pnpm bench` in the repo to measure.
 
 ## Theming
 
@@ -357,7 +461,7 @@ so documents follow your theme and dark mode. Change the palette with
 Everything is exported for building your own UI on the same blocks:
 `createExtensions`, `BLOCKS`, `filterBlocks`, `turnBlockInto`, the custom extensions
 (`Callout`, `Columns`, `ImageBlock`, `Embed`, `CodeBlock`, `SlashCommand`, `BlockDrop`, `TextColor`, `BgColor`),
-the token objects (`primitiveTokens`, `semanticLightTokens`, `semanticDarkTokens`, `componentTokens`) and locales (`vi`, `en`).
+the token objects (`primitiveTokens`, `semanticLightTokens`, `semanticDarkTokens`, `componentTokens`) and locales (`vi`, `en`, `zh`).
 
 ## License
 

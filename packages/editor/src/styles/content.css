@@ -531,4 +531,43 @@
   .me-content .me-block-selected .me-media-empty { box-shadow: inset 0 0 0 100vmax var(--me-block-selected-bg); }
   .me-content .ProseMirror-gapcursor::after { border-top-color: var(--me-color-text); }
   .ProseMirror-hideselection *::selection { background: transparent; }
+
+  /*
+   * Server-rendered pages (@toantranmei/editor/render): the same classes as the node views,
+   * minus their editing UI. Toggles are native <details>, so they open without JavaScript.
+   */
+  .me-render .me-content details.me-toggle { display: block; }
+  .me-render .me-content details.me-toggle > summary { display: flex; align-items: flex-start; gap: var(--me-space-1); padding-left: 0; cursor: pointer; }
+  .me-render .me-content .me-toggle-arrow {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: var(--me-toggle-button-size);
+    height: var(--me-toggle-button-size);
+    border-radius: var(--me-radius-sm);
+    color: var(--me-toggle-arrow-color);
+  }
+  .me-render .me-content summary:hover .me-toggle-arrow { background: var(--me-color-hover); }
+  .me-render .me-content .me-toggle-arrow::before {
+    content: "";
+    border-left: var(--me-space-3) solid currentColor;
+    border-top: calc(var(--me-space-3) * 0.75) solid transparent;
+    border-bottom: calc(var(--me-space-3) * 0.75) solid transparent;
+    transition: transform var(--me-duration-normal);
+  }
+  .me-render .me-content details.me-toggle[open] > summary .me-toggle-arrow::before { transform: rotate(90deg); }
+  .me-render .me-content .me-toggle-title { flex: 1; min-width: 0; }
+  .me-render .me-content details.me-toggle > [data-type="detailsContent"] { margin-left: calc(var(--me-toggle-button-size) + var(--me-space-1)); }
+  .me-render .me-content details.me-toggle[data-level] > summary { align-items: center; font-weight: var(--me-heading-weight); line-height: var(--me-heading-line-height); }
+  .me-render .me-content :is(.me-math-block, .me-math-inline) { cursor: auto; }
+  .me-render .me-content :is(.me-math-block, .me-math-inline):hover { background: none; }
+  .me-render .me-content a.me-mention:not(.me-mention--page) { text-decoration: none; }
+  /* Not `disabled` (it would grey the box out): read-only by not taking clicks. */
+  .me-render .me-content ul[data-type="taskList"] input[type="checkbox"] { pointer-events: none; }
+  .me-render .me-content a.me-toc-item { color: var(--me-toc-item-color); text-decoration-color: var(--me-color-border); }
+  .me-render .me-content pre.mermaid { text-align: center; }
+  .me-render .me-content pre.mermaid[data-processed] { font-family: var(--me-font-sans); white-space: normal; }
+  .me-render .me-content pre.mermaid svg { display: inline-block; max-width: 100%; height: auto; }
+  .me-render .me-content .me-toc-item { display: block; }
 }

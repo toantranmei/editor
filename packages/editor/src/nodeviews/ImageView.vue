@@ -10,6 +10,7 @@ import ImageLightbox from '../components/ImageLightbox.vue'
 import { useClickOutside } from '../composables/useClickOutside'
 import { useEditable } from '../composables/useEditable'
 import { useScope } from '../composables/useScope'
+import { isSameOrigin, isWebUrl, safeUrl } from '../safe-url'
 
 const props = defineProps(nodeViewProps)
 const editable = useEditable(props.editor)
@@ -105,7 +106,11 @@ const align = computed(() => (props.node.attrs.align ?? 'center') as Align)
 const ALIGN_ICONS = { left: AlignLeft, center: AlignCenter, right: AlignRight }
 const crop = computed(() => props.node.attrs.crop as ImageCrop | null)
 const captionShown = computed(() => props.node.attrs.showCaption ?? !!props.node.attrs.caption)
-const isRemote = computed(() => /^https?:/i.test(props.node.attrs.src ?? ''))
+/** The image URL if it is safe to load and open (KS-BUG-7: never `javascript:` / `data:text/html`). */
+const src = computed(() => safeUrl(props.node.attrs.src, 'image'))
+/** A web URL (link actions apply); `isRemote` when it is on another origin (download fetches it). */
+const isWeb = computed(() => !!src.value && isWebUrl(src.value))
+const isRemote = computed(() => isWeb.value && !isSameOrigin(src.value!))
 
 const menu = ref<'align' | 'more' | null>(null)
 const toolbar = ref<HTMLElement | null>(null)
@@ -131,7 +136,8 @@ function finishCrop(value: ImageCrop | null) {
 
 /** Saves the original file; cross-origin links that refuse fetch open in a new tab. */
 async function download() {
-  const src = props.node.attrs.src as string
+  const url = src.value
+  if (!url) return
   const name = (props.node.attrs.alt as string) || 'image'
   const save = (href: string) => {
     const a = document.createElement('a')
@@ -139,20 +145,21 @@ async function download() {
     a.download = name
     a.click()
   }
-  if (!isRemote.value) return save(src)
+  if (!isRemote.value) return save(url)
   try {
-    const blob = await (await fetch(src)).blob()
-    const url = URL.createObjectURL(blob)
-    save(url)
-    setTimeout(() => URL.revokeObjectURL(url), 1000)
+    const blob = await (await fetch(url)).blob()
+    const objectUrl = URL.createObjectURL(blob)
+    save(objectUrl)
+    setTimeout(() => URL.revokeObjectURL(objectUrl), 1000)
   }
   catch {
-    window.open(src, '_blank', 'noopener')
+    window.open(url, '_blank', 'noopener')
   }
 }
 
 async function copyLink() {
-  await navigator.clipboard?.writeText(props.node.attrs.src)
+  if (!src.value) return
+  await navigator.clipboard?.writeText(new URL(src.value, location.href).href)
   copied.value = true
   setTimeout(() => (copied.value = false), 1500)
   menu.value = null
@@ -163,7 +170,7 @@ function replace() {
 }
 function openOriginal() {
   menu.value = null
-  window.open(props.node.attrs.src, '_blank', 'noopener')
+  if (src.value) window.open(src.value, '_blank', 'noopener')
 }
 function remove() {
   menu.value = null
@@ -226,8 +233,8 @@ const cropStyle = computed(() => {
       :style="{ width: `${node.attrs.width}%` }"
     >
       <ImageCropper
-        v-if="cropping"
-        :src="node.attrs.src"
+        v-if="cropping && src"
+        :src="src"
         :alt="node.attrs.alt"
         :crop="crop"
         :messages="m"
@@ -241,7 +248,10 @@ const cropStyle = computed(() => {
       >
         <!-- Only this layer clips (for crops), so the toolbar's menus can overflow the frame. -->
         <div class="me-figure-media" :class="{ 'is-cropped': !!crop }" :style="crop ? { aspectRatio: String(crop.ratio) } : undefined">
-          <img :src="node.attrs.src" :alt="node.attrs.alt || ''" class="me-figure-img" :style="cropStyle" draggable="false" @dblclick="viewing = true">
+          <img v-if="src" :src="src" :alt="node.attrs.alt || ''" class="me-figure-img" :style="cropStyle" draggable="false" @dblclick="viewing = true">
+          <p v-else class="me-error me-image-blocked">
+            {{ m.invalidLink }}
+          </p>
         </div>
 
         <div ref="toolbar" class="me-popover me-toolbar me-image-toolbar" contenteditable="false" @mousedown.stop>
@@ -280,11 +290,11 @@ const cropStyle = computed(() => {
                 <span class="me-menu-icon"><RefreshCw /></span>
                 <span class="me-menu-title me-menu-text">{{ m.replace }}</span>
               </button>
-              <button v-if="isRemote" type="button" class="me-menu-item" @click="copyLink">
+              <button v-if="isWeb" type="button" class="me-menu-item" @click="copyLink">
                 <span class="me-menu-icon"><component :is="copied ? Check : Copy" /></span>
                 <span class="me-menu-title me-menu-text">{{ copied ? m.linkCopied : m.copyLink }}</span>
               </button>
-              <button v-if="isRemote" type="button" class="me-menu-item" @click="openOriginal">
+              <button v-if="isWeb" type="button" class="me-menu-item" @click="openOriginal">
                 <span class="me-menu-icon"><ExternalLink /></span>
                 <span class="me-menu-title me-menu-text">{{ m.original }}</span>
               </button>
@@ -318,8 +328,8 @@ const cropStyle = computed(() => {
     </figure>
 
     <ImageLightbox
-      v-if="viewing"
-      :src="node.attrs.src"
+      v-if="viewing && src"
+      :src="src"
       :alt="node.attrs.alt"
       :messages="m"
       :scope="scope"

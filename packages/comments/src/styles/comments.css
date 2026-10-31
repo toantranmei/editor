@@ -1,0 +1,126 @@
+/*
+ * Comments UI. Only var(--me-…) tokens (component.comments.* in the editor's tokens.ts).
+ */
+@layer mei-editor {
+  /* Highlights in the document */
+  .me-content .me-comment-highlight {
+    background: var(--me-comments-highlight);
+    border-bottom: var(--me-border-width-medium) solid var(--me-comments-underline);
+    cursor: pointer;
+  }
+  .me-content .me-comment-highlight.is-active { background: var(--me-comments-highlight-active); }
+
+  /* Gutter badges (inside the editor root, to the right of the blocks) */
+  .me-comments-gutter { position: absolute; top: 0; right: 0; width: 0; height: 0; z-index: 5; }
+  .me-comments-badge {
+    --me-icon-size: var(--me-comments-badge-font-size);
+    position: absolute;
+    right: var(--me-comments-badge-offset);
+    display: inline-flex;
+    align-items: center;
+    gap: var(--me-space-1);
+    height: var(--me-comments-badge-size);
+    padding: 0 var(--me-space-3);
+    border-radius: var(--me-radius-sm);
+    background: var(--me-comments-badge-bg);
+    color: var(--me-comments-badge-color);
+    font-size: var(--me-comments-badge-font-size);
+    font-weight: var(--me-font-weight-medium);
+    white-space: nowrap;
+  }
+  .me-comments-badge:hover, .me-comments-badge.is-active { background: var(--me-comments-badge-active-bg); color: var(--me-comments-badge-active-color); }
+
+  /* Panel */
+  .me-comments-panel {
+    display: flex;
+    flex-direction: column;
+    gap: var(--me-comments-thread-gap);
+    width: var(--me-comments-panel-width);
+    max-width: 100%;
+    padding: var(--me-comments-panel-padding);
+    border-left: var(--me-border-width-thin) solid var(--me-comments-panel-border);
+    background: var(--me-comments-panel-bg);
+  }
+  .me-comments-header { display: flex; flex-direction: column; gap: var(--me-space-4); }
+  .me-comments-title { font-size: var(--me-font-size-md); font-weight: var(--me-font-weight-semibold); }
+  .me-comments-count { color: var(--me-comments-meta-color); font-size: var(--me-comments-meta-font-size); }
+  .me-comments-empty, .me-comments-hint { padding: var(--me-space-4) 0; }
+
+  .me-comment-thread {
+    display: flex;
+    flex-direction: column;
+    gap: var(--me-space-5);
+    padding: var(--me-comments-thread-padding);
+    border: var(--me-border-width-thin) solid var(--me-comments-thread-border);
+    border-radius: var(--me-comments-thread-radius);
+    cursor: pointer;
+  }
+  .me-comment-thread.is-active { border-color: var(--me-comments-thread-active-border); cursor: auto; }
+  .me-comment-thread.is-resolved { opacity: 0.75; }
+  .me-comment-thread-head { display: flex; align-items: flex-start; gap: var(--me-space-3); }
+  .me-comment-quote {
+    flex: 1;
+    min-width: 0;
+    padding-left: var(--me-space-4);
+    border-left: var(--me-border-width-medium) solid var(--me-comments-quote-border);
+    color: var(--me-comments-quote-color);
+    font-size: var(--me-comments-body-font-size);
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .me-comment-quote.is-detached { text-decoration: line-through; }
+  .me-comment-resolve { flex-shrink: 0; }
+
+  .me-comment { display: flex; flex-direction: column; gap: var(--me-space-2); }
+  .me-comment-head { position: relative; display: flex; align-items: center; gap: var(--me-space-3); min-width: 0; }
+  .me-comment-avatar {
+    flex-shrink: 0;
+    width: var(--me-comments-avatar-size);
+    height: var(--me-comments-avatar-size);
+    border-radius: var(--me-rounded-full);
+    object-fit: cover;
+  }
+  .me-comment-avatar--initials {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--me-color-surface);
+    color: var(--me-color-text-muted);
+    font-size: var(--me-comments-meta-font-size);
+    font-weight: var(--me-font-weight-medium);
+  }
+  .me-comment-author { font-size: var(--me-comments-body-font-size); font-weight: var(--me-font-weight-medium); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .me-comment-meta { flex: 1; min-width: 0; color: var(--me-comments-meta-color); font-size: var(--me-comments-meta-font-size); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .me-comment-menu-anchor { position: relative; display: inline-flex; }
+  .me-comment-more { opacity: 0; transition: opacity var(--me-duration-fast); }
+  .me-comment:hover .me-comment-more, .me-comment-more[aria-expanded="true"], .me-comment-more:focus-visible { opacity: 1; }
+  .me-comment-menu { position: absolute; top: 100%; right: 0; z-index: 30; margin-top: var(--me-space-2); }
+  .me-menu-item--danger { color: var(--me-color-danger); }
+  .me-comment-body { font-size: var(--me-comments-body-font-size); padding-left: calc(var(--me-comments-avatar-size) + var(--me-space-3)); }
+  .me-comment-body p { margin: 0; padding: 0; min-height: 0; }
+
+  /* Composer */
+  .me-comment-composer { display: flex; flex-direction: column; gap: var(--me-space-3); cursor: auto; }
+  .me-comment-field { position: relative; }
+  .me-comment-input {
+    min-height: var(--me-comments-composer-min-height);
+    padding: var(--me-comments-composer-padding);
+    border-radius: var(--me-radius-md);
+    background: var(--me-comments-composer-bg);
+    font-size: var(--me-comments-body-font-size);
+  }
+  .me-comment-input p { margin: 0; padding: 0; min-height: 0; }
+  .me-comment-placeholder {
+    position: absolute;
+    top: 0;
+    left: 0;
+    padding: var(--me-comments-composer-padding);
+    color: var(--me-color-text-faint);
+    font-size: var(--me-comments-body-font-size);
+    pointer-events: none;
+  }
+  .me-comment-actions { display: flex; justify-content: flex-end; gap: var(--me-space-3); }
+  .me-comment-error { color: var(--me-color-danger); font-size: var(--me-comments-meta-font-size); }
+}

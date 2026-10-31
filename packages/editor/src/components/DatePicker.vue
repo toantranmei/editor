@@ -63,12 +63,14 @@ const view = ref(monthOf(props.value.start))
 const today = isoDate(new Date())
 // "Oct 2026" / "Tháng 11 2026": month + year only, short enough for one line.
 const monthLabel = computed(() => {
+  // Chinese / Japanese / Korean read year first: "2026年10月".
+  if (/^(zh|ja|ko)/.test(props.locale)) return new Intl.DateTimeFormat(props.locale, { year: 'numeric', month: 'long' }).format(view.value)
   const month = new Intl.DateTimeFormat(props.locale, { month: props.locale.startsWith('en') ? 'short' : 'long' }).format(view.value)
   return `${month.charAt(0).toUpperCase()}${month.slice(1)} ${view.value.getFullYear()}`
 })
 // Weeks start on Monday (like Notion's default).
 const weekdays = computed(() => {
-  const fmt = new Intl.DateTimeFormat(props.locale, { weekday: props.locale.startsWith('vi') ? 'narrow' : 'short' })
+  const fmt = new Intl.DateTimeFormat(props.locale, { weekday: /^(vi|zh)/.test(props.locale) ? 'narrow' : 'short' })
   return Array.from({ length: 7 }, (_, i) => fmt.format(new Date(2023, 0, 2 + i)).slice(0, 2))
 })
 const days = computed(() => {

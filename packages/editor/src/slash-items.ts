@@ -58,7 +58,7 @@ function colorItems(editor: Editor): SlashItem[] {
       group: m.slash.colors,
       title,
       swatch: { kind, color },
-      terms: [title, name, color, kind === 'text' ? 'color mau chu' : 'background highlight nen'],
+      terms: [title, name, color, kind === 'text' ? 'color mau chu 文字颜色' : 'background highlight nen 背景颜色'],
       apply: (ed) => {
         pushRecentColor({ kind, color })
         const caret = ed.state.selection.from
@@ -99,6 +99,8 @@ export function slashItems(editor: Editor, query: string): SlashItem[] {
 
   const score = (item: SlashItem) => {
     const terms = item.terms.map(normalize)
+    // Title or id typed exactly beats a block that merely lists it as a keyword ("/page" → Page, not Mention).
+    if (terms[0] === q || terms[1] === q) return 4
     if (terms.includes(q)) return 3
     if (terms.some(t => t.startsWith(q) || t.split(/\s+/).some(w => w.startsWith(q)))) return 2
     if (terms.some(t => t.includes(q))) return 1

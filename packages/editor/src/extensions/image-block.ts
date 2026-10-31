@@ -1,13 +1,21 @@
 import Image from '@tiptap/extension-image'
 import { blockNodeView } from '../nodeviews/renderer'
 import ImageView from '../nodeviews/ImageView.vue'
+import { safeUrl } from '../safe-url'
 
 export const ImageBlock = Image.extend({
   draggable: true,
 
   addAttributes() {
+    const parent: Record<string, object> = this.parent?.() ?? {}
     return {
-      ...this.parent?.(),
+      ...parent,
+      // Pasted / exported HTML never carries a `javascript:` or `data:text/html` source (KS-BUG-7).
+      src: {
+        ...parent.src,
+        parseHTML: (el: HTMLElement) => safeUrl(el.getAttribute('src'), 'image'),
+        renderHTML: (attrs: Record<string, unknown>) => ({ src: safeUrl(attrs.src, 'image') }),
+      },
       width: {
         default: 100,
         parseHTML: el => Number(el.getAttribute('data-width')) || 100,

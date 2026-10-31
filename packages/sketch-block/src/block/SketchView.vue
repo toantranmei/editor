@@ -9,7 +9,7 @@ import { Maximize2, PenTool, Pointer, X } from '@lucide/vue'
 import { NodeViewWrapper, nodeViewProps } from '@tiptap/vue-3'
 import { useClickOutside, useEditable, useScope } from '@toantranmei/editor'
 import { computed, getCurrentInstance, markRaw, nextTick, onBeforeUnmount, onMounted, onUnmounted, ref, shallowRef, watch } from 'vue'
-import { messages } from '../messages'
+import { messages, type SketchLocale } from '../messages'
 import type { SketchElement } from '../model/types'
 import type { BoardConnection, ConnectionStatusValue, SketchProvider } from '../providers/types'
 import { isBoardId, isBoardMissing } from './board-ids'
@@ -32,7 +32,10 @@ const props = defineProps(nodeViewProps)
 
 const scope = useScope(() => props.editor)
 const editable = useEditable(props.editor)
-const locale = computed(() => (props.editor.storage.meiConfig?.locale === 'en' ? 'en' : 'vi'))
+const locale = computed<SketchLocale>(() => {
+  const l = props.editor.storage.meiConfig?.locale as string | undefined
+  return l === 'en' || l === 'zh' ? l : 'vi'
+})
 const m = computed(() => messages[locale.value])
 const options = computed(() => props.extension.options as SketchOptions)
 const boardId = computed(() => (props.node.attrs.boardId as string | null) ?? null)

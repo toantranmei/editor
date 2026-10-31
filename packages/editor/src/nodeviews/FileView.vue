@@ -3,6 +3,7 @@ import { NodeViewWrapper, nodeViewProps } from '@tiptap/vue-3'
 import { AudioLines, Download, File as FileIcon, Film, Link as LinkIcon, Upload } from '@lucide/vue'
 import { computed, ref } from 'vue'
 import { useEditable } from '../composables/useEditable'
+import { safeUrl } from '../safe-url'
 import type { FileBlockOptions, FileKind } from '../extensions/file-block'
 
 const props = defineProps(nodeViewProps)
@@ -17,11 +18,9 @@ const error = ref('')
 const uploading = ref(false)
 const fileInput = ref<HTMLInputElement | null>(null)
 
-// Only web, data and blob URLs: pasted content could carry `javascript:` links.
-const safeSrc = computed(() => {
-  const src = String(props.node.attrs.src ?? '')
-  return /^(https?:|data:|blob:)/i.test(src) ? src : null
-})
+// Web, blob, data and same-origin paths (uploads like `/api/v1/files/<id>`, KS-BUG-15);
+// never `javascript:`: pasted content could carry such links.
+const safeSrc = computed(() => safeUrl(props.node.attrs.src, 'any'))
 const accept = computed(() => ({ file: '', audio: 'audio/*', video: 'video/*' })[kind.value])
 const icon = computed(() => ({ file: FileIcon, audio: AudioLines, video: Film })[kind.value])
 const title = computed(() => ({ file: m.value.chooseFile, audio: m.value.chooseAudio, video: m.value.chooseVideo })[kind.value])

@@ -14,6 +14,7 @@ import { useScope } from '../composables/useScope'
 import { type DateValue, formatDateValue, reminderTime } from '../date-utils'
 import type { MentionItem, MentionOptions } from '../extensions/mention'
 import { readTokenPx } from '../theme/read'
+import { safeUrl } from '../safe-url'
 
 const props = defineProps(nodeViewProps)
 
@@ -60,11 +61,15 @@ function position() {
   })
 }
 
+/** Link and avatar from the document, only if safe (never `javascript:`). */
+const href = computed(() => safeUrl(props.node.attrs.href))
+const avatar = computed(() => safeUrl(props.node.attrs.avatar, 'image'))
+
 function onClick(e: MouseEvent) {
   if (!props.editor.isEditable) {
     const item = props.node.attrs as MentionItem
     if (options.value.onClick) options.value.onClick(item)
-    else if (item.href) window.open(item.href, '_blank', 'noopener')
+    else if (href.value) window.open(href.value, '_blank', 'noopener')
     return
   }
   e.preventDefault()
@@ -168,7 +173,7 @@ onBeforeUnmount(() => {
       :data-kind="kind"
       @click="onClick"
     >
-      <img v-if="kind === 'user' && node.attrs.avatar" class="me-mention-avatar" :src="node.attrs.avatar" alt="">
+      <img v-if="kind === 'user' && avatar" class="me-mention-avatar" :src="avatar" alt="">
       <FileText v-else-if="kind === 'page'" class="me-mention-icon" />
       <span>{{ kind === 'page' ? '' : '@' }}{{ label }}</span>
     </span>
@@ -206,7 +211,7 @@ onBeforeUnmount(() => {
               @mouseenter="active = i"
               @click="pickItem(item)"
             >
-              <img v-if="item.avatar" class="me-menu-icon me-avatar" :src="item.avatar" alt="">
+              <img v-if="safeUrl(item.avatar, 'image')" class="me-menu-icon me-avatar" :src="safeUrl(item.avatar, 'image')!" alt="">
               <span v-else class="me-menu-icon"><component :is="ICONS[item.kind]" /></span>
               <span class="me-menu-text">
                 <span class="me-menu-title">{{ item.label }}</span>
@@ -217,7 +222,7 @@ onBeforeUnmount(() => {
               {{ options.search ? m.empty : m.noSearch }}
             </div>
           </div>
-          <a v-if="kind === 'page' && node.attrs.href" class="me-menu-item me-mention-open" :href="node.attrs.href" target="_blank" rel="noopener noreferrer">
+          <a v-if="kind === 'page' && href" class="me-menu-item me-mention-open" :href="href" target="_blank" rel="noopener noreferrer">
             <span class="me-menu-icon"><ExternalLink /></span>
             <span class="me-menu-title me-menu-text">{{ m.openPage }}</span>
           </a>
