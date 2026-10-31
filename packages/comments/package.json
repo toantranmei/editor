@@ -1,6 +1,6 @@
 {
   "name": "@toantranmei/comments",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Notion-style comments (marks, gutter badges, side panel, threads) for @toantranmei/editor.",
   "keywords": ["vue", "tiptap", "notion", "comments", "editor", "collaboration"],
   "license": "MIT",

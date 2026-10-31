@@ -1,6 +1,6 @@
 {
   "name": "@toantranmei/synced-block",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Notion-style synced blocks for @toantranmei/editor: one Yjs document shown and edited on many pages.",
   "keywords": [
     "vue",
