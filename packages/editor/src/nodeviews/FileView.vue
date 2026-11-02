@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { NodeViewWrapper, nodeViewProps } from '@tiptap/vue-3'
-import { AudioLines, Download, File as FileIcon, Film, Link as LinkIcon, Upload } from '@lucide/vue'
+import { AudioLines, Download, File as FileIcon, Film, Link as LinkIcon, RefreshCw, Trash, Upload } from '@lucide/vue'
 import { computed, ref } from 'vue'
 import { useEditable } from '../composables/useEditable'
 import { safeUrl } from '../safe-url'
 import type { FileBlockOptions, FileKind } from '../extensions/file-block'
+import { pendingUpload, runUpload, type UploadError } from '../extensions/file-drop'
 
 const props = defineProps(nodeViewProps)
 const editable = useEditable(props.editor)
@@ -68,6 +69,16 @@ function submitLink() {
   }
 }
 
+// --- Pasted / dropped file (FileDrop): progress, error + retry ---------------------------
+const pending = computed(() => pendingUpload(props.editor, props.node.attrs.uploadId))
+const uploadError = computed(() => props.node.attrs.error as UploadError | null)
+const isPending = computed(() => !props.node.attrs.src && (!!props.node.attrs.uploading || !!uploadError.value))
+const progress = computed(() => `${Math.round((pending.value?.progress ?? 0) * 100)}%`)
+const uploadErrorText = computed(() => {
+  const e = uploadError.value
+  return e === 'tooLarge' ? m.value.tooLarge(options.value.maxSize) : e === 'badType' ? m.value.wrongType : m.value.uploadFailed
+})
+
 const sizeLabel = computed(() => {
   const bytes = Number(props.node.attrs.size)
   if (!bytes) return ''
@@ -78,8 +89,30 @@ const sizeLabel = computed(() => {
 </script>
 
 <template>
-  <NodeViewWrapper class="me-media" :class="{ 'is-readonly-empty': !editable && !node.attrs.src }">
-    <div v-if="!node.attrs.src" class="me-media-empty" contenteditable="false" @dragover.prevent @drop="onDrop">
+  <NodeViewWrapper class="me-media" :class="{ 'is-readonly-empty': !editable && !node.attrs.src && !isPending }">
+    <div v-if="isPending" class="me-file me-file--pending" :class="{ 'is-failed': !!uploadError, 'is-selected': selected }" contenteditable="false">
+      <div class="me-file-row">
+        <component :is="icon" class="me-file-icon" />
+        <span class="me-file-name">{{ node.attrs.name }}</span>
+        <span v-if="sizeLabel" class="me-file-size">{{ sizeLabel }}</span>
+      </div>
+      <div class="me-media-status" role="status">
+        <template v-if="!uploadError">
+          <span>{{ m.uploading }}</span>
+          <span class="me-media-progress"><span class="me-media-progress-bar" :style="{ width: progress }" /></span>
+        </template>
+        <template v-else>
+          <span class="me-error me-media-status-error">{{ uploadErrorText }}</span>
+          <button v-if="editable && pending && uploadError === 'failed'" type="button" class="me-btn" @click="runUpload(editor, node.attrs.uploadId)">
+            <RefreshCw /> {{ m.retry }}
+          </button>
+          <button v-if="editable" type="button" class="me-btn" @click="deleteNode()">
+            <Trash /> {{ m.delete }}
+          </button>
+        </template>
+      </div>
+    </div>
+    <div v-else-if="!node.attrs.src" class="me-media-empty" contenteditable="false" @dragover.prevent @drop="onDrop">
       <div class="me-tabs">
         <button v-for="t in (['upload', 'link'] as const)" :key="t" type="button" class="me-tab" :class="{ 'is-active': tab === t }" @click="tab = t">
           <component :is="t === 'upload' ? Upload : LinkIcon" />

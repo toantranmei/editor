@@ -2,6 +2,7 @@ import Image from '@tiptap/extension-image'
 import { blockNodeView } from '../nodeviews/renderer'
 import ImageView from '../nodeviews/ImageView.vue'
 import { safeUrl } from '../safe-url'
+import { uploadAttributes } from './upload-attrs'
 
 export const ImageBlock = Image.extend({
   draggable: true,
@@ -50,6 +51,7 @@ export const ImageBlock = Image.extend({
         },
         renderHTML: attrs => (attrs.crop ? { 'data-crop': JSON.stringify(attrs.crop) } : {}),
       },
+      ...uploadAttributes(),
     }
   },
 

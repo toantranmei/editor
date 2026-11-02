@@ -7,6 +7,9 @@ export { MeiEditorPlugin, type MeiEditorPluginOptions } from './plugin'
 export { createExtensions, type MeiExtensionsOptions } from './extensions'
 export { MeiConfig, type ImageUploader, type MeiConfigStorage } from './config'
 export { BlockDrop } from './extensions/block-drop'
+export {
+  FileDrop, pendingUpload, runUpload, type FileDropStorage, type PendingUpload, type UploadError,
+} from './extensions/file-drop'
 export { Callout } from './extensions/callout'
 export { Column, Columns } from './extensions/columns'
 export { ImageBlock } from './extensions/image-block'
