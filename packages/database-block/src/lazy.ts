@@ -12,8 +12,10 @@ const Loading = {
   setup() {
     const text = inject(loadingTextKey, null)
     // Standalone `<DatabaseView :locale>` (full-page route): read the locale given to the async wrapper.
-    const props = getCurrentInstance()?.parent?.vnode.props as { locale?: string, options?: { messages?: Parameters<typeof databaseMessages>[1] } } | null | undefined
-    const fallback = databaseMessages(props?.locale ?? 'vi', props?.options?.messages).loading
+    type Messages = Parameters<typeof databaseMessages>[1]
+    const props = getCurrentInstance()?.parent?.vnode.props as { locale?: string, messages?: Messages, options?: { messages?: Messages } } | null | undefined
+    // Same precedence as DatabaseView: the `messages` prop, then `options.messages`.
+    const fallback = databaseMessages(props?.locale ?? 'vi', props?.messages ?? props?.options?.messages).loading
     return () => h('div', { 'class': 'me-db-empty is-loading', 'aria-busy': 'true', 'role': 'status' }, [
       h('span', { class: 'me-db-sr-only' }, text?.value ?? fallback),
     ])

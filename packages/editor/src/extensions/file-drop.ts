@@ -60,19 +60,18 @@ export function uploadState(editor: Editor, attrs: Record<string, unknown>, now 
 /**
  * When an `uploading` node without a local file becomes interrupted (ms, local clock). `uploadStartedAt` comes from
  * another machine whose clock may differ, so the countdown never starts before this tab first saw the upload:
- * `max(firstSeenHere, min(uploadStartedAt, now)) + UPLOAD_STALE_MS`. Nodes without an `uploadId` (duplicates,
+ * `max(firstSeenHere, min(uploadStartedAt, firstSeenHere)) + UPLOAD_STALE_MS`, i.e. 2 minutes after first seen, fixed. Nodes without an `uploadId` (duplicates,
  * older documents) only use `uploadStartedAt`.
  */
 export function uploadStaleAt(editor: Editor, attrs: Record<string, unknown>, now = Date.now()): number {
   const started = typeof attrs.uploadStartedAt === 'number' ? attrs.uploadStartedAt : 0
   const id = attrs.uploadId
   const seen = editor.storage.fileDrop?.firstSeen
-  let firstSeen = -Infinity
-  if (typeof id === 'string' && seen) {
-    firstSeen = seen.get(id) ?? now
-    if (!seen.has(id)) seen.set(id, firstSeen)
-  }
-  return Math.max(firstSeen, Math.min(started, now)) + UPLOAD_STALE_MS
+  if (typeof id !== 'string' || !seen) return Math.min(started, now) + UPLOAD_STALE_MS
+  const firstSeen = seen.get(id) ?? now
+  if (!seen.has(id)) seen.set(id, firstSeen)
+  // max(firstSeen, min(started, firstSeen)): fixed once seen, even when the uploader's clock is ahead.
+  return Math.max(firstSeen, Math.min(started, firstSeen)) + UPLOAD_STALE_MS
 }
 
 const readAsDataUrl = (file: File) => new Promise<string>((resolve, reject) => {
