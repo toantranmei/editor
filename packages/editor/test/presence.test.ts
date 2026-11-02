@@ -231,7 +231,9 @@ describe('remote carets', () => {
     await vi.waitFor(() => expect(me.view.dom.querySelector('.me-peer-selection')).not.toBeNull())
     expect(caretsOf(me)).toHaveLength(1)
     const el = caretsOf(me)[0] as HTMLElement
-    expect(el.querySelector('.me-peer-label')?.textContent).toBe('Peer')
+    expect((el.querySelector('.me-peer-label') as HTMLElement).dataset.name).toBe('Peer')
+    // No text node in the widget: the local caret can never land in it (typing there was lost).
+    expect(el.textContent).toBe('')
     expect(el.style.getPropertyValue('--me-peer-color')).toBe(presenceColor(1))
     expect(me.view.dom.querySelector('.me-peer-selection')).not.toBeNull()
     expect(me.view.dom.querySelectorAll('.me-peer-block')).toHaveLength(1)
@@ -250,7 +252,7 @@ describe('remote carets', () => {
     awPeer.setLocalStateField('user', { name: 'Evil', color: 'red' })
     select(peer, 3)
     await vi.waitFor(() => expect(caretsOf(me)).toHaveLength(1))
-    expect(caretsOf(me)[0]!.textContent).not.toContain('Evil')
+    expect((caretsOf(me)[0]!.querySelector('.me-peer-label') as HTMLElement).dataset.name).not.toContain('Evil')
     expect(me.view.dom.innerHTML).not.toContain('Evil')
   })
 

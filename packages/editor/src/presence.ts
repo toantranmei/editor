@@ -97,9 +97,11 @@ function caret(user: PresenceUser, color: string): HTMLElement {
   el.setAttribute('aria-hidden', 'true')
   const label = document.createElement('span')
   label.className = 'me-peer-label'
-  label.textContent = user.name
-  // Word joiners keep the caret from breaking the line around it.
-  el.append('⁠', label, '⁠')
+  // The name is drawn by CSS (`content: attr(data-name)`): the widget holds no text node. With text inside it (the name,
+  // or word joiners around the caret), the browser could put the local caret in that non-editable text when both
+  // carets share a position (End, Ctrl+End, a click at the line end), and what was typed then was lost.
+  label.dataset.name = user.name
+  el.append(label)
   return el
 }
 
