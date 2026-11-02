@@ -169,6 +169,9 @@ const isSchemeOptions = (o: object): o is RenderTokensOptions => {
 // A value or name that could leave its declaration (or the <style>) is dropped: braces, `;`, `<>`, comments
 // (`/*` could swallow the next rules) and backslash escapes (`\7d` is a `}`).
 const UNSAFE_CSS = /[{};<>\\]|\/\*|\*\//
+// Quotes are fine in pairs (`"Segoe UI"`); an unbalanced one would run a string over the closing brace.
+const unbalancedQuotes = (v: string) => (v.match(/"/g)?.length ?? 0) % 2 === 1 || (v.match(/'/g)?.length ?? 0) % 2 === 1
+const unsafeCss = (v: string) => UNSAFE_CSS.test(v) || unbalancedQuotes(v)
 
 /** `[cssVar, value]` pairs of a token tree or flat map (`components` are not prefixed, like `overridesCss`). */
 function tokenPairs(tokens: object | undefined): [string, string][] {
@@ -178,7 +181,7 @@ function tokenPairs(tokens: object | undefined): [string, string][] {
     if (typeof value === 'string') out.push([key.startsWith('--') ? key : cssVar(key), value])
     else if (value && typeof value === 'object') out.push(...flatten(value as TokenTree, key === 'components' ? '' : key))
   }
-  return out.filter(([k, v]) => !UNSAFE_CSS.test(k) && !UNSAFE_CSS.test(v))
+  return out.filter(([k, v]) => !unsafeCss(k) && !unsafeCss(v))
 }
 
 /** Default dark tokens + `dark` overrides under `prefers-color-scheme: dark` (unless the editor is forced light). */
