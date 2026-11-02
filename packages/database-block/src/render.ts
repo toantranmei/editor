@@ -62,7 +62,8 @@ function cellHtml(prop: Prop, row: Row, ctx: RenderContext, db: StaticDatabase, 
 
 /**
  * A read-only HTML table of a database view (any view type renders as its table of rows). With `rowHref`, each
- * row's title cell is a link.
+ * row's title (the `title` property, whichever column it is) links to the row; without a title column, a leading
+ * cell holds the link.
  */
 export function renderStaticDatabase(
   db: StaticDatabase, viewId: string | null | undefined, ctx: RenderContext, m: DatabaseMessages,
@@ -74,15 +75,27 @@ export function renderStaticDatabase(
   const locale = ctx.locale
   const title = db.meta?.title?.trim() || m.untitled
   const icon = db.meta?.icon ? `<span class="me-db-icon" aria-hidden="true">${ctx.escape(db.meta.icon)}</span>` : ''
-  const head = props.map(p => `<th scope="col"${ctx.attr('data-prop', p.id)}>${ctx.escape(p.name)}</th>`).join('')
-  const titleCell = (r: Row, p: Prop) => {
-    const content = cellHtml(p, r, ctx, db, locale) || `<span class="me-db-muted">${ctx.escape(m.untitled)}</span>`
-    const href = rowHref ? ctx.safeUrl(rowHref(r.id), 'link') : null
-    return href ? `<a class="me-db-row-link"${ctx.attr('href', href)}>${content}</a>` : content
+  // The row link goes on the `title` property (plain text, so no nested <a>). Without one in view, a small
+  // leading cell carries the link instead of wrapping another column (which may hold links of its own).
+  const titleProp = props.find(p => p.type === 'title')
+  const hrefOf = (r: Row) => (rowHref ? ctx.safeUrl(rowHref(r.id), 'link') : null)
+  const linkCol = !!rowHref && !titleProp
+  const head = (linkCol ? `<th scope="col" class="me-db-row-open"${ctx.attr('aria-label', m.open)}></th>` : '')
+    + props.map(p => `<th scope="col"${ctx.attr('data-prop', p.id)}>${ctx.escape(p.name)}</th>`).join('')
+  const cell = (r: Row, p: Prop, first: boolean) => {
+    let content = cellHtml(p, r, ctx, db, locale)
+    if (p === titleProp) {
+      content ||= `<span class="me-db-muted">${ctx.escape(m.untitled)}</span>`
+      const href = hrefOf(r)
+      if (href) content = `<a class="me-db-row-link"${ctx.attr('href', href)}>${content}</a>`
+    }
+    return first ? `<th scope="row">${content}</th>` : `<td${ctx.attr('data-type', p.type)}>${content}</td>`
   }
-  const body = db.rows.map(r => `<tr${ctx.attr('data-row-id', r.id)}>${props.map((p, i) => i === 0
-    ? `<th scope="row">${titleCell(r, p)}</th>`
-    : `<td${ctx.attr('data-type', p.type)}>${cellHtml(p, r, ctx, db, locale)}</td>`).join('')}</tr>`).join('')
+  const openCell = (r: Row) => {
+    const href = hrefOf(r)
+    return `<td class="me-db-row-open">${href ? `<a class="me-db-row-link"${ctx.attr('href', href)}${ctx.attr('aria-label', m.open)}>${ctx.icon('fileText')}</a>` : ''}</td>`
+  }
+  const body = db.rows.map(r => `<tr${ctx.attr('data-row-id', r.id)}>${linkCol ? openCell(r) : ''}${props.map((p, i) => cell(r, p, i === 0)).join('')}</tr>`).join('')
   const total = db.total ?? db.rows.length
   const more = total > db.rows.length ? `<p class="me-db-static-more">+${total - db.rows.length} ${ctx.escape(m.more)}</p>` : ''
   const tabs = view ? `<div class="me-db-static-view">${ctx.escape(view.name || m.viewTypes[view.type])}</div>` : ''

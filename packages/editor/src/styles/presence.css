@@ -25,7 +25,8 @@
     left: calc(var(--me-border-width-medium) * -1);
     padding: 0 var(--me-space-2);
     border-radius: var(--me-rounded-xs) var(--me-rounded-xs) var(--me-rounded-xs) 0;
-    background: var(--me-peer-color);
+    /* Darkened per caret so white text reaches 4.5:1 (presence.ts `labelBackground`). */
+    background: var(--me-peer-label-bg, var(--me-peer-color));
     color: var(--me-white);
     font-size: var(--me-font-size-xs);
     font-weight: var(--me-font-weight-medium);

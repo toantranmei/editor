@@ -43,6 +43,8 @@ export interface EditorMessages {
     /** Pasted / dropped image in a format browsers can't show (HEIC, TIFF…). */
     badType: string
     retry: string
+    /** An upload whose tab went away (still "uploading" after 2 minutes). */
+    uploadInterrupted: string
     align: string
     alignments: { left: string, center: string, right: string }
     captionToggle: string
@@ -125,6 +127,8 @@ export interface EditorMessages {
     uploading: string
     download: string
     retry: string
+    /** An upload whose tab went away (still "uploading" after 2 minutes). */
+    uploadInterrupted: string
     delete: string
   }
   datePicker: {
@@ -218,6 +222,7 @@ export const vi: EditorMessages = {
     uploadFailed: 'Tải ảnh lên thất bại.',
     badType: 'Định dạng ảnh không được hỗ trợ.',
     retry: 'Thử lại',
+    uploadInterrupted: 'Tải lên bị gián đoạn.',
     align: 'Căn lề',
     alignments: { left: 'Căn trái', center: 'Căn giữa', right: 'Căn phải' },
     captionToggle: 'Chú thích',
@@ -306,6 +311,7 @@ export const vi: EditorMessages = {
     uploading: 'Đang tải lên...',
     download: 'Tải xuống',
     retry: 'Thử lại',
+    uploadInterrupted: 'Tải lên bị gián đoạn.',
     delete: 'Xoá',
   },
   datePicker: {
@@ -412,6 +418,7 @@ export const en: EditorMessages = {
     uploadFailed: 'Upload failed.',
     badType: 'This image format is not supported.',
     retry: 'Retry',
+    uploadInterrupted: 'Upload interrupted.',
     align: 'Align',
     alignments: { left: 'Align left', center: 'Align center', right: 'Align right' },
     captionToggle: 'Caption',
@@ -500,6 +507,7 @@ export const en: EditorMessages = {
     uploading: 'Uploading...',
     download: 'Download',
     retry: 'Retry',
+    uploadInterrupted: 'Upload interrupted.',
     delete: 'Delete',
   },
   datePicker: {
@@ -606,6 +614,7 @@ export const zh: EditorMessages = {
     uploadFailed: '上传失败。',
     badType: '不支持此图片格式。',
     retry: '重试',
+    uploadInterrupted: '上传已中断。',
     align: '对齐',
     alignments: { left: '左对齐', center: '居中', right: '右对齐' },
     captionToggle: '说明',
@@ -694,6 +703,7 @@ export const zh: EditorMessages = {
     uploading: '正在上传...',
     download: '下载',
     retry: '重试',
+    uploadInterrupted: '上传已中断。',
     delete: '删除',
   },
   datePicker: {

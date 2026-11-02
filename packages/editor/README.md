@@ -243,7 +243,10 @@ const collaboration = {
 Remote carets show the name for 3 s after they move (and on hover), selections get a 25 % tint and the block
 holding the caret `me-peer-block` (2px bar + 6 % tint, `--me-peer-color`). The local caret is published in the
 awareness field `cursor`, at most every 50 ms, and never while the editor is read-only. `PRESENCE_COLORS` has 12
-colours with ≥ 3:1 contrast on light and dark backgrounds.
+colours with ≥ 3:1 contrast on light and dark backgrounds; name labels darken the colour (`labelBackground`) so the
+white text reaches 4.5:1. The caret stays visible while focus is elsewhere on the page (a comment box, a popover);
+it is cleared when the editor becomes read-only, unmounts, or the tab stays hidden for over a minute (restored when
+it is visible again). Typing re-shows your label to others even when the caret's position doesn't change.
 
 For a headless setup use `createExtensions({ blocks, undoRedo: false })` together with
 `collaborationExtensions({ document, field })` from `@toantranmei/editor/collaboration`.
@@ -315,7 +318,7 @@ code the first time a page shows one, so apps don't need a wrapper:
 | `mermaid` | Mermaid (`loadMermaid()`, optional peer) | code |
 | `codeBlock` | highlight.js grammar per language | plain code |
 | `emoji` | emoji data per locale | – |
-| `@toantranmei/database-block` | the database UI (`DatabaseView`, TanStack) | `me-db-empty` loading row |
+| `@toantranmei/database-block` | the database UI (`DatabaseView`, TanStack) | loading box at the view's last height (this session), else header + 3 rows (`database.loadingHeight`) |
 | `@toantranmei/chart-block` | ECharts | chart frame at its height |
 | `@toantranmei/sketch-block` | the board engine (on first interaction / preview) | preview at the block's height |
 | collaboration | Yjs, y-tiptap, presence (`@toantranmei/editor/collaboration`) | – |
@@ -381,8 +384,10 @@ order; a text selection is replaced): images become image blocks with an instant
 (audio / video / file from the mime type; needs the `file` block). Uploads go through `uploadImage` and
 `file.configure({ upload })`, which may report progress with their optional second / third argument
 `onProgress(fraction)`. Too large (`maxImageSize`, `file` `maxSize`), unsupported image formats and failed uploads
-stay on the block with Retry / Delete. Pastes that carry text or web images (`<img src="https://…">`) keep the
-regular paste.
+stay on the block with Retry / Delete (only in the tab that has the file; other editors see "Uploading…"). An upload
+still running after 2 minutes with nobody holding its file (the tab closed) shows "Upload interrupted" with Delete.
+Pastes that carry text or web images (`<img src="https://…">`) keep the regular paste; Word's local images
+(`<img src="file:///…">`) are uploaded from the clipboard's files, in place.
 
 ## Safe loading
 

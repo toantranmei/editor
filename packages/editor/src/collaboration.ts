@@ -8,7 +8,7 @@ import type * as Y from 'yjs'
 import { type MeiPresence, presenceExtension } from './presence'
 
 export {
-  PRESENCE_COLORS, presenceColor, refreshPresence, scrollToPeer, type MeiPresence, type PresenceUser,
+  labelBackground, PRESENCE_COLORS, presenceColor, refreshPresence, scrollToPeer, type MeiPresence, type PresenceUser,
 } from './presence'
 
 /**

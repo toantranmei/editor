@@ -178,6 +178,16 @@
   .me-db-prop-icon { flex: none; width: var(--me-font-size-sm); height: var(--me-font-size-sm); color: var(--me-database-muted-color); }
   .me-db-empty { padding: var(--me-space-7); color: var(--me-database-muted-color); text-align: center; }
   .me-db-empty.is-missing { color: var(--me-database-faint-color); }
+  /* Loading an inline database: keep its last height (this session) or a typical table's, so the page doesn't jump. */
+  .me-db-empty.is-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    min-height: var(--me-db-reserved-height, var(--me-database-loading-height));
+  }
+  /* Inside a loaded database (title and tabs already shown): the rows' space only. */
+  .me-db .me-db-empty.is-loading { min-height: var(--me-database-loading-body-height); }
   .me-db-danger { color: var(--me-database-danger-color); }
   .me-db-hidden-input { position: absolute; width: 0; height: 0; opacity: 0; pointer-events: none; }
   .me-db-row { display: flex; align-items: center; gap: var(--me-space-3); }
@@ -750,6 +760,9 @@
   /* Row title linking to the row's page (render option `rowHref`). */
   .me-db-row-link { color: inherit; text-decoration: none; }
   .me-db-row-link:hover { text-decoration: underline; }
+  .me-db-static-table .me-db-row-open { min-width: 0; width: var(--me-database-link-icon-size); padding: 0 var(--me-space-2); }
+  .me-db-row-open .me-db-row-link { display: inline-flex; color: var(--me-database-muted-color); }
+  .me-db-row-open svg { width: var(--me-database-link-icon-size); height: var(--me-database-link-icon-size); }
   .me-db-static-table tr > :first-child { border-left: 0; }
   .me-db-static-table tr > :last-child { border-right: 0; }
   .me-db-static-table .me-db-tag + .me-db-tag { margin-left: var(--me-database-tag-gap); }

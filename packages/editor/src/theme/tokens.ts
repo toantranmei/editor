@@ -414,6 +414,10 @@ export const component = {
     /** Table. Row/header heights are also read by the virtualizer (px). */
     rowHeight: '33px',
     headerHeight: '33px',
+    /** Space kept while a database loads (title + tabs + header + 3 rows), so the page doesn't jump. */
+    loadingHeight: 'calc(var(--me-database-row-height) * 4 + 5em)',
+    /** Same, below the title and tabs (views still loading). */
+    loadingBodyHeight: 'calc(var(--me-database-row-height) * 4)',
     footerHeight: '33px',
     groupHeaderHeight: '40px',
     headerColor: r('color.textMuted'),

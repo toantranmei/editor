@@ -145,6 +145,6 @@ defineExpose({ db, view: viewRef })
       <Toolbar @new-row="newRow" />
     </div>
     <component :is="VIEWS[type]" v-if="db.view.value" ref="viewRef" :key="db.view.value.id" :full="full" />
-    <div v-else class="me-db-empty">{{ m.loading }}</div>
+    <div v-else class="me-db-empty is-loading">{{ m.loading }}</div>
   </div>
 </template>

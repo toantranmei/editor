@@ -23,8 +23,8 @@ export interface MeiPresence {
 }
 
 /**
- * 12 caret colours, each with a contrast ≥ 3:1 against white and against the dark editor background (#191919),
- * and white label text on them. Adjacent entries differ in hue.
+ * 12 caret colours, each with a contrast ≥ 3:1 against white and against the dark editor background (#191919).
+ * Name labels use white text on the colour darkened to ≥ 4.5:1 (`labelBackground`). Adjacent entries differ in hue.
  */
 export const PRESENCE_COLORS: readonly string[] = Object.freeze([
   '#e5484d', '#3e7ee8', '#3d9a50', '#a855f7', '#c97a0a', '#0797b9',
@@ -42,10 +42,16 @@ export function presenceColor(index: number): string {
 const CURSOR_FIELD = 'cursor'
 /** Local cursor updates are sent at most this often. */
 const THROTTLE_MS = 50
-/** The name label shows this long after a peer's caret moves, then fades (presence.css). */
+/** The name label shows this long after a peer's caret moves or they type, then fades (presence.css). */
 const LABEL_MS = 3000
+/** A page hidden this long stops publishing its caret (restored when visible again). */
+const HIDDEN_MS = 60_000
 
-interface CursorState { anchor: unknown, head: unknown }
+/**
+ * `activity` counts local edits: typing mid-text keeps the relative position, so without it the peer's label would
+ * not re-show while they type. Extra field, ignored by y-tiptap's own cursor plugin.
+ */
+interface CursorState { anchor: unknown, head: unknown, activity?: number }
 interface PeerState {
   decorations: DecorationSet
   /** Absolute head position of every drawn peer, for `scrollToPeer`. */
@@ -58,10 +64,34 @@ const presenceKey = new PluginKey<PeerState>('meiPresence')
 const SAFE_COLOR = /^[#\w\s(),.%-]+$/
 const safeColor = (color: string) => (SAFE_COLOR.test(color) ? color : PRESENCE_COLORS[0]!)
 
+const channel = (v: number) => {
+  const c = v / 255
+  return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4
+}
+const luminance = ([r, g, b]: number[]) => 0.2126 * channel(r!) + 0.7152 * channel(g!) + 0.0722 * channel(b!)
+const toHex = (rgb: number[]) => `#${rgb.map(v => Math.round(v).toString(16).padStart(2, '0')).join('')}`
+
+/**
+ * Background of a name label for caret `color`: the colour itself, darkened just enough for white text to reach
+ * 4.5:1. Non-hex colours are returned unchanged.
+ */
+export function labelBackground(color: string): string {
+  const m = /^#([\da-f]{3}|[\da-f]{6})$/i.exec(color.trim())
+  if (!m) return color
+  const hex = m[1]!.length === 3 ? [...m[1]!].map(c => c + c).join('') : m[1]!
+  const rgb = [0, 2, 4].map(i => Number.parseInt(hex.slice(i, i + 2), 16))
+  for (let f = 1; f > 0; f -= 0.02) {
+    const next = rgb.map(v => v * f)
+    if (1.05 / (luminance(next) + 0.05) >= 4.5) return toHex(next)
+  }
+  return '#000000'
+}
+
 function caret(user: PresenceUser, color: string): HTMLElement {
   const el = document.createElement('span')
   el.className = 'me-peer-caret'
   el.style.setProperty('--me-peer-color', color)
+  el.style.setProperty('--me-peer-label-bg', labelBackground(color))
   el.setAttribute('aria-hidden', 'true')
   const label = document.createElement('span')
   label.className = 'me-peer-label'
@@ -178,6 +208,8 @@ export function presenceExtension(presence: MeiPresence) {
           awareness.on('change', onChange)
 
           // --- Local: publish the selection, throttled; read-only editors publish nothing ---
+          // Kept on blur (focus in a comment composer / popover must keep you visible); cleared when read-only,
+          // destroyed or hidden for HIDDEN_MS. Nothing is published before the editor was first focused.
           let pending: CursorState | null | undefined
           let timer: ReturnType<typeof setTimeout> | null = null
           let lastSent = 0
@@ -196,33 +228,58 @@ export function presenceExtension(presence: MeiPresence) {
             else timer ??= setTimeout(send, wait)
           }
           const current = () => (awareness.getLocalState() as { [CURSOR_FIELD]?: CursorState | null } | null)?.[CURSOR_FIELD] ?? null
-          const update = (v: EditorView) => {
+          let focused = view.hasFocus()
+          let hidden = false
+          let hiddenTimer: ReturnType<typeof setTimeout> | null = null
+          let activity = 0
+          const update = (v: EditorView, prevState?: EditorState) => {
             const ystate = ySyncPluginKey.getState(v.state)
             if (!ystate?.binding || ystate.binding.projectionError != null) return
-            if (!editor.isEditable || !v.hasFocus()) {
-              if (current() != null || pending) publish(null)
+            if (v.hasFocus()) focused = true
+            if (!editor.isEditable || hidden || !focused) {
+              // A queued value counts: a pending null must not be overtaken by a stale "already null".
+              if ((pending === undefined ? current() : pending) != null) publish(null)
               return
             }
+            if (prevState && prevState.doc !== v.state.doc && !ystate.isChangeOrigin) activity++
             const { anchor, head } = v.state.selection
-            const next = {
+            const next: CursorState = {
               anchor: absolutePositionToRelativePosition(anchor, ystate.type, ystate.binding.mapping),
               head: absolutePositionToRelativePosition(head, ystate.type, ystate.binding.mapping),
+              activity,
             }
-            const before = pending ?? current()
-            if (before?.anchor && before.head
-              && Y.compareRelativePositions(Y.createRelativePositionFromJSON(before.anchor), next.anchor)
-              && Y.compareRelativePositions(Y.createRelativePositionFromJSON(before.head), next.head)) return
+            const before = pending === undefined ? current() : pending
+            if (before?.anchor && before.head && (before.activity ?? 0) === activity
+              && Y.compareRelativePositions(Y.createRelativePositionFromJSON(before.anchor), next.anchor as Y.RelativePosition)
+              && Y.compareRelativePositions(Y.createRelativePositionFromJSON(before.head), next.head as Y.RelativePosition)) return
             publish(next)
           }
           const onFocus = () => update(view)
           view.dom.addEventListener('focusin', onFocus)
-          view.dom.addEventListener('focusout', onFocus)
+          const onVisibility = () => {
+            if (hiddenTimer) clearTimeout(hiddenTimer)
+            hiddenTimer = null
+            if (document.visibilityState === 'hidden') {
+              hiddenTimer = setTimeout(() => {
+                hiddenTimer = null
+                hidden = true
+                if (!view.isDestroyed) update(view)
+              }, HIDDEN_MS)
+            }
+            else if (hidden) {
+              hidden = false
+              if (!view.isDestroyed) update(view)
+            }
+          }
+          const doc = typeof document === 'undefined' ? null : document
+          doc?.addEventListener('visibilitychange', onVisibility)
 
           return {
             update,
             destroy: () => {
               view.dom.removeEventListener('focusin', onFocus)
-              view.dom.removeEventListener('focusout', onFocus)
+              doc?.removeEventListener('visibilitychange', onVisibility)
+              if (hiddenTimer) clearTimeout(hiddenTimer)
               awareness.off('change', onChange)
               if (timer) clearTimeout(timer)
               awareness.setLocalStateField(CURSOR_FIELD, null)

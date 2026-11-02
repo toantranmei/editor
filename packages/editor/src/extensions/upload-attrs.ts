@@ -7,6 +7,8 @@ export function uploadAttributes() {
     /** Key of the pending upload in `editor.storage.fileDrop.uploads` (this tab only). */
     uploadId: { default: null, rendered: false, parseHTML: () => null },
     uploading: { default: false, rendered: false, parseHTML: () => false },
+    /** When the upload started (ms epoch). An `uploading` node older than 2 minutes counts as interrupted. */
+    uploadStartedAt: { default: null, rendered: false, parseHTML: () => null },
     /** `'tooLarge' | 'badType' | 'failed'` when the upload could not finish. */
     error: { default: null, rendered: false, parseHTML: () => null },
   }

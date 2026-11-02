@@ -166,8 +166,9 @@ const isSchemeOptions = (o: object): o is RenderTokensOptions => {
   return keys.length > 0 && keys.every(k => k === 'light' || k === 'dark')
 }
 
-// A value or name that could leave its declaration (or the <style>) is dropped.
-const UNSAFE_CSS = /[{};<>]/
+// A value or name that could leave its declaration (or the <style>) is dropped: braces, `;`, `<>`, comments
+// (`/*` could swallow the next rules) and backslash escapes (`\7d` is a `}`).
+const UNSAFE_CSS = /[{};<>\\]|\/\*|\*\//
 
 /** `[cssVar, value]` pairs of a token tree or flat map (`components` are not prefixed, like `overridesCss`). */
 function tokenPairs(tokens: object | undefined): [string, string][] {
