@@ -20,7 +20,7 @@ export type {
 export { attr, escapeHtml, safeUrl } from './html'
 export { highlightCode } from './highlight'
 export { hydrateMermaid, type HydrateMermaidOptions } from './mermaid'
-import { baseTokensCss, LAYER, overridesCss, unsafeCss } from '../theme/css'
+import { baseTokensCss, LAYER, overridesCss, safePairs } from '../theme/css'
 import { cssVar, declarations, flatten, type TokenTree } from '../theme/define'
 import { semanticDark, type ThemeTokens } from '../theme/tokens'
 
@@ -174,7 +174,7 @@ function tokenPairs(tokens: object | undefined): [string, string][] {
     if (typeof value === 'string') out.push([key.startsWith('--') ? key : cssVar(key), value])
     else if (value && typeof value === 'object') out.push(...flatten(value as TokenTree, key === 'components' ? '' : key))
   }
-  return out.filter(([k, v]) => !unsafeCss(k) && !unsafeCss(v))
+  return safePairs(out)
 }
 
 /** Default dark tokens + `dark` overrides under `prefers-color-scheme: dark` (unless the editor is forced light). */

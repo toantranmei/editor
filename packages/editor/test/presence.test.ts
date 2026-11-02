@@ -2,7 +2,7 @@ import { TextSelection } from '@tiptap/pm/state'
 import { Editor } from '@tiptap/vue-3'
 import { absolutePositionToRelativePosition, ySyncPluginKey } from '@tiptap/y-tiptap'
 import { Awareness, applyAwarenessUpdate, encodeAwarenessUpdate } from 'y-protocols/awareness'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import * as Y from 'yjs'
 import { defaultBlocks } from '../src/blocks'
 import { text } from '../src/blocks/basic'
@@ -264,7 +264,9 @@ describe('remote carets', () => {
   it('scrollToPeer is true with a caret and false without', async () => {
     // happy-dom may lack scrollIntoView; any element the caret sits in must be scrollable.
     const scroll = vi.fn()
+    const original = Element.prototype.scrollIntoView
     Element.prototype.scrollIntoView = scroll
+    onTestFinished(() => { Element.prototype.scrollIntoView = original })
     const { me, peer, awPeer } = setup()
     expect(scrollToPeer(me, awPeer.clientID)).toBe(false)
     select(peer, 3)

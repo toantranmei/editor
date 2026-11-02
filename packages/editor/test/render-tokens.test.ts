@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { renderTokensStyle } from '../src/render'
 
 const MEDIA = '@media (prefers-color-scheme: dark)'
@@ -64,6 +64,12 @@ describe('renderTokensStyle', () => {
     })
     it('keeps balanced quotes (font names)', () => {
       expect(renderTokensStyle({ light: { '--me-font': '"Segoe UI", \'Inter\'' } })).toContain('--me-font:"Segoe UI", \'Inter\'')
+    })
+    it('warns about each dropped token (development)', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      renderTokensStyle({ light: { '--me-evil': 'a;b' } })
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('--me-evil'))
+      warn.mockRestore()
     })
     it('drops unsafe names', () => {
       const css = renderTokensStyle({ light: { '--zz-a;b': '#fff', '--zz-a/*': '#fff', '--me-ok': '#000' } })

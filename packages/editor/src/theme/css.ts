@@ -61,9 +61,20 @@ function unbalancedQuotes(v: string): boolean {
 
 export const unsafeCss = (v: string) => UNSAFE_CSS.test(v) || unbalancedQuotes(v)
 
+const isDev = () => typeof process !== 'undefined' && process.env?.NODE_ENV !== 'production'
+
+/** Keeps the safe `[name, value]` pairs; warns in development about each dropped one. */
+export function safePairs(pairs: [string, string][]): [string, string][] {
+  return pairs.filter(([k, v]) => {
+    const ok = !unsafeCss(k) && !unsafeCss(v)
+    if (!ok && isDev()) console.warn(`[mei-editor] token "${k}" dropped: its name or value is not safe in CSS ({ } ; < > \\ comments, unclosed quotes)`)
+    return ok
+  })
+}
+
 function overridePairs(tokens: Omit<ThemeTokens, 'dark'>): [string, string][] {
   const { components, ...semantic } = tokens
-  return [...flatten(semantic as TokenTree), ...flatten((components ?? {}) as TokenTree)].filter(([k, v]) => !unsafeCss(k) && !unsafeCss(v))
+  return safePairs([...flatten(semantic as TokenTree), ...flatten((components ?? {}) as TokenTree)])
 }
 
 /**
