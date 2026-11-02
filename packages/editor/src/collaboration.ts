@@ -5,6 +5,11 @@ import { type EditorState, Plugin, PluginKey } from '@tiptap/pm/state'
 import type { EditorView } from '@tiptap/pm/view'
 import { prosemirrorJSONToYXmlFragment, yXmlFragmentToProsemirrorJSON, ySyncPluginKey } from '@tiptap/y-tiptap'
 import type * as Y from 'yjs'
+import { type MeiPresence, presenceExtension } from './presence'
+
+export {
+  PRESENCE_COLORS, presenceColor, refreshPresence, scrollToPeer, type MeiPresence, type PresenceUser,
+} from './presence'
 
 /**
  * `<MeiEditor :collaboration>`: the editor reads and writes a Yjs document instead of `v-model`.
@@ -15,7 +20,11 @@ export interface MeiCollaboration {
   document: Y.Doc
   /** Name of the `Y.XmlFragment` in `document` that holds the editor content. Default `'default'`. */
   field?: string
-  // Reserved: presence (`CollaborationCaret`: provider + user) will be added here.
+  /**
+   * Remote carets, selections and active blocks over a `y-protocols` awareness; the local selection is published
+   * to it (throttled, not when read-only). Names and colours come only from `resolveUser`.
+   */
+  presence?: MeiPresence
 }
 
 /**
@@ -81,7 +90,8 @@ const firstRender = Extension.create({
 })
 
 /**
- * Tiptap extensions for a collaborative editor: Yjs sync + Yjs undo (Mod-z / Mod-Shift-z / Mod-y).
+ * Tiptap extensions for a collaborative editor: Yjs sync + Yjs undo (Mod-z / Mod-Shift-z / Mod-y), and presence
+ * when `options.presence` is given.
  * Use with `createExtensions({ ..., undoRedo: false })` — the built-in history must be off.
  * Kept in its own module (`@toantranmei/editor/collaboration`) so editors without collaboration never load Yjs.
  */
@@ -93,6 +103,7 @@ export function collaborationExtensions(options: MeiCollaboration): AnyExtension
       ySyncOptions: { mapping: new Map() },
     }),
     firstRender,
+    ...(options.presence ? [presenceExtension(options.presence)] : []),
   ]
 }
 

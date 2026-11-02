@@ -1,0 +1,54 @@
+/*
+ * Collaboration presence: remote carets, name labels, selections and the active block (src/presence.ts).
+ * Each element carries `--me-peer-color` (from `resolveUser`). Only var(--me-…) tokens here.
+ */
+@layer mei-editor {
+  .me-peer-caret {
+    position: relative;
+    margin-left: calc(var(--me-border-width-thin) * -1);
+    margin-right: calc(var(--me-border-width-thin) * -1);
+    border-left: var(--me-border-width-medium) solid var(--me-peer-color);
+    word-break: normal;
+  }
+  /* Wider hover target than the 2px bar, so hovering shows the name. */
+  .me-peer-caret::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: calc(var(--me-space-2) * -1);
+    width: calc(var(--me-space-2) * 2);
+  }
+  .me-peer-label {
+    position: absolute;
+    bottom: 100%;
+    left: calc(var(--me-border-width-medium) * -1);
+    padding: 0 var(--me-space-2);
+    border-radius: var(--me-rounded-xs) var(--me-rounded-xs) var(--me-rounded-xs) 0;
+    background: var(--me-peer-color);
+    color: var(--me-white);
+    font-size: var(--me-font-size-xs);
+    font-weight: var(--me-font-weight-medium);
+    line-height: var(--me-line-height-normal);
+    font-style: normal;
+    white-space: nowrap;
+    pointer-events: none;
+    user-select: none;
+    /* Shown for 3 s after the caret moves (delay set per caret), then hidden until hovered. */
+    animation: me-peer-label-fade var(--me-duration-normal) ease-out var(--me-peer-label-delay, 3000ms) forwards; /* me-allow-literal: fallback = LABEL_MS */
+  }
+  .me-peer-caret:hover .me-peer-label { animation: none; opacity: 1; }
+  @keyframes me-peer-label-fade { to { opacity: 0; } }
+
+  .me-peer-selection { background-color: color-mix(in srgb, var(--me-peer-color) 25%, transparent); }
+
+  /* Block holding a peer's caret: 2px bar on the left + light tint over the block's own background. */
+  .me-content .me-peer-block {
+    box-shadow: calc(var(--me-border-width-medium) * -1) 0 0 0 var(--me-peer-color);
+    background-image: linear-gradient(color-mix(in srgb, var(--me-peer-color) 6%, transparent), color-mix(in srgb, var(--me-peer-color) 6%, transparent));
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .me-peer-label { animation-duration: 0s; } /* me-allow-literal: no motion */
+  }
+}

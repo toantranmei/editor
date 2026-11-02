@@ -59,4 +59,6 @@ export { useClickOutside } from './composables/useClickOutside'
 export { useEditable } from './composables/useEditable'
 export { useScope } from './composables/useScope'
 
+// Types only: the runtime lives in `@toantranmei/editor/collaboration` (Yjs stays out of the main chunk).
+export type { MeiCollaboration, MeiPresence, PresenceUser } from './collaboration'
 export type { Editor, JSONContent } from '@tiptap/vue-3'
