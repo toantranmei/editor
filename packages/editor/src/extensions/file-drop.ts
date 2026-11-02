@@ -24,6 +24,8 @@ export interface PendingUpload {
 export interface FileDropStorage {
   /** Pending uploads by the node's `uploadId` attribute. */
   uploads: Map<string, PendingUpload>
+  /** Local time each other-tab upload (`uploadId`) was first seen here, for `uploadStaleAt` (not reactive). */
+  firstSeen: Map<string, number>
 }
 
 declare module '@tiptap/core' {
@@ -52,8 +54,25 @@ export type UploadState = 'local' | 'remote' | 'interrupted' | null
 export function uploadState(editor: Editor, attrs: Record<string, unknown>, now = Date.now()): UploadState {
   if (pendingUpload(editor, attrs.uploadId)) return 'local'
   if (!attrs.uploading) return null
+  return now > uploadStaleAt(editor, attrs, now) ? 'interrupted' : 'remote'
+}
+
+/**
+ * When an `uploading` node without a local file becomes interrupted (ms, local clock). `uploadStartedAt` comes from
+ * another machine whose clock may differ, so the countdown never starts before this tab first saw the upload:
+ * `max(firstSeenHere, min(uploadStartedAt, now)) + UPLOAD_STALE_MS`. Nodes without an `uploadId` (duplicates,
+ * older documents) only use `uploadStartedAt`.
+ */
+export function uploadStaleAt(editor: Editor, attrs: Record<string, unknown>, now = Date.now()): number {
   const started = typeof attrs.uploadStartedAt === 'number' ? attrs.uploadStartedAt : 0
-  return now - started > UPLOAD_STALE_MS ? 'interrupted' : 'remote'
+  const id = attrs.uploadId
+  const seen = editor.storage.fileDrop?.firstSeen
+  let firstSeen = -Infinity
+  if (typeof id === 'string' && seen) {
+    firstSeen = seen.get(id) ?? now
+    if (!seen.has(id)) seen.set(id, firstSeen)
+  }
+  return Math.max(firstSeen, Math.min(started, now)) + UPLOAD_STALE_MS
 }
 
 const readAsDataUrl = (file: File) => new Promise<string>((resolve, reject) => {
@@ -205,10 +224,16 @@ function insertsUpload(steps: readonly unknown[]): boolean {
 }
 
 /**
- * Meta key of y-tiptap's sync plugin (`new PluginKey('y-sync')`), read by name so Yjs stays out of the main chunk.
- * Its `isChangeOrigin` marks remote changes.
+ * True for a transaction made by y-tiptap's sync plugin (remote changes, initial render): any meta of a
+ * `PluginKey('y-sync')` (`y-sync$`, or `y-sync$1`… when the module is loaded twice) with `isChangeOrigin`. Read by key
+ * name so Yjs stays out of the main chunk. `Transaction.meta` is internal: when it can't be read, the transaction
+ * counts as remote (the cleanup below then skips it, never the reverse).
  */
-const Y_SYNC_META = 'y-sync$'
+function isSyncTransaction(tr: { getMeta: (key: string) => unknown }): boolean {
+  const meta = (tr as unknown as { meta?: unknown }).meta
+  if (!meta || typeof meta !== 'object') return true
+  return Object.keys(meta).some(key => key.startsWith('y-sync$') && !!(tr.getMeta(key) as { isChangeOrigin?: boolean } | undefined)?.isChangeOrigin)
+}
 
 const isAccepted = (editor: Editor, file: File) => (file.type.startsWith('image/') ? !!editor.schema.nodes.image : !!editor.schema.nodes.fileBlock)
 
@@ -223,12 +248,13 @@ export const FileDrop = Extension.create<Record<string, never>, FileDropStorage>
   priority: 110,
 
   addStorage() {
-    return { uploads: shallowReactive(new Map<string, PendingUpload>()) }
+    return { uploads: shallowReactive(new Map<string, PendingUpload>()), firstSeen: new Map<string, number>() }
   },
 
   onDestroy() {
     for (const entry of this.storage.uploads.values()) if (entry.preview) URL.revokeObjectURL(entry.preview)
     this.storage.uploads.clear()
+    this.storage.firstSeen.clear()
   },
 
   addProseMirrorPlugins() {
@@ -254,7 +280,7 @@ export const FileDrop = Extension.create<Record<string, never>, FileDropStorage>
       // A node-level copy of a placeholder (duplicate, copy inside the editor) gets a state of its own: its
       // `uploadId` belongs to the original. Without a local file it shows as interrupted (Delete), never stuck.
       appendTransaction: (trs, _old, state) => {
-        if (!trs.some(tr => tr.docChanged && !tr.getMeta(Y_SYNC_META)?.isChangeOrigin && insertsUpload(tr.steps))) return null
+        if (!trs.some(tr => tr.docChanged && !isSyncTransaction(tr) && insertsUpload(tr.steps))) return null
         const seen = new Set<string>()
         const tr = state.tr
         state.doc.descendants((node, pos) => {
@@ -326,7 +352,8 @@ export const FileDrop = Extension.create<Record<string, never>, FileDropStorage>
           const coords = view.posAtCoords({ left: event.clientX, top: event.clientY })
           event.preventDefault()
           // Over node-view gaps and the gutter, posAtCoords finds nothing: use the block geometry (as BlockDrop).
-          const at = coords?.pos ?? blockGapAtPoint(view, event.clientX, event.clientY)
+          const containers = (editor.extensionManager.extensions.find(e => e.name === 'blockDrop')?.options as { containers?: string[] } | undefined)?.containers
+          const at = coords?.pos ?? blockGapAtPoint(view, event.clientX, event.clientY, containers)
           return insert(view, files, at ?? view.state.selection.from)
         },
       },

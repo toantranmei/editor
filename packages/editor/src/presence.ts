@@ -46,6 +46,8 @@ const THROTTLE_MS = 50
 const LABEL_MS = 3000
 /** A page hidden this long stops publishing its caret (restored when visible again). */
 const HIDDEN_MS = 60_000
+/** Local edits raise `activity` at most this often (the label stays LABEL_MS after each). */
+const ACTIVITY_MS = 1000
 
 /**
  * `activity` counts local edits: typing mid-text keeps the relative position, so without it the peer's label would
@@ -232,6 +234,7 @@ export function presenceExtension(presence: MeiPresence) {
           let hidden = false
           let hiddenTimer: ReturnType<typeof setTimeout> | null = null
           let activity = 0
+          let lastActivity = 0
           const update = (v: EditorView, prevState?: EditorState) => {
             const ystate = ySyncPluginKey.getState(v.state)
             if (!ystate?.binding || ystate.binding.projectionError != null) return
@@ -241,7 +244,11 @@ export function presenceExtension(presence: MeiPresence) {
               if ((pending === undefined ? current() : pending) != null) publish(null)
               return
             }
-            if (prevState && prevState.doc !== v.state.doc && !ystate.isChangeOrigin) activity++
+            // At most one bump per ACTIVITY_MS of continuous typing: enough to keep the label shown, less churn.
+            if (prevState && prevState.doc !== v.state.doc && !ystate.isChangeOrigin && Date.now() - lastActivity >= ACTIVITY_MS) {
+              activity++
+              lastActivity = Date.now()
+            }
             const { anchor, head } = v.state.selection
             const next: CursorState = {
               anchor: absolutePositionToRelativePosition(anchor, ystate.type, ystate.binding.mapping),

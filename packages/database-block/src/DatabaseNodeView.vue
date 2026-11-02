@@ -6,8 +6,8 @@
 import { Database } from '@lucide/vue'
 import { NodeViewWrapper, nodeViewProps } from '@tiptap/vue-3'
 import { useEditable, useScope } from '@toantranmei/editor'
-import { computed, onBeforeUnmount, onMounted, shallowRef, watch } from 'vue'
-import { DatabaseView, reservedHeights } from './lazy'
+import { computed, onBeforeUnmount, onMounted, provide, shallowRef, watch } from 'vue'
+import { DatabaseView, loadingTextKey, reservedHeights } from './lazy'
 import { databaseMessages } from './messages'
 import { resolveSource } from './sources'
 import type { DatabaseBlockOptions, DatabaseSource } from './types'
@@ -18,6 +18,7 @@ const databaseId = computed(() => (props.node.attrs.databaseId as string | null)
 const inline = computed(() => props.node.attrs.inline !== false)
 const locale = computed(() => (props.editor.storage.meiConfig?.locale ?? 'vi') as 'vi' | 'en' | 'zh')
 const m = computed(() => databaseMessages(locale.value, options.value.messages))
+provide(loadingTextKey, computed(() => m.value.loading))
 const scope = useScope(() => props.editor)
 const editable = useEditable(props.editor)
 

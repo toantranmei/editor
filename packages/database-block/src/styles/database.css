@@ -186,6 +186,15 @@
     box-sizing: border-box;
     min-height: var(--me-db-reserved-height, var(--me-database-loading-height));
   }
+  /* Text for screen readers only (the chunk-loading placeholder). */
+  .me-db-sr-only {
+    position: absolute;
+    width: var(--me-border-width-thin);
+    height: var(--me-border-width-thin);
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
   /* Inside a loaded database (title and tabs already shown): the rows' space only. */
   .me-db .me-db-empty.is-loading { min-height: var(--me-database-loading-body-height); }
   .me-db-danger { color: var(--me-database-danger-color); }
