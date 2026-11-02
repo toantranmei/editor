@@ -147,6 +147,15 @@ const html = renderHTML(doc, {
 })
 ```
 
+To link each row's title to the row's own page, use `databaseBlockRenderWith({ rowHref })` instead of
+`databaseBlockRender` (`rowHref(databaseId, rowId)` returns a URL, or null to leave that row unlinked):
+
+```ts
+import { databaseBlockRenderWith } from '@toantranmei/database-block/render'
+
+const blocks = [databaseBlockRenderWith({ rowHref: (_db, rowId) => `/notes/p/${slug}/${rowId}` })]
+```
+
 `databaseBlock` (the editor block) carries the same render hook. Style it with `@toantranmei/database-block/style.css`.
 
 ## Performance

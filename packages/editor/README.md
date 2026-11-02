@@ -219,6 +219,32 @@ onBeforeUnmount(() => { local.destroy(); doc.destroy() })
 </template>
 ```
 
+### Presence (carets)
+
+Pass a [`y-protocols`](https://github.com/yjs/y-protocols) awareness and a lookup of who each Yjs client is:
+
+```ts
+import { presenceColor, scrollToPeer } from '@toantranmei/editor/collaboration'
+
+const collaboration = {
+  document: doc,
+  presence: {
+    awareness: provider.awareness,
+    // Server-trusted identity; null hides that client. Never read names / colours from awareness states.
+    resolveUser: (clientId: number) => {
+      const peer = peers.get(clientId)
+      return peer ? { name: peer.name, color: presenceColor(peer.colorIndex), avatarUrl: peer.avatarUrl } : null
+    },
+  },
+}
+// avatar click: scrollToPeer(editor, clientId); after `resolveUser` changes its answers: refreshPresence(editor)
+```
+
+Remote carets show the name for 3 s after they move (and on hover), selections get a 25 % tint and the block
+holding the caret `me-peer-block` (2px bar + 6 % tint, `--me-peer-color`). The local caret is published in the
+awareness field `cursor`, at most every 50 ms, and never while the editor is read-only. `PRESENCE_COLORS` has 12
+colours with ≥ 3:1 contrast on light and dark backgrounds.
+
 For a headless setup use `createExtensions({ blocks, undoRedo: false })` together with
 `collaborationExtensions({ document, field })` from `@toantranmei/editor/collaboration`.
 The same entry has `fillDocument(doc, json, editor.schema, field?)` (seed / replace a shared document's
@@ -264,10 +290,38 @@ relative URLs (`safeUrl`), media also to `data:image|audio|video`; embeds need a
 keep the editor's sandbox; HTML blocks run in `sandbox` without `allow-same-origin` (code kept in `srcdoc`).
 
 Also exported: `renderHTML` (sync), `hasMath`, `escapeHtml`, `attr`, `safeUrl`, `highlightCode`,
-`renderTokensStyle(overrides?)` (`<style id="mei-editor-tokens">` with the default tokens, which the editor
+`renderTokensStyle(options?)` (`<style id="mei-editor-tokens">` with the default tokens, which the editor
 otherwise injects at runtime), and `hydrateMermaid(root?)`: a browser helper that turns
 `<pre class="mermaid">` into diagrams (loads the optional `mermaid` peer). A 1,000-block document renders in
 ~5 ms.
+
+`renderTokensStyle` takes either token overrides (`ThemeTokens`, like `<MeiEditor :tokens>`; dark follows
+`<html class="dark">` / `.me-dark`) or `{ light, dark }`: then the page also follows the OS, with the default dark
+tokens and `dark` under `@media (prefers-color-scheme: dark)` (`.me-light` opts out). Both parts accept a token tree
+(`{ color: { text: '#222' } }`) or a flat map (`{ 'color.text': '#222' }` / `{ '--me-color-text': '#222' }`).
+
+```ts
+const style = renderTokensStyle({ light: appTokens, dark: { color: { text: '#eee', bg: '#191919' } } }) // into <head>
+```
+
+### Heavy blocks load on first use
+
+Blocks keep their schema in the main bundle (a document must parse before anything renders) and load their heavy
+code the first time a page shows one, so apps don't need a wrapper:
+
+| Block | Loaded lazily | Shown meanwhile |
+| --- | --- | --- |
+| `math` | KaTeX (`loadKatex()`, optional peer) | TeX source |
+| `mermaid` | Mermaid (`loadMermaid()`, optional peer) | code |
+| `codeBlock` | highlight.js grammar per language | plain code |
+| `emoji` | emoji data per locale | – |
+| `@toantranmei/database-block` | the database UI (`DatabaseView`, TanStack) | `me-db-empty` loading row |
+| `@toantranmei/chart-block` | ECharts | chart frame at its height |
+| `@toantranmei/sketch-block` | the board engine (on first interaction / preview) | preview at the block's height |
+| collaboration | Yjs, y-tiptap, presence (`@toantranmei/editor/collaboration`) | – |
+
+Bundlers put each in its own chunk; keep these packages external to your own vendor chunk so the split survives.
+Static rendering (`/render` entries) never loads them.
 
 
 ## Keyboard & mouse
@@ -319,6 +373,16 @@ async function upload(file: File) {
 }
 </script>
 ```
+
+### Paste and drop files
+
+Pasting or dropping images and files anywhere in the editor inserts them at the caret / drop point (several in
+order; a text selection is replaced): images become image blocks with an instant preview, other files file blocks
+(audio / video / file from the mime type; needs the `file` block). Uploads go through `uploadImage` and
+`file.configure({ upload })`, which may report progress with their optional second / third argument
+`onProgress(fraction)`. Too large (`maxImageSize`, `file` `maxSize`), unsupported image formats and failed uploads
+stay on the block with Retry / Delete. Pastes that carry text or web images (`<img src="https://…">`) keep the
+regular paste.
 
 ## Safe loading
 

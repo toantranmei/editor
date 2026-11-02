@@ -21,7 +21,13 @@ export interface StaticDatabase {
   rowTitles?: Record<string, string>
 }
 
-type RenderOptions = Pick<DatabaseBlockOptions, 'messages'>
+type RenderOptions = Pick<DatabaseBlockOptions, 'messages'> & {
+  /**
+   * Link of a row (e.g. its published page, `/notes/p/<slug>/<rowId>`). When set, the row's title cell renders as
+   * `<a href>`; return null to leave a row unlinked.
+   */
+  rowHref?: (databaseId: string, rowId: string) => string | null
+}
 
 function cellHtml(prop: Prop, row: Row, ctx: RenderContext, db: StaticDatabase, locale: string): string {
   const v = cellValue(row, prop)
@@ -54,8 +60,14 @@ function cellHtml(prop: Prop, row: Row, ctx: RenderContext, db: StaticDatabase, 
   }
 }
 
-/** A read-only HTML table of a database view (any view type renders as its table of rows). */
-export function renderStaticDatabase(db: StaticDatabase, viewId: string | null | undefined, ctx: RenderContext, m: DatabaseMessages): string {
+/**
+ * A read-only HTML table of a database view (any view type renders as its table of rows). With `rowHref`, each
+ * row's title cell is a link.
+ */
+export function renderStaticDatabase(
+  db: StaticDatabase, viewId: string | null | undefined, ctx: RenderContext, m: DatabaseMessages,
+  rowHref?: (rowId: string) => string | null,
+): string {
   const views = [...db.views].sort(byPosition)
   const view = views.find(v => v.id === viewId) ?? views[0]
   const props = visibleProps(view, db.props)
@@ -63,8 +75,13 @@ export function renderStaticDatabase(db: StaticDatabase, viewId: string | null |
   const title = db.meta?.title?.trim() || m.untitled
   const icon = db.meta?.icon ? `<span class="me-db-icon" aria-hidden="true">${ctx.escape(db.meta.icon)}</span>` : ''
   const head = props.map(p => `<th scope="col"${ctx.attr('data-prop', p.id)}>${ctx.escape(p.name)}</th>`).join('')
+  const titleCell = (r: Row, p: Prop) => {
+    const content = cellHtml(p, r, ctx, db, locale) || `<span class="me-db-muted">${ctx.escape(m.untitled)}</span>`
+    const href = rowHref ? ctx.safeUrl(rowHref(r.id), 'link') : null
+    return href ? `<a class="me-db-row-link"${ctx.attr('href', href)}>${content}</a>` : content
+  }
   const body = db.rows.map(r => `<tr${ctx.attr('data-row-id', r.id)}>${props.map((p, i) => i === 0
-    ? `<th scope="row">${cellHtml(p, r, ctx, db, locale) || `<span class="me-db-muted">${ctx.escape(m.untitled)}</span>`}</th>`
+    ? `<th scope="row">${titleCell(r, p)}</th>`
     : `<td${ctx.attr('data-type', p.type)}>${cellHtml(p, r, ctx, db, locale)}</td>`).join('')}</tr>`).join('')
   const total = db.total ?? db.rows.length
   const more = total > db.rows.length ? `<p class="me-db-static-more">+${total - db.rows.length} ${ctx.escape(m.more)}</p>` : ''
@@ -96,7 +113,8 @@ export function databaseRenderers(options: Partial<RenderOptions> = {}): BlockRe
       return `${open}${href ? `<a class="me-db-link-row"${ctx.attr('href', href)}>${row}</a>` : `<span class="me-db-link-row">${row}</span>`}</div>`
     }
     if (!db) return `${open}<div class="me-db-empty is-missing">${ctx.escape(m.notFound)}</div></div>`
-    return `${open}<div class="me-db">${renderStaticDatabase(db, viewId, ctx, m)}</div></div>`
+    const rowHref = options.rowHref && id ? (rowId: string) => options.rowHref!(id, rowId) : undefined
+    return `${open}<div class="me-db">${renderStaticDatabase(db, viewId, ctx, m, rowHref)}</div></div>`
   }
   return { nodes: { databaseView } }
 }
@@ -106,3 +124,13 @@ export function databaseRenderers(options: Partial<RenderOptions> = {}): BlockRe
  * `renderHTML(doc, { blocks: [databaseBlockRender], data: { databases } })`.
  */
 export const databaseBlockRender: RenderBlock = { name: 'database', render: databaseRenderers() }
+
+/**
+ * `databaseBlockRender` with options, e.g. links from each row to its own page:
+ * `renderHTML(doc, { blocks: [databaseBlockRenderWith({ rowHref: (db, row) => `/notes/p/${slug}/${row}` })] })`.
+ */
+export function databaseBlockRenderWith(options: Partial<RenderOptions>): RenderBlock {
+  return { name: 'database', render: databaseRenderers(options) }
+}
+
+export type { RenderOptions as DatabaseRenderOptions }
