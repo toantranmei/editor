@@ -208,6 +208,10 @@ const cropStyle = computed(() => {
         <template v-if="!uploadError">
           <span>{{ m.uploading }}</span>
           <span class="me-media-progress"><span class="me-media-progress-bar" :style="{ width: progress }" /></span>
+          <!-- Uploaded from another tab (or a closed one): it can still be removed. -->
+          <button v-if="editable && !pending" type="button" class="me-btn" @click="deleteNode()">
+            <Trash /> {{ m.delete }}
+          </button>
         </template>
         <template v-else>
           <span class="me-error me-media-status-error">{{ uploadErrorText }}</span>
