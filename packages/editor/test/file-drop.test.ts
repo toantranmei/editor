@@ -79,6 +79,10 @@ describe('paste', () => {
     const editor = make({ upload: async () => '/x' })
     expect(paste(editor, [png()], { 'text/html': '<p>some <b>text</b></p>', 'text/plain': 'some text' })).toBe(false)
     expect(nodesOf(editor, 'image')).toHaveLength(0)
+    // The regular paste then inserts the text (the fallback the editor would run next).
+    editor.view.pasteHTML('<p>some <b>text</b></p>')
+    expect(editor.getText()).toContain('some text')
+    expect(nodesOf(editor, 'image')).toHaveLength(0)
   })
 
   it('does nothing when the editor is read-only', () => {

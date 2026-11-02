@@ -20,7 +20,7 @@ export type {
 export { attr, escapeHtml, safeUrl } from './html'
 export { highlightCode } from './highlight'
 export { hydrateMermaid, type HydrateMermaidOptions } from './mermaid'
-import { baseTokensCss, LAYER, overridesCss } from '../theme/css'
+import { baseTokensCss, LAYER, overridesCss, unsafeCss } from '../theme/css'
 import { cssVar, declarations, flatten, type TokenTree } from '../theme/define'
 import { semanticDark, type ThemeTokens } from '../theme/tokens'
 
@@ -165,13 +165,6 @@ const isSchemeOptions = (o: object): o is RenderTokensOptions => {
   const keys = Object.keys(o)
   return keys.length > 0 && keys.every(k => k === 'light' || k === 'dark')
 }
-
-// A value or name that could leave its declaration (or the <style>) is dropped: braces, `;`, `<>`, comments
-// (`/*` could swallow the next rules) and backslash escapes (`\7d` is a `}`).
-const UNSAFE_CSS = /[{};<>\\]|\/\*|\*\//
-// Quotes are fine in pairs (`"Segoe UI"`); an unbalanced one would run a string over the closing brace.
-const unbalancedQuotes = (v: string) => (v.match(/"/g)?.length ?? 0) % 2 === 1 || (v.match(/'/g)?.length ?? 0) % 2 === 1
-const unsafeCss = (v: string) => UNSAFE_CSS.test(v) || unbalancedQuotes(v)
 
 /** `[cssVar, value]` pairs of a token tree or flat map (`components` are not prefixed, like `overridesCss`). */
 function tokenPairs(tokens: object | undefined): [string, string][] {

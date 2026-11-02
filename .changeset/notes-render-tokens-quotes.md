@@ -2,4 +2,4 @@
 '@toantranmei/editor': patch
 ---
 
-`renderTokensStyle` drops token names and values with an unbalanced quote (it could swallow the closing brace).
+Token overrides (`renderTokensStyle` in every form, and the runtime overrides) drop names and values with `{};<>`, comments, backslashes or an unclosed quote.

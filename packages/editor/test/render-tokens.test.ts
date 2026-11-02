@@ -50,6 +50,18 @@ describe('renderTokensStyle', () => {
         expect(css).toContain('--me-ok:#fff')
       })
     }
+    it('quotes: a quote of the other kind inside a string is fine, an unclosed one is not', () => {
+      expect(renderTokensStyle({ light: { '--me-q1': '"it\'s"' } })).toContain('--me-q1:"it\'s"')
+      expect(renderTokensStyle({ light: { '--me-q2': '"a\' b" c\'' } })).not.toContain('--me-q2')
+      expect(renderTokensStyle({ light: { '--me-q3': 'a"' } })).not.toContain('--me-q3')
+    })
+    it('the legacy single-argument form is filtered the same way (light and dark)', () => {
+      const css = renderTokensStyle({ color: { accent: 'red;}body{x:y', text: '#111' }, dark: { color: { accent: 'a/*b', text: '"x' } } })
+      expect(css).not.toContain('body{x:y')
+      expect(css).not.toContain('a/*b')
+      expect(css).not.toContain('"x')
+      expect(css).toContain('--me-color-text:#111')
+    })
     it('keeps balanced quotes (font names)', () => {
       expect(renderTokensStyle({ light: { '--me-font': '"Segoe UI", \'Inter\'' } })).toContain('--me-font:"Segoe UI", \'Inter\'')
     })

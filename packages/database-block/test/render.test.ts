@@ -65,6 +65,17 @@ describe('static render: rowHref', () => {
     expect(html).not.toMatch(/href="[^"]*"[^>]*><script/)
   })
 
+  it('a view whose visible list leaves the title out still shows it first, with the link on it (no extra cell)', () => {
+    const base = db.views.find(v => v.id === 'v-table')!
+    const other = db.props.find(p => p.type !== 'title')!.id
+    const view = { ...base, config: { ...base.config, visible: [other] } }
+    const hiddenTitle: StaticDatabase = { ...db, views: [view, ...db.views.filter(v => v.id !== 'v-table')] }
+    expect(visibleProps(view, hiddenTitle.props)[0]!.type).toBe('title')
+    const html = render((_, r) => `/r/${r}`, hiddenTitle)
+    expect(html).toContain('<th scope="row"><a class="me-db-row-link"')
+    expect(html).not.toContain('me-db-row-open')
+  })
+
   it('without a title column, a leading link cell holds the link', () => {
     // The title always shows when it exists, so the database has none.
     const noTitle: StaticDatabase = { ...db, props: db.props.filter(p => p.type !== 'title') }

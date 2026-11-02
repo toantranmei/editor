@@ -43,9 +43,27 @@ export function baseTokensCss(): string {
   ].join('\n')
 }
 
+// A value or name that could leave its declaration (or the <style>) is dropped: braces, `;`, `<>`, comments
+// (`/*` could swallow the next rules) and backslash escapes (`\7d` is a `}`).
+const UNSAFE_CSS = /[{};<>\\]|\/\*|\*\//
+
+/** True when a quote is never closed (it would run a string over the closing brace). `"it's"` is balanced. */
+function unbalancedQuotes(v: string): boolean {
+  let open = ''
+  for (const ch of v) {
+    if (open) {
+      if (ch === open) open = ''
+    }
+    else if (ch === '"' || ch === "'") open = ch
+  }
+  return open !== ''
+}
+
+export const unsafeCss = (v: string) => UNSAFE_CSS.test(v) || unbalancedQuotes(v)
+
 function overridePairs(tokens: Omit<ThemeTokens, 'dark'>): [string, string][] {
   const { components, ...semantic } = tokens
-  return [...flatten(semantic as TokenTree), ...flatten((components ?? {}) as TokenTree)]
+  return [...flatten(semantic as TokenTree), ...flatten((components ?? {}) as TokenTree)].filter(([k, v]) => !unsafeCss(k) && !unsafeCss(v))
 }
 
 /**

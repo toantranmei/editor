@@ -1,11 +1,12 @@
 import { TextSelection } from '@tiptap/pm/state'
 import { Editor } from '@tiptap/vue-3'
+import { absolutePositionToRelativePosition, ySyncPluginKey } from '@tiptap/y-tiptap'
 import { Awareness, applyAwarenessUpdate, encodeAwarenessUpdate } from 'y-protocols/awareness'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import * as Y from 'yjs'
 import { defaultBlocks } from '../src/blocks'
 import { text } from '../src/blocks/basic'
-import { collaborationExtensions, labelBackground, PRESENCE_COLORS, presenceColor, scrollToPeer, type PresenceUser } from '../src/collaboration'
+import { collaborationExtensions, labelBackground, refreshPresence, PRESENCE_COLORS, presenceColor, scrollToPeer, type PresenceUser } from '../src/collaboration'
 import { createExtensions } from '../src/extensions'
 
 const editors: Editor[] = []
@@ -94,25 +95,34 @@ describe('local cursor publishing', () => {
     await vi.waitFor(() => expect(cursorOf(awPeer)).not.toBeNull())
   })
 
-  it('a read-only editor publishes no cursor, and clears an existing one', async () => {
+  it('a read-only editor publishes no cursor, and clears an existing one', () => {
+    vi.useFakeTimers()
     const { peer, awPeer } = setup()
     select(peer, 3)
-    await vi.waitFor(() => expect(cursorOf(awPeer)).not.toBeNull())
+    vi.advanceTimersByTime(100)
+    expect(cursorOf(awPeer)).not.toBeNull()
     peer.setEditable(false)
     peer.view.dispatch(peer.state.tr)
-    await vi.waitFor(() => expect(cursorOf(awPeer)).toBeNull())
+    vi.advanceTimersByTime(100)
+    expect(cursorOf(awPeer)).toBeNull()
     select(peer, 5)
-    await new Promise(r => setTimeout(r, 120))
+    vi.advanceTimersByTime(200)
     expect(cursorOf(awPeer)).toBeNull()
   })
 
-  it('does not clear the caret on blur', async () => {
+  it('does not clear the caret on blur', () => {
+    vi.useFakeTimers()
     const { peer, awPeer } = setup()
     select(peer, 3)
-    await vi.waitFor(() => expect(cursorOf(awPeer)).not.toBeNull())
+    vi.advanceTimersByTime(100)
+    expect(cursorOf(awPeer)).not.toBeNull()
+    const before = document.activeElement
     peer.view.dom.blur()
+    peer.view.dom.dispatchEvent(new FocusEvent('focusout', { bubbles: true }))
+    expect(document.activeElement).not.toBe(before)
+    expect(peer.view.hasFocus()).toBe(false)
     peer.view.dispatch(peer.state.tr)
-    await new Promise(r => setTimeout(r, 120))
+    vi.advanceTimersByTime(200)
     expect(cursorOf(awPeer)).not.toBeNull()
   })
 
@@ -124,14 +134,16 @@ describe('local cursor publishing', () => {
     select(peer, 3)
     select(peer, 4)
     select(peer, 5)
-    const during = sets.mock.calls.filter(c => c[0] === 'cursor').length
-    expect(during).toBeLessThanOrEqual(1)
+    const cursorCalls = () => sets.mock.calls.filter(c => c[0] === 'cursor')
+    expect(cursorCalls().length).toBeLessThanOrEqual(1)
     vi.advanceTimersByTime(60)
-    const calls = sets.mock.calls.filter(c => c[0] === 'cursor')
-    expect(calls.length).toBeLessThanOrEqual(2)
-    const last = calls.at(-1)![1] as { head: unknown }
-    const abs = Y.createRelativePositionFromJSON(last.head)
-    expect(abs).toBeTruthy()
+    expect(cursorCalls().length).toBeLessThanOrEqual(2)
+    const expected = (() => {
+      const state = ySyncPluginKey.getState(peer.state)!
+      return absolutePositionToRelativePosition(5, state.type, state.binding.mapping)
+    })()
+    const last = cursorCalls().at(-1)![1] as { head: unknown }
+    expect(Y.compareRelativePositions(Y.createRelativePositionFromJSON(last.head), expected)).toBe(true)
   })
 
   it('a pending null is not overtaken by a stale "already null": blur-free read-only toggle ends null', () => {
@@ -250,14 +262,33 @@ describe('remote carets', () => {
   })
 
   it('scrollToPeer is true with a caret and false without', async () => {
+    // happy-dom may lack scrollIntoView; any element the caret sits in must be scrollable.
+    const scroll = vi.fn()
+    Element.prototype.scrollIntoView = scroll
     const { me, peer, awPeer } = setup()
     expect(scrollToPeer(me, awPeer.clientID)).toBe(false)
     select(peer, 3)
     await vi.waitFor(() => expect(caretsOf(me)).toHaveLength(1))
-    const el = me.view.dom.querySelector('p') as HTMLElement
-    el.scrollIntoView = vi.fn()
-    // domAtPos can resolve to any element of the line; make every element scrollable.
-    Element.prototype.scrollIntoView ??= () => {}
     expect(scrollToPeer(me, awPeer.clientID)).toBe(true)
+    expect(scroll).toHaveBeenCalledOnce()
+  })
+
+  it('the name label counts down 3 s from the last move or edit, and re-shows on activity', async () => {
+    const { me, peer } = setup()
+    const delay = () => Number.parseInt((me.view.dom.querySelector('.me-peer-caret') as HTMLElement).style.getPropertyValue('--me-peer-label-delay'))
+    select(peer, 3)
+    await vi.waitFor(() => expect(me.view.dom.querySelector('.me-peer-caret')).not.toBeNull())
+    expect(delay()).toBeGreaterThan(2500)
+    const first = me.view.dom.querySelector('.me-peer-caret')
+    // Fake time from here (real now): 3.5 s pass without movement; a redraw keeps the same element, so its CSS fade (3 s) runs out.
+    vi.useFakeTimers({ now: Date.now() })
+    vi.advanceTimersByTime(3500)
+    refreshPresence(me)
+    expect(me.view.dom.querySelector('.me-peer-caret')).toBe(first)
+    // The peer types in place: activity rises, the cursor changes, the caret is re-created with a fresh countdown.
+    peer.commands.insertContentAt(3, 'x')
+    vi.advanceTimersByTime(100)
+    expect(me.view.dom.querySelector('.me-peer-caret')).not.toBe(first)
+    expect(delay()).toBeGreaterThan(2500)
   })
 })
