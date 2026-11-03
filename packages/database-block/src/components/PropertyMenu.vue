@@ -123,7 +123,7 @@ function remove() {
         </template>
         <button type="button" class="me-menu-item" role="menuitem" @click="sort('asc')"><ArrowUp class="me-db-menu-icon" />{{ m.sortAscending }}</button>
         <button type="button" class="me-menu-item" role="menuitem" @click="sort('desc')"><ArrowDown class="me-db-menu-icon" />{{ m.sortDescending }}</button>
-        <button v-if="prop.type !== 'files'" type="button" class="me-menu-item" role="menuitem" @click="filter"><ListFilter class="me-db-menu-icon" />{{ m.filterBy }}</button>
+        <button type="button" class="me-menu-item" role="menuitem" @click="filter"><ListFilter class="me-db-menu-icon" />{{ m.filterBy }}</button>
         <div class="me-db-separator" role="separator" />
         <button v-if="!isTitle" type="button" class="me-menu-item" role="menuitem" data-action="hide" @click="hide"><EyeOff class="me-db-menu-icon" />{{ m.hide }}</button>
         <template v-if="isTable">

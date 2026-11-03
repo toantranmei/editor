@@ -498,6 +498,8 @@
   .me-db-filter-value > .me-input { width: 100%; }
   .me-db-chips { display: flex; flex-wrap: wrap; gap: var(--me-database-tag-gap); }
   .me-db-chip { opacity: 0.55; cursor: pointer; }
+  .me-db-filter-groups { display: flex; flex-direction: column; gap: var(--me-space-2); }
+  .me-db-group-chip { padding: 0 var(--me-space-2); border: 0; border-radius: var(--me-radius-sm); background: none; color: var(--me-color-text-muted); font: inherit; font-size: var(--me-font-size-xs); }
   .me-db-chip.is-on { opacity: 1; box-shadow: 0 0 0 var(--me-border-width-thin) var(--me-tint-text, var(--me-color-text)); }
 
   .me-db-datepicker { display: flex; flex-direction: column; gap: var(--me-space-2); width: var(--me-datepicker-width); }

@@ -6,22 +6,25 @@ import type { FilterCondition, FilterGroup, FilterNode, FilterOp, Prop, PropType
 
 export const TEXT_OPS: FilterOp[] = ['equals', 'not_equals', 'contains', 'not_contains', 'starts_with', 'ends_with', 'is_empty', 'is_not_empty']
 export const NUMBER_OPS: FilterOp[] = ['=', '!=', '>', '>=', '<', '<=', 'is_empty', 'is_not_empty']
-export const SELECT_OPS: FilterOp[] = ['is', 'is_not', 'is_any_of', 'is_none_of']
-export const LIST_OPS: FilterOp[] = ['contains', 'not_contains', 'contains_any', 'contains_all']
-export const DATE_OPS: FilterOp[] = ['is', 'before', 'after', 'on_or_before', 'on_or_after', 'between', 'is_relative']
+export const SELECT_OPS: FilterOp[] = ['is', 'is_not', 'is_any_of', 'is_none_of', 'is_empty', 'is_not_empty']
+export const LIST_OPS: FilterOp[] = ['contains', 'not_contains', 'contains_any', 'contains_all', 'is_empty', 'is_not_empty']
+export const DATE_OPS: FilterOp[] = ['is_relative', 'is', 'before', 'after', 'on_or_before', 'on_or_after', 'between', 'is_empty', 'is_not_empty']
 export const CHECKBOX_OPS: FilterOp[] = ['is']
+/** Files (and anything without a comparable value): only emptiness. */
+export const EMPTY_OPS: FilterOp[] = ['is_not_empty', 'is_empty']
 
 export const RELATIVE_DATES: RelativeDate[] = [
   'today', 'tomorrow', 'yesterday', 'this_week', 'past_week', 'next_week', 'this_month', 'past_month', 'next_month', 'past_year', 'next_year',
 ]
 
 /** Filter family of a property: formula / rollup follow their result type. */
-export function filterKind(prop: Prop): 'text' | 'number' | 'select' | 'list' | 'date' | 'checkbox' {
+export function filterKind(prop: Prop): 'text' | 'number' | 'select' | 'list' | 'date' | 'checkbox' | 'empty' {
   const type = resultType(prop)
   switch (type) {
     case 'number': case 'unique_id': return 'number'
     case 'select': case 'status': return 'select'
-    case 'multi_select': case 'person': case 'relation': case 'files': case 'created_by': case 'last_edited_by': return 'list'
+    case 'files': return 'empty'
+    case 'multi_select': case 'person': case 'relation': case 'created_by': case 'last_edited_by': return 'list'
     case 'date': case 'created_time': case 'last_edited_time': return 'date'
     case 'checkbox': return 'checkbox'
     default: return 'text'
@@ -54,6 +57,7 @@ export function opsFor(prop: Prop): FilterOp[] {
     list: LIST_OPS,
     date: DATE_OPS,
     checkbox: CHECKBOX_OPS,
+    empty: EMPTY_OPS,
   }[filterKind(prop)]
 }
 
@@ -86,7 +90,7 @@ export function defaultValue(prop: Prop, op: FilterOp): unknown {
     case 'option': return prop.config?.options?.[0]?.id ?? ''
     case 'date': return ''
     case 'date_range': return ['', '']
-    case 'relative': return 'today'
+    case 'relative': return 'this_week'
     case 'bool': return true
     default: return ''
   }
@@ -130,4 +134,4 @@ export function normalizeFilter(group: FilterGroup | undefined): FilterGroup | u
 }
 
 /** Props a filter condition can target. */
-export const filterableProps = (props: Prop[]) => props.filter(p => p.type !== 'files')
+export const filterableProps = (props: Prop[]) => props

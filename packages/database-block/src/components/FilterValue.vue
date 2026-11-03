@@ -17,6 +17,16 @@ const people = computed(() => {
 })
 const isPeople = computed(() => ['person', 'created_by', 'last_edited_by'].includes(props.prop.type))
 const options = computed(() => props.prop.config?.options ?? [])
+/** Status: options under their group (To-do / In progress / Complete), so a whole group can be picked at once. */
+const groups = computed(() => {
+  const gs = props.prop.type === 'status' ? props.prop.config?.groups ?? [] : []
+  const byId = new Map(options.value.map(o => [o.id, o]))
+  return gs.map(g => ({ id: g.id, name: g.name, options: g.option_ids.map(id => byId.get(id)).filter(o => !!o) }))
+})
+const toggleGroup = (ids: string[]) => {
+  const all = ids.every(id => list.value.includes(id))
+  emit('change', all ? list.value.filter(x => !ids.includes(x)) : [...new Set([...list.value, ...ids])])
+}
 const list = computed<string[]>(() => (Array.isArray(props.value) ? props.value.map(String) : []))
 
 // Text / number inputs write after a short pause, so typing doesn't re-query on every key.
@@ -42,10 +52,42 @@ const range = computed<[string, string]>(() => (Array.isArray(props.value) ? [St
 <template>
   <span class="me-db-filter-value" :data-kind="kind">
     <template v-if="kind === 'none'" />
+    <select v-else-if="kind === 'option' && groups.length" class="me-input me-db-select" :value="value ?? ''" :aria-label="m.value" @change="emit('change', ($event.target as HTMLSelectElement).value)">
+      <option value="" />
+      <optgroup v-for="g in groups" :key="g.id" :label="g.name">
+        <option v-for="o in g.options" :key="o.id" :value="o.id">{{ o.name }}</option>
+      </optgroup>
+    </select>
     <select v-else-if="kind === 'option' && (options.length || !isPeople)" class="me-input me-db-select" :value="value ?? ''" :aria-label="m.value" @change="emit('change', ($event.target as HTMLSelectElement).value)">
       <option value="" />
       <option v-for="o in options" :key="o.id" :value="o.id">{{ o.name }}</option>
     </select>
+    <span v-else-if="kind === 'options' && groups.length" class="me-db-filter-groups" role="group" :aria-label="m.value">
+      <span v-for="g in groups" :key="g.id" class="me-db-chips" data-status-group>
+        <button
+          type="button"
+          class="me-db-chip me-db-group-chip"
+          :class="{ 'is-on': g.options.length > 0 && g.options.every(o => list.includes(o.id)) }"
+          :aria-pressed="g.options.length > 0 && g.options.every(o => list.includes(o.id))"
+          :data-group="g.id"
+          @click="toggleGroup(g.options.map(o => o.id))"
+        >
+          {{ g.name }}
+        </button>
+        <button
+          v-for="o in g.options"
+          :key="o.id"
+          type="button"
+          class="me-db-tag me-db-chip"
+          :class="{ 'is-on': list.includes(o.id) }"
+          :data-color="o.color === 'default' ? undefined : o.color"
+          :aria-pressed="list.includes(o.id)"
+          @click="toggle(o.id)"
+        >
+          {{ o.name }}
+        </button>
+      </span>
+    </span>
     <span v-else-if="kind === 'options' || (kind === 'list' && isPeople)" class="me-db-chips" role="group" :aria-label="m.value">
       <button
         v-for="o in (kind === 'options' ? options.map(o => ({ id: o.id, name: o.name, color: o.color })) : people.map(p => ({ id: p.id, name: p.name, color: 'default' })))"
