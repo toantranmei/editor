@@ -1,5 +1,65 @@
 # @toantranmei/editor
 
+## 0.4.0
+
+### Minor Changes
+
+- 0fe3868: An upload still running when its editor is destroyed (the page was left) is no longer lost: a collaborative editor
+  writes the result (`src`, or `error: 'failed'`) straight into its Yjs document when the upload ends, so every editor
+  on that document, and anyone loading it later, gets the image or file. An editor opened again on the same document
+  meanwhile shows the upload as this tab's (preview, progress). New `uploadsSettled(editor)`: a promise once every
+  upload running for the editor wrote its result (null when none runs); for a collaborative editor it also counts
+  uploads still running on its Yjs document from earlier editors (a remount, a page opened again). Keep the document open, saved and synced until then,
+  e.g. `uploadsSettled(editor)?.finally(() => provider.destroy())`. A plain `v-model` editor destroyed meanwhile still
+  cannot keep the result.
+- c90937c: Paste or drop images and files anywhere in the editor (new core extension `FileDrop`, registered by default). Each
+  image becomes an image block with an instant preview and a progress bar, other files a file block (audio / video /
+  file from the mime type), several files in order; a text selection is replaced. Pastes with text or web images keep
+  the regular paste. Oversize, unsupported or failed uploads stay on the block (`error: 'tooLarge' | 'badType' |
+  'failed'`) with Retry / Delete. `ImageUploader` and `fileBlock`'s `upload` take an optional `onProgress(fraction)`.
+  
+  **Breaking:** `FileDrop` is on by default and handles pastes and drops that carry files before other paste handlers
+  (priority 110): an app that handled file pastes or drops itself now gets image / file blocks instead (filter
+  `FileDrop` out of `createExtensions` to keep the old behaviour).
+  
+  **Breaking (TypeScript):** `EditorMessages` has new required keys `image.badType`, `image.retry`,
+  `image.uploadInterrupted`, `file.retry`, `file.uploadInterrupted` and `file.delete`. Callers passing a full
+  `messages` object to `createExtensions` must add them; `<MeiEditor :messages>` takes a partial object and is not
+  affected.
+- 28d9509: Presence: the caret stays while focus is elsewhere on the page (cleared on read-only, unmount, or a tab hidden for
+  over a minute, restored when visible); typing re-shows the label (`cursor.activity`); labels darken their colour
+  for 4.5:1 white text (`labelBackground`). Uploads: new attr `uploadStartedAt`; only the uploading tab shows progress
+  and Delete / Retry, others "Uploading…", and after 2 minutes without an owner "Upload interrupted" with Delete
+  (`uploadState`, `UPLOAD_STALE_MS`, message `uploadInterrupted`); a duplicated placeholder gets its own state; Word's
+  `file:` images are uploaded from the clipboard in place; drops over gaps use the block geometry (`blockAtPoint`,
+  `blockGapAtPoint`). `renderTokensStyle` also drops values with comments or backslashes. Database: the row link sits on
+  the title property (or a leading cell without one); loading keeps the view's last height or `database.loadingHeight`.
+- 4edb914: Presence for collaborative editors: `MeiCollaboration.presence = { awareness, resolveUser }` draws remote carets
+  with name labels (shown 3 s after a move, and on hover), selections (25 % tint) and the peer's active block
+  (`me-peer-block`, 2px bar + 6 % tint). Names and colours come only from `resolveUser(clientId)`; the local caret is
+  published to the awareness (field `cursor`, throttled to 50 ms, never while read-only). New exports from
+  `@toantranmei/editor/collaboration`: `PRESENCE_COLORS` (12 colours, ≥ 3:1 on light and dark), `presenceColor(index)`,
+  `scrollToPeer(editor, clientId)`, `refreshPresence(editor)`, types `MeiPresence`, `PresenceUser`.
+- 70c4afc: `renderTokensStyle({ light, dark })`: server-rendered pages can follow the OS colour scheme — the default dark tokens
+  and `dark` overrides apply under `@media (prefers-color-scheme: dark)` (forced `.me-light` opts out). Each part takes
+  a token tree or a flat map (`'color.text'` / `'--me-color-text'`). The new form is chosen only when the object has a
+  `light` key (use `{ light: {} }` for the defaults only); `renderTokensStyle(overrides)`, including dark-only
+  `renderTokensStyle({ dark: {…} })`, is unchanged (class-based dark, no OS media rule). New type
+  `RenderTokensOptions`. README documents which heavy blocks load on first use.
+
+### Patch Changes
+
+- d48d595: Duplicate-placeholder cleanup recognises any `y-sync$…` meta (y-tiptap loaded twice) and never runs on sync
+  transactions; presence raises `activity` at most once a second; FileDrop's fallback drop position uses BlockDrop's
+  configured containers; "interrupted" uploads count from when this tab first saw them (clock skew, `uploadStaleAt`);
+  the database chunk-loading placeholder carries a screen-reader "Loading…" in the editor's locale.
+- 6681cb8: Remote carets hold no text node: the word joiners around the caret are removed and the name label is drawn with `content: attr(data-name)` (`.me-peer-label[data-name]`, its `textContent` is now empty). The local caret could land in a peer's caret at the same position and the keys typed there were lost.
+- e76a340: Token overrides (`renderTokensStyle` in every form, and the runtime overrides) drop names and values with `{};<>`, comments, backslashes or an unclosed quote.
+  
+  A dropped token logs a `console.warn` in development.
+  
+  **Breaking:** values containing `;` are now dropped, including `data:` URIs such as `url(data:image/png;base64,…)`; use a regular URL instead.
+
 ## 0.3.1
 
 ### Patch Changes

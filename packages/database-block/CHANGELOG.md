@@ -1,5 +1,38 @@
 # @toantranmei/database-block
 
+## 0.2.0
+
+### Minor Changes
+
+- 70c4afc: Static render: row titles can link to the row's page. `databaseRenderers({ rowHref })` /
+  `databaseBlockRenderWith({ rowHref })` with `rowHref(databaseId, rowId) => string | null` render the title cell as
+  `<a class="me-db-row-link" href>`; `renderStaticDatabase` takes an optional `rowHref(rowId)`.
+- 28d9509: Presence: the caret stays while focus is elsewhere on the page (cleared on read-only, unmount, or a tab hidden for
+  over a minute, restored when visible); typing re-shows the label (`cursor.activity`); labels darken their colour
+  for 4.5:1 white text (`labelBackground`). Uploads: new attr `uploadStartedAt`; only the uploading tab shows progress
+  and Delete / Retry, others "Uploading…", and after 2 minutes without an owner "Upload interrupted" with Delete
+  (`uploadState`, `UPLOAD_STALE_MS`, message `uploadInterrupted`); a duplicated placeholder gets its own state; Word's
+  `file:` images are uploaded from the clipboard in place; drops over gaps use the block geometry (`blockAtPoint`,
+  `blockGapAtPoint`). `renderTokensStyle` also drops values with comments or backslashes. Database: the row link sits on
+  the title property (or a leading cell without one); loading keeps the view's last height or `database.loadingHeight`.
+
+### Patch Changes
+
+- d48d595: Duplicate-placeholder cleanup recognises any `y-sync$…` meta (y-tiptap loaded twice) and never runs on sync
+  transactions; presence raises `activity` at most once a second; FileDrop's fallback drop position uses BlockDrop's
+  configured containers; "interrupted" uploads count from when this tab first saw them (clock skew, `uploadStaleAt`);
+  the database chunk-loading placeholder carries a screen-reader "Loading…" in the editor's locale.
+- Updated dependencies [0fe3868]
+- Updated dependencies [c90937c]
+- Updated dependencies [28d9509]
+- Updated dependencies [d48d595]
+- Updated dependencies [6681cb8]
+- Updated dependencies [4edb914]
+- Updated dependencies [e76a340]
+- Updated dependencies [70c4afc]
+  - @toantranmei/editor@0.4.0
+  - @toantranmei/chart-block@0.1.1
+
 ## 0.1.0
 
 ### Minor Changes
