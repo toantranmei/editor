@@ -299,7 +299,8 @@ otherwise injects at runtime), and `hydrateMermaid(root?)`: a browser helper tha
 ~5 ms.
 
 `renderTokensStyle` takes either token overrides (`ThemeTokens`, like `<MeiEditor :tokens>`; dark follows
-`<html class="dark">` / `.me-dark`) or `{ light, dark }`: then the page also follows the OS, with the default dark
+`<html class="dark">` / `.me-dark`) or `{ light, dark }` (with a `light` key, `{}` allowed; `{ dark }` alone is the
+overrides form): then the page also follows the OS, with the default dark
 tokens and `dark` under `@media (prefers-color-scheme: dark)` (`.me-light` opts out). Both parts accept a token tree
 (`{ color: { text: '#222' } }`) or a flat map (`{ 'color.text': '#222' }` / `{ '--me-color-text': '#222' }`).
 
@@ -388,6 +389,17 @@ stay on the block with Retry / Delete (only in the tab that has the file; other 
 still running after 2 minutes with nobody holding its file (the tab closed) shows "Upload interrupted" with Delete.
 Pastes that carry text or web images (`<img src="https://…">`) keep the regular paste; Word's local images
 (`<img src="file:///…">`) are uploaded from the clipboard's files, in place.
+
+Leaving the page while a file uploads: a collaborative editor that is destroyed meanwhile writes the result into
+its Yjs document once the upload ends (an editor opened again on that document shows the upload's progress). Keep
+the document open until then:
+
+```ts
+import { uploadsSettled } from '@toantranmei/editor'
+// before the editor unmounts
+const settled = uploadsSettled(editor)
+settled ? settled.finally(() => provider.destroy()) : provider.destroy()
+```
 
 ## Safe loading
 

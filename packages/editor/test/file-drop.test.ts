@@ -4,7 +4,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { defaultBlocks, file } from '../src/blocks'
 import { text } from '../src/blocks/basic'
 import { createExtensions } from '../src/extensions'
-import { pendingUpload, runUpload, UPLOAD_STALE_MS, uploadStaleAt, uploadState } from '../src/extensions/file-drop'
+import { pendingUpload, runUpload, UPLOAD_STALE_MS, uploadsSettled, uploadStaleAt, uploadState } from '../src/extensions/file-drop'
+import * as Y from 'yjs'
+import { collaborationExtensions } from '../src/collaboration'
 
 const editors: Editor[] = []
 afterEach(() => {
@@ -211,6 +213,81 @@ describe('interrupted uploads', () => {
       editor.view.dispatch(editor.state.tr.insert(editor.state.doc.content.size, copy).setMeta(key, { isChangeOrigin: true }))
       expect(nodesOf(editor, 'image').map(n => n.attrs.uploadId), key).toEqual([img!.attrs.uploadId, img!.attrs.uploadId])
     }
+  })
+})
+
+describe('an editor destroyed while uploading (the page was left)', () => {
+  function collab(doc: Y.Doc, upload: Uploader) {
+    const editor = new Editor({
+      extensions: [
+        ...createExtensions({ blocks: [text, ...defaultBlocks], uploadImage: upload, undoRedo: false }),
+        ...collaborationExtensions({ document: doc }),
+      ],
+    })
+    editors.push(editor)
+    return editor
+  }
+  const imagesIn = (doc: Y.Doc) => {
+    const out: Record<string, unknown>[] = []
+    for (const node of doc.getXmlFragment('default').createTreeWalker(n => n instanceof Y.XmlElement && n.nodeName === 'image')) {
+      out.push((node as Y.XmlElement).getAttributes())
+    }
+    return out
+  }
+
+  it('the result is written into the document, which every editor on it then shows', async () => {
+    let resolve!: (url: string) => void
+    const doc = new Y.Doc()
+    const first = collab(doc, () => new Promise(r => (resolve = r)))
+    expect(paste(first, [png()])).toBe(true)
+    const [placeholder] = imagesIn(doc)
+    expect(placeholder).toMatchObject({ uploading: true })
+    const uploadId = placeholder!.uploadId
+    const settled = uploadsSettled(first)
+    expect(settled).not.toBeNull()
+    first.destroy()
+
+    // Opened again before the upload ends: the new editor shows it as this tab's (preview, progress), not stuck.
+    const second = collab(doc, async () => '/never')
+    expect(nodesOf(second, 'image')[0]!.attrs.uploadId).toBe(uploadId)
+    expect(pendingUpload(second, uploadId)?.file.name).toBe('a.png')
+    expect(uploadState(second, nodesOf(second, 'image')[0]!.attrs)).toBe('local')
+
+    resolve('/api/v1/files/9')
+    await settled
+    const [done] = imagesIn(doc)
+    expect(done!.src).toBe('/api/v1/files/9')
+    expect(done!.uploadId).toBeUndefined()
+    expect(done!.uploading).toBe(false)
+    expect(nodesOf(second, 'image')[0]!.attrs).toMatchObject({ src: '/api/v1/files/9', uploading: false, uploadId: null, error: null })
+    expect(pendingUpload(second, uploadId)).toBeNull()
+    // and the document holds it for anyone who loads it later (a reload)
+    const reloaded = new Y.Doc()
+    Y.applyUpdate(reloaded, Y.encodeStateAsUpdate(doc))
+    expect(nodesOf(collab(reloaded, async () => '/x'), 'image')[0]!.attrs.src).toBe('/api/v1/files/9')
+  })
+
+  it('a failure after the editor is gone ends as failed (Delete), never stuck uploading', async () => {
+    let reject!: (error: Error) => void
+    const doc = new Y.Doc()
+    const editor = collab(doc, () => new Promise((_r, no) => (reject = no)))
+    paste(editor, [png()])
+    const settled = uploadsSettled(editor)!
+    editor.destroy()
+    reject(new Error('offline'))
+    await settled
+    expect(imagesIn(doc)[0]).toMatchObject({ uploading: false, error: 'failed' })
+    const again = collab(doc, async () => '/x')
+    expect(pendingUpload(again, nodesOf(again, 'image')[0]!.attrs.uploadId)).toBeNull()
+  })
+
+  it('nothing running: uploadsSettled is null', async () => {
+    const editor = make({ upload: async () => '/x' })
+    expect(uploadsSettled(editor)).toBeNull()
+    paste(editor, [png()])
+    await uploadsSettled(editor)
+    expect(nodesOf(editor, 'image')[0]!.attrs.src).toBe('/x')
+    expect(uploadsSettled(editor)).toBeNull()
   })
 })
 

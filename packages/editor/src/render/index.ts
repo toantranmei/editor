@@ -161,9 +161,11 @@ export interface RenderTokensOptions {
   dark?: ThemeTokens['dark'] | Record<string, string>
 }
 
+/** The `{ light, dark }` form needs `light` (`{ light: {} }` for defaults only): `{ dark }` alone stays the overrides
+ * form (`ThemeTokens` with its `dark` part), as before 0.4, with no OS dark mode. */
 const isSchemeOptions = (o: object): o is RenderTokensOptions => {
   const keys = Object.keys(o)
-  return keys.length > 0 && keys.every(k => k === 'light' || k === 'dark')
+  return keys.includes('light') && keys.every(k => k === 'light' || k === 'dark')
 }
 
 /** `[cssVar, value]` pairs of a token tree or flat map (`components` are not prefixed, like `overridesCss`). */
@@ -204,8 +206,9 @@ function schemeCss({ light, dark }: RenderTokensOptions): string {
  *
  * - `renderTokensStyle(overrides)`: token overrides (`ThemeTokens`), unlayered, for `.me-scope`; dark follows
  *   `html.dark` / `.me-dark` (like the editor).
- * - `renderTokensStyle({ light, dark })`: the page also follows the OS, `@media (prefers-color-scheme: dark)`
- *   switches to the default dark tokens plus `dark` (published pages without a theme toggle).
+ * - `renderTokensStyle({ light, dark })` (`light` required, may be `{}`): the page also follows the OS,
+ *   `@media (prefers-color-scheme: dark)` switches to the default dark tokens plus `dark` (published pages without a
+ *   theme toggle). `{ dark }` alone is the overrides form above.
  */
 export function renderTokensStyle(options?: ThemeTokens | RenderTokensOptions): string {
   const extra = options && isSchemeOptions(options) ? schemeCss(options) : overridesCss(options as ThemeTokens | undefined)

@@ -35,6 +35,13 @@ describe('renderTokensStyle', () => {
     expect(renderTokensStyle({ color: { accent: '#7c3aed' } })).not.toContain(MEDIA)
   })
 
+  it('dark-only overrides ({ dark }) keep the old form: class-based dark only, no OS media block', () => {
+    const css = renderTokensStyle({ dark: { color: { accent: '#eeeeee' } } })
+    expect(css).not.toContain(MEDIA)
+    expect(css).toContain('#eeeeee')
+    expect(renderTokensStyle({ light: {} })).toContain(MEDIA)
+  })
+
   it('neutralises </style', () => {
     const css = renderTokensStyle({ light: { 'x-y': '</style><script>' } })
     expect(css.match(/<\/style/gi)).toHaveLength(1)
