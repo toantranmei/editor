@@ -37,6 +37,8 @@ export interface PropConfig {
   /** relation */
   database_id?: string
   two_way_prop_id?: string
+  /** relation: at most this many pages (1 = "1 page"). */
+  limit?: number
   /** rollup */
   relation_prop_id?: string
   target_prop_id?: string
@@ -260,6 +262,10 @@ export interface DatabaseSource {
   upload?: (file: File) => Promise<FileValue>
 
   // ── Additions of this block (optional) ──
+  /** Databases a relation can point to (Relation → "Related to" picker); without it the id is typed. */
+  searchDatabases?: (query: string) => Promise<Array<{ id: string, title: string, icon?: string | null, path?: string }>>
+  /** Properties of another database (rollup target, two-way names); without it the target id is typed. */
+  propsOf?: (databaseId: string) => Promise<Prop[]>
   /** Checks a formula while it is typed in the property editor. */
   validateFormula?: (expression: string) => Promise<FormulaCheck> | FormulaCheck
   /**

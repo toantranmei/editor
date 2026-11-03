@@ -712,6 +712,16 @@ export function createMemorySource(init: MemorySourceInit): MemorySource {
       const list = dbId === databaseId ? rows.map(r => ({ id: r.id, title: titleOf(r) })) : init.related?.[dbId] ?? []
       return wait(list.filter(r => fold(r.title).includes(f)).slice(0, 20))
     },
+    async searchDatabases(q) {
+      record('searchDatabases', [q])
+      const f = fold(q)
+      const list = [{ id: databaseId, title: meta.value.title, icon: meta.value.icon ?? null }, ...Object.keys(init.related ?? {}).map(id => ({ id, title: id, icon: null }))]
+      return wait(list.filter(d => fold(d.title).includes(f)))
+    },
+    async propsOf(dbId) {
+      record('propsOf', [dbId])
+      return wait(dbId === databaseId ? props.value : [])
+    },
     async people(q) {
       record('people', [q])
       const f = fold(q)

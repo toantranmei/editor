@@ -4,7 +4,7 @@ import { Check, FileText, X } from '@lucide/vue'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { useDb } from '../context'
 
-const props = defineProps<{ kind: 'person' | 'relation', value: string[], databaseId?: string, initialQuery?: string }>()
+const props = defineProps<{ kind: 'person' | 'relation', value: string[], databaseId?: string, initialQuery?: string, single?: boolean }>()
 const emit = defineEmits<{ change: [ids: string[]] }>()
 
 const db = useDb()
@@ -51,7 +51,8 @@ onBeforeUnmount(() => {
 })
 
 const label = (id: string) => (props.kind === 'person' ? db.names.people.get(id) : db.names.rows.get(id)) ?? id
-const toggle = (id: string) => emit('change', props.value.includes(id) ? props.value.filter(x => x !== id) : [...props.value, id])
+/** `single` (Limit: 1): picking replaces the value. */
+const toggle = (id: string) => emit('change', props.value.includes(id) ? props.value.filter(x => x !== id) : props.single ? [id] : [...props.value, id])
 function onKey(e: KeyboardEvent) {
   const n = results.value.length
   if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && n) {

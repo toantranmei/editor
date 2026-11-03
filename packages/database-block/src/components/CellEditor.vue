@@ -148,10 +148,11 @@ const preview = computed(() => (type.value === 'number' && !error.value && draft
         :kind="type === 'person' ? 'person' : 'relation'"
         :value="ids"
         :database-id="prop.config?.database_id"
+        :single="prop.config?.limit === 1"
         :initial-query="initialText ?? ''"
         @change="v => write(v)"
       />
-      <FilesEditor v-else-if="type === 'files'" :value="(local as FileValue[] | null) ?? []" @change="v => write(v)" />
+      <FilesEditor v-else-if="type === 'files'" :value="(local as FileValue[] | null) ?? []" @change="v => write(prop.config?.limit === 1 ? v.slice(-1) : v)" />
       <div v-else class="me-db-cell-hint">{{ m.readOnly }}</div>
     </div>
   </DbPopover>

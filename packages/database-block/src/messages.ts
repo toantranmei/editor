@@ -165,6 +165,11 @@ export interface DatabaseMessages {
   insertRight: string
   duplicateProperty: string
   clearSelection: string
+  onePerson: string
+  oneFile: string
+  searchDatabases: string
+  relationLimit: string
+  onePage: string
   rules: string
   reset: string
   saveForEveryone: string
@@ -420,6 +425,11 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     insertRight: 'Insert right',
     duplicateProperty: 'Duplicate property',
     clearSelection: 'Clear selection',
+    onePerson: '1 person',
+    oneFile: '1 file',
+    searchDatabases: 'Search databases…',
+    relationLimit: 'Limit',
+    onePage: '1 page',
     rules: 'rules',
     reset: 'Reset',
     saveForEveryone: 'Save for everyone',
@@ -671,6 +681,11 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     insertRight: 'Chèn bên phải',
     duplicateProperty: 'Nhân bản thuộc tính',
     clearSelection: 'Bỏ chọn',
+    onePerson: '1 người',
+    oneFile: '1 tệp',
+    searchDatabases: 'Tìm database…',
+    relationLimit: 'Giới hạn',
+    onePage: '1 trang',
     rules: 'quy tắc',
     reset: 'Đặt lại',
     saveForEveryone: 'Lưu cho mọi người',
@@ -922,6 +937,11 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     insertRight: '在右侧插入',
     duplicateProperty: '复制属性',
     clearSelection: '取消选择',
+    onePerson: '1 人',
+    oneFile: '1 个文件',
+    searchDatabases: '搜索数据库…',
+    relationLimit: '上限',
+    onePage: '1 个页面',
     rules: '条规则',
     reset: '重置',
     saveForEveryone: '为所有人保存',

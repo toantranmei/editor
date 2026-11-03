@@ -430,6 +430,8 @@
   .me-db-filterbar-sep { align-self: stretch; width: var(--me-border-width-thin); background: var(--me-database-border); }
   .me-db-filterbar-end { display: inline-flex; gap: var(--me-space-2); margin-left: auto; }
   .me-db-save-draft { height: var(--me-toolbar-button-size); }
+  .me-db-db-list { display: flex; flex-direction: column; max-height: calc(var(--me-database-calendar-cell-height) * 2); overflow-y: auto; }
+  .me-db-db-icon { flex: none; width: var(--me-font-size-md); text-align: center; }
   .me-db-kbd { color: var(--me-color-text-muted); font: inherit; font-size: var(--me-font-size-xs); }
   .me-db-open {
     position: absolute;

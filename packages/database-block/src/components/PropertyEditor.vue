@@ -3,6 +3,7 @@
  * Creates a property ("+" in the table header, "Add property") or edits one's settings: name, type, number format,
  * options, date format, formula (checked with the optional `validateFormula`), relation / rollup, ID prefix.
  */
+import { Check } from '@lucide/vue'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useDb } from '../context'
 import type { DateDisplay, FormulaCheck, NumberFormat, Prop, PropConfig, PropType, RollupFn, SelectOption } from '../types'
@@ -91,6 +92,35 @@ onBeforeUnmount(() => clearTimeout(timer))
 const relationProps = computed(() => db.props.value.filter(p => p.type === 'relation'))
 const rollupRelation = computed(() => db.props.value.find(p => p.id === config.value.relation_prop_id))
 const rollupTargetsHere = computed(() => !rollupRelation.value || !rollupRelation.value.config?.database_id || rollupRelation.value.config.database_id === db.databaseId)
+// Relation: databases to pick from (source.searchDatabases), the current one first.
+const dbQuery = ref('')
+const dbResults = ref<Array<{ id: string, title: string, icon?: string | null, path?: string }>>([])
+let dbSeq = 0
+watch([dbQuery, type], async () => {
+  if (type.value !== 'relation' || !db.source.searchDatabases) return
+  const mine = ++dbSeq
+  try {
+    const list = await db.source.searchDatabases(dbQuery.value.trim())
+    if (mine !== dbSeq) return
+    const self = list.find(d => d.id === db.databaseId)
+    dbResults.value = self ? [self, ...list.filter(d => d.id !== db.databaseId)] : list
+  }
+  catch (error) {
+    db.report(error)
+  }
+}, { immediate: true })
+// Rollup over a relation to another database: that database's properties (source.propsOf).
+const targetProps = ref<Prop[]>([])
+watch(() => rollupRelation.value?.config?.database_id, async (id) => {
+  targetProps.value = []
+  if (!id || id === db.databaseId || !db.source.propsOf) return
+  try {
+    targetProps.value = await db.source.propsOf(id)
+  }
+  catch (error) {
+    db.report(error)
+  }
+}, { immediate: true })
 const valid = computed(() => {
   if (!name.value.trim()) return false
   if (type.value === 'formula' && check.value && !check.value.ok) return false
@@ -212,6 +242,14 @@ function save(andClose = true) {
         </label>
       </template>
 
+      <label v-else-if="type === 'person' || type === 'files'" class="me-db-field">
+        <span class="me-menu-label">{{ m.relationLimit }}</span>
+        <select class="me-input me-db-select" data-setting="limit" :value="config.limit === 1 ? '1' : ''" @change="patchConfig({ limit: ($event.target as HTMLSelectElement).value === '1' ? 1 : undefined })">
+          <option value="">{{ m.noLimit }}</option>
+          <option value="1">{{ type === 'person' ? m.onePerson : m.oneFile }}</option>
+        </select>
+      </label>
+
       <label v-else-if="type === 'url'" class="me-db-toggle-row">
         <span>{{ m.showFullUrl }}</span>
         <input type="checkbox" class="me-db-switch" data-setting="full_url" :checked="config.full_url !== false" @change="patchConfig({ full_url: ($event.target as HTMLInputElement).checked ? undefined : false })">
@@ -226,9 +264,36 @@ function save(andClose = true) {
       </div>
 
       <template v-else-if="type === 'relation'">
-        <label class="me-db-field">
+        <div v-if="db.source.searchDatabases" class="me-db-field" data-setting="relation_db">
+          <span class="me-menu-label">{{ m.relationDatabase }}</span>
+          <input v-model="dbQuery" class="me-input" :placeholder="m.searchDatabases" :aria-label="m.searchDatabases" data-db-search>
+          <div class="me-db-db-list" role="listbox" :aria-label="m.relationDatabase">
+            <button
+              v-for="d in dbResults"
+              :key="d.id"
+              type="button"
+              class="me-menu-item"
+              role="option"
+              :aria-selected="config.database_id === d.id"
+              :data-db="d.id"
+              @click="config.database_id = d.id"
+            >
+              <span class="me-db-db-icon" aria-hidden="true">{{ d.icon || '🗄' }}</span>
+              <span class="me-menu-title">{{ d.id === db.databaseId ? `${d.title} (${m.thisDatabase})` : d.title }}<span v-if="d.path" class="me-db-hint"> · {{ d.path }}</span></span>
+              <Check v-if="config.database_id === d.id" class="me-db-menu-end" />
+            </button>
+          </div>
+        </div>
+        <label v-else class="me-db-field">
           <span class="me-menu-label">{{ m.relationDatabase }}</span>
           <input v-model="config.database_id" class="me-input" :placeholder="m.thisDatabase" :aria-label="m.relationDatabase">
+        </label>
+        <label class="me-db-field">
+          <span class="me-menu-label">{{ m.relationLimit }}</span>
+          <select class="me-input me-db-select" data-setting="limit" :value="config.limit === 1 ? '1' : ''" @change="patchConfig({ limit: ($event.target as HTMLSelectElement).value === '1' ? 1 : undefined })">
+            <option value="">{{ m.noLimit }}</option>
+            <option value="1">{{ m.onePage }}</option>
+          </select>
         </label>
         <label class="me-db-toggle-row">
           <span>{{ m.twoWay }}</span>
@@ -245,8 +310,8 @@ function save(andClose = true) {
         </label>
         <label class="me-db-field">
           <span class="me-menu-label">{{ m.rollupTarget }}</span>
-          <select v-if="rollupTargetsHere" v-model="config.target_prop_id" class="me-input me-db-select">
-            <option v-for="p in db.props.value" :key="p.id" :value="p.id">{{ p.name }}</option>
+          <select v-if="rollupTargetsHere || targetProps.length" v-model="config.target_prop_id" class="me-input me-db-select" data-setting="target">
+            <option v-for="p in (rollupTargetsHere ? db.props.value : targetProps)" :key="p.id" :value="p.id">{{ p.name }}</option>
           </select>
           <input v-else v-model="config.target_prop_id" class="me-input">
         </label>
