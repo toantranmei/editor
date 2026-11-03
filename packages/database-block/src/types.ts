@@ -148,6 +148,8 @@ export interface ViewConfig {
   colors?: ColorRule[]
   /** Table: draw the lines between columns (default true). */
   vertical_lines?: boolean
+  /** Inline table: lines shown before "Load more" (default 50, 0 = no limit). */
+  load_limit?: number
   /** How rows open from this view. Default `side_peek`. */
   open_in?: OpenMode
   aggregates?: Record<string, AggregateFn | string>

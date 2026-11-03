@@ -168,6 +168,16 @@ watch(() => store.value?.segments.value, () => rowVirtualizer.value.measure())
 const vRows = computed(() => rowVirtualizer.value.getVirtualItems())
 /** Height of everything in the scroller; the token `max-height` caps it, so short tables don't leave a gap. */
 const contentHeight = computed(() => sizes.value.header * 2 + rowVirtualizer.value.getTotalSize() + (!store.value?.grouped && db.canEditContent.value ? sizes.value.row : 0) + 2)
+/**
+ * Load limit (inline tables, Notion's "Load limit"): the block grows with its rows up to `load_limit` lines
+ * (default 50; 0 = no limit, the old fixed-height scroller) and "Load more" shows the next batch.
+ */
+const loadLimit = computed(() => (props.full ? 0 : (db.view.value?.config.load_limit ?? 50)))
+const shownLines = ref(0)
+watch(() => [db.view.value?.id, loadLimit.value], () => (shownLines.value = loadLimit.value), { immediate: true })
+const limited = computed(() => loadLimit.value > 0 && itemCount.value > shownLines.value)
+const limitedHeight = computed(() => (limited.value ? sizes.value.header * 2 + shownLines.value * sizes.value.row + 2 : contentHeight.value))
+const remaining = computed(() => Math.max(0, itemCount.value - shownLines.value))
 const vCols = computed(() => colVirtualizer.value.getVirtualItems().map(v => ({ ...v, col: v.index + frozen.value })))
 const padLeft = computed(() => (vCols.value.length ? restStarts.value[vCols.value[0]!.index]! : 0))
 const padRight = computed(() => (vCols.value.length ? restWidth.value - restStarts.value[vCols.value[vCols.value.length - 1]!.index + 1]! : restWidth.value))
@@ -706,8 +716,8 @@ defineExpose({ sel, checked, startEdit, pasteMatrix, store, rowVirtualizer, colV
     <div
       ref="scroller"
       class="me-db-table"
-      :class="{ 'is-full': props.full, 'is-resizing': !!resizing, 'is-wrap': anyWrap }"
-      :style="{ height: `${contentHeight}px` }"
+      :class="{ 'is-full': props.full, 'is-resizing': !!resizing, 'is-wrap': anyWrap, 'is-grow': loadLimit > 0, 'is-limited': limited }"
+      :style="{ height: `${limitedHeight}px` }"
       tabindex="0"
       role="grid"
       :aria-rowcount="itemCount"
@@ -894,6 +904,9 @@ defineExpose({ sel, checked, startEdit, pasteMatrix, store, rowVirtualizer, colV
       </div>
     </div>
 
+    <button v-if="limited" type="button" class="me-db-text-button me-db-load-more" data-load-more @click="shownLines += loadLimit">
+      {{ m.loadMore }} <span class="me-db-hint">({{ remaining }})</span>
+    </button>
     <div v-if="checked.size" class="me-db-selection-bar" role="toolbar" :aria-label="fmt(m.selected, { count: checked.size })">
       <span class="me-db-selection-count">{{ fmt(m.selected, { count: checked.size }) }}</span>
       <button v-if="db.canEditContent.value" type="button" class="me-db-text-button" data-bulk="duplicate" @click="duplicateSelected"><Copy />{{ m.duplicate }}</button>

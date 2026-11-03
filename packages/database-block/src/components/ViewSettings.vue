@@ -228,6 +228,13 @@ const value = (e: Event) => (e.target as HTMLSelectElement).value
           <span>{{ m.freezeFirst }}</span>
           <input type="checkbox" class="me-db-switch" data-setting="freeze" :checked="(c.freeze ?? 1) > 0" :disabled="!editable" @change="set({ freeze: checked($event) ? undefined : 0 })">
         </label>
+        <label class="me-db-field">
+          <span class="me-menu-label">{{ m.loadLimit }}</span>
+          <select class="me-input me-db-select" data-setting="load_limit" :value="String(c.load_limit ?? 50)" :disabled="!editable" @change="set({ load_limit: value($event) === '50' ? undefined : Number(value($event)) })">
+            <option v-for="n in [10, 25, 50, 100]" :key="n" :value="String(n)">{{ n }}</option>
+            <option value="0">{{ m.noLimit }}</option>
+          </select>
+        </label>
         <label class="me-db-toggle-row">
           <span>{{ m.verticalLines }}</span>
           <input type="checkbox" class="me-db-switch" data-setting="vertical_lines" :checked="c.vertical_lines !== false" :disabled="!editable" @change="set({ vertical_lines: checked($event) ? undefined : false })">

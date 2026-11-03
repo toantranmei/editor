@@ -317,6 +317,10 @@
     contain: strict;
   }
   .me-db-table.is-full { max-height: var(--me-database-full-height); }
+  /* Load limit: the inline table grows with its rows (no inner vertical scroll); past the limit, Load more. */
+  .me-db-table.is-grow { max-height: none; }
+  .me-db-table.is-limited { overflow-y: hidden; }
+  .me-db-load-more { align-self: flex-start; margin-top: var(--me-space-2); }
   .me-db-table.is-resizing { cursor: col-resize; user-select: none; }
   .me-db-table-inner { position: relative; min-width: 100%; }
   .me-db-thead, .me-db-tfoot { position: sticky; z-index: 3; display: flex; background: var(--me-database-header-bg); }
