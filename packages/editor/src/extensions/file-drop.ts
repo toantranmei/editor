@@ -183,15 +183,26 @@ export function pendingUpload(editor: Editor, uploadId: unknown): PendingUpload 
 }
 
 /**
- * Resolves once every upload this editor started has written its result (its `src`, or its error), also after the
- * editor is destroyed; null when none is running. A collaborative editor destroyed meanwhile writes the result into
- * its Yjs document: keep that document open (and saved, synced) until then, e.g. close it in `.finally()`. A plain
- * (`v-model`) editor destroyed meanwhile cannot keep the result.
+ * Uploads running per Yjs document (the collaboration `Y.Doc`), whichever editor started them: an editor opened again
+ * on that document (a remount, a page left and opened again) still counts the uploads of the editors before it.
+ */
+const docRuns = new WeakMap<object, Map<string, Promise<void>>>()
+
+const docOf = (editor: Editor): object | null => collaborationFragment(editor)?.doc ?? null
+
+/**
+ * Resolves once every upload running for this editor has written its result (its `src`, or its error), also after
+ * the editor is destroyed; null when none is running. Counts the uploads this editor started and, for a collaborative
+ * editor, every upload still running on its Yjs document (started by an earlier editor of it). A collaborative editor
+ * destroyed meanwhile writes the result into its Yjs document: keep that document open (and saved, synced) until
+ * then, e.g. close it in `.finally()`. A plain (`v-model`) editor destroyed meanwhile cannot keep the result.
  */
 export function uploadsSettled(editor: Editor): Promise<void> | null {
-  const running = editor.storage.fileDrop?.running
-  if (!running?.size) return null
-  return Promise.allSettled([...running.values()]).then(() => {})
+  const runs = new Set(editor.storage.fileDrop?.running.values() ?? [])
+  const doc = docOf(editor)
+  for (const run of (doc && docRuns.get(doc)?.values()) || []) runs.add(run)
+  if (!runs.size) return null
+  return Promise.allSettled([...runs]).then(() => {})
 }
 
 /**
@@ -202,10 +213,15 @@ export function runUpload(editor: Editor, uploadId: string): Promise<void> {
   const running = editor.storage.fileDrop?.running
   const current = running?.get(uploadId)
   if (current) return current
+  const doc = docOf(editor)
+  let onDoc = doc ? docRuns.get(doc) : undefined
+  if (doc && !onDoc) docRuns.set(doc, (onDoc = new Map()))
   const run = upload(editor, uploadId).finally(() => {
     if (running?.get(uploadId) === run) running.delete(uploadId)
+    if (onDoc?.get(uploadId) === run) onDoc.delete(uploadId)
   })
   running?.set(uploadId, run)
+  onDoc?.set(uploadId, run)
   return run
 }
 

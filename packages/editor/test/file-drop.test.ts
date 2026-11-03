@@ -267,6 +267,30 @@ describe('an editor destroyed while uploading (the page was left)', () => {
     expect(nodesOf(collab(reloaded, async () => '/x'), 'image')[0]!.attrs.src).toBe('/api/v1/files/9')
   })
 
+  it('an editor opened again on the document counts the uploads left by the one before (left again before the end)', async () => {
+    let resolve!: (url: string) => void
+    const doc = new Y.Doc()
+    const first = collab(doc, () => new Promise(r => (resolve = r)))
+    paste(first, [png()])
+    first.destroy()
+    // back on the page, then away again before the upload ends: the second editor must keep the document open too
+    const second = collab(doc, async () => '/never')
+    const settled = uploadsSettled(second)
+    expect(settled).not.toBeNull()
+    second.destroy()
+    let done = false
+    void settled!.then(() => (done = true))
+    await Promise.resolve()
+    expect(done).toBe(false)
+    resolve('/api/v1/files/7')
+    await settled
+    expect(imagesIn(doc)[0]!.src).toBe('/api/v1/files/7')
+    // nothing left running on that document
+    expect(uploadsSettled(collab(doc, async () => '/x'))).toBeNull()
+    // another document is not held by it
+    expect(uploadsSettled(collab(new Y.Doc(), async () => '/x'))).toBeNull()
+  })
+
   it('a failure after the editor is gone ends as failed (Delete), never stuck uploading', async () => {
     let reject!: (error: Error) => void
     const doc = new Y.Doc()
