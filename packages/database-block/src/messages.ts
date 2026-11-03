@@ -165,6 +165,12 @@ export interface DatabaseMessages {
   insertRight: string
   duplicateProperty: string
   clearSelection: string
+  searchFormula: string
+  formulaType: string
+  formulaTypes: Record<string, string>
+  formulaGroups: Record<string, string>
+  example: string
+  formulaHelp: string
   templates: string
   templatesHint: string
   saveAsTemplate: string
@@ -429,6 +435,12 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     insertRight: 'Insert right',
     duplicateProperty: 'Duplicate property',
     clearSelection: 'Clear selection',
+    searchFormula: 'Search properties and functions…',
+    formulaType: 'Type',
+    formulaTypes: { number: 'Number', string: 'Text', boolean: 'Checkbox', date: 'Date' },
+    formulaGroups: { general: 'General', text: 'Text', number: 'Number', date: 'Date', logic: 'Logic' },
+    example: 'Example',
+    formulaHelp: 'Click a property or a function to insert it. Hover one to see how it is used.',
     templates: 'Templates',
     templatesHint: "No templates yet. Use a row's menu → Save as template.",
     saveAsTemplate: 'Save as template',
@@ -689,6 +701,12 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     insertRight: 'Chèn bên phải',
     duplicateProperty: 'Nhân bản thuộc tính',
     clearSelection: 'Bỏ chọn',
+    searchFormula: 'Tìm thuộc tính và hàm…',
+    formulaType: 'Kiểu',
+    formulaTypes: { number: 'Số', string: 'Văn bản', boolean: 'Hộp kiểm', date: 'Ngày' },
+    formulaGroups: { general: 'Chung', text: 'Văn bản', number: 'Số', date: 'Ngày', logic: 'Logic' },
+    example: 'Ví dụ',
+    formulaHelp: 'Bấm vào thuộc tính hoặc hàm để chèn. Rê chuột để xem cách dùng.',
     templates: 'Mẫu (template)',
     templatesHint: 'Chưa có mẫu. Dùng menu của một row → Lưu làm mẫu.',
     saveAsTemplate: 'Lưu làm mẫu',
@@ -949,6 +967,12 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     insertRight: '在右侧插入',
     duplicateProperty: '复制属性',
     clearSelection: '取消选择',
+    searchFormula: '搜索属性和函数…',
+    formulaType: '类型',
+    formulaTypes: { number: '数字', string: '文本', boolean: '复选框', date: '日期' },
+    formulaGroups: { general: '通用', text: '文本', number: '数字', date: '日期', logic: '逻辑' },
+    example: '示例',
+    formulaHelp: '点击属性或函数即可插入，悬停查看用法。',
     templates: '模板',
     templatesHint: '还没有模板。使用行菜单 → 另存为模板。',
     saveAsTemplate: '另存为模板',

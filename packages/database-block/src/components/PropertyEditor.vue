@@ -9,6 +9,7 @@ import { useDb } from '../context'
 import type { DateDisplay, FormulaCheck, NumberFormat, Prop, PropConfig, PropType, RollupFn, SelectOption } from '../types'
 import { clone, CREATABLE_TYPES, OPTION_TYPES, placeColumn, positionAfter, uuidv7 } from '../util'
 import DbPopover from './DbPopover.vue'
+import FormulaEditor from './FormulaEditor.vue'
 import NumberShowAs from './NumberShowAs.vue'
 import OptionsList from './OptionsList.vue'
 import PropIcon from './PropIcon.vue'
@@ -257,10 +258,7 @@ function save(andClose = true) {
 
       <div v-else-if="type === 'formula'" class="me-db-field">
         <span class="me-menu-label">{{ m.formula }}</span>
-        <textarea v-model="config.expression" class="me-input me-db-formula" spellcheck="false" :placeholder="m.formulaPlaceholder" :aria-label="m.formula" :aria-invalid="check?.ok === false || undefined" />
-        <span v-if="checking" class="me-db-hint">{{ m.formulaChecking }}</span>
-        <span v-else-if="check && !check.ok" class="me-db-error" role="alert">{{ check.error }}<template v-if="check.position !== undefined"> (@{{ check.position }})</template></span>
-        <span v-else-if="check?.ok" class="me-db-hint">{{ m.formulaOk }}</span>
+        <FormulaEditor v-model="config.expression" :check="check" :checking="checking" :self-id="prop?.id" />
       </div>
 
       <template v-else-if="type === 'relation'">

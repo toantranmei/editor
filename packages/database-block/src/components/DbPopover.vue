@@ -42,6 +42,8 @@ function place() {
   let left = props.placement === 'right' ? r.right : r.left
   let top = props.placement === 'over' ? r.top : props.placement === 'right' ? r.top : r.bottom
   if (left + w > vw - 8) left = Math.max(8, vw - w - 8)
+  // An anchor scrolled out to the left (a column header) still opens the popover on screen.
+  left = Math.max(8, left)
   if (h && top + h > vh - 8) top = props.placement === 'below' && r.top - h > 8 ? r.top - h : Math.max(8, vh - h - 8)
   pos.value = { left, top, width: props.matchWidth ? r.width : 0, maxHeight: vh - top - 8 }
 }
