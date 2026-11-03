@@ -342,6 +342,7 @@
   .me-db-row-handle { display: inline-flex; flex: none; width: var(--me-database-handle-col-width); color: var(--me-color-handle); cursor: grab; opacity: 0; }
   .me-db-row-handle svg { width: var(--me-database-handle-col-width); height: var(--me-font-size-md); }
   .me-db-tr:hover .me-db-row-handle { opacity: 1; }
+  .me-db-kbd { color: var(--me-color-text-muted); font: inherit; font-size: var(--me-font-size-xs); }
   .me-db-open {
     position: absolute;
     right: var(--me-space-3);

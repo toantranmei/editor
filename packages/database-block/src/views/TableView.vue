@@ -4,7 +4,7 @@
  * Only the rows in view (+ overscan) are requested from the source, in chunk-aligned windows (`RowStore`).
  * Rows have a fixed height and move with `transform`, so scrolling never triggers layout of off-screen rows.
  */
-import { ChevronDown, ChevronRight, GripVertical, Plus, Trash2, X } from '@lucide/vue'
+import { ChevronDown, ChevronRight, Copy, Ellipsis, GripVertical, Plus, Trash2, X } from '@lucide/vue'
 import { type ColumnDef, type ColumnSizingState, getCoreRowModel, useVueTable } from '@tanstack/vue-table'
 import { useVirtualizer } from '@tanstack/vue-virtual'
 import { componentTokens } from '@toantranmei/editor'
@@ -17,6 +17,7 @@ import OpenModeIcon from '../components/OpenModeIcon.vue'
 import PropertyEditor from '../components/PropertyEditor.vue'
 import PropertyMenu from '../components/PropertyMenu.vue'
 import PropIcon from '../components/PropIcon.vue'
+import RowMenu from '../components/RowMenu.vue'
 import { useDb } from '../context'
 import { rectWithFallback } from '../virtual'
 import { type GridSelection, inSelection, navigate, selectionRect } from '../grid-nav'
@@ -25,7 +26,7 @@ import type { Item } from '../row-store'
 import { toTsv, parseTsv } from '../tsv'
 import type { Prop, Row, SelectOption } from '../types'
 import { useRowStore } from '../use-rows'
-import { cellValue, cssPx, isReadOnly } from '../util'
+import { cellValue, cssPx, duplicateRows, isReadOnly } from '../util'
 import { displayText, optionById, parseText } from '../values'
 
 const props = withDefaults(defineProps<{ full?: boolean }>(), { full: false })
@@ -263,6 +264,27 @@ const rowOfItem = (index: number) => {
   return item?.kind === 'row' ? store.value?.rowAt(item.seg, item.index) : undefined
 }
 
+/** Row menu (⋮⋮ click, right-click, bulk bar ⋯): applies to the checked rows when the row is one of them. */
+const rowMenu = shallowRef<{ rows: Row[], anchor: HTMLElement | DOMRect } | null>(null)
+const loadedRows = computed(() => rendered.value.map(r => r.row).filter((r): r is Row => !!r))
+function checkedRows(): Row[] {
+  const byId = new Map(loadedRows.value.map(r => [r.id, r]))
+  return [...checked.value].map(id => byId.get(id)).filter((r): r is Row => !!r)
+}
+function openRowMenu(row: Row, anchor: HTMLElement | DOMRect) {
+  rowMenu.value = { rows: checked.value.has(row.id) && checked.value.size > 1 ? checkedRows() : [row], anchor }
+}
+function onRowContext(e: MouseEvent, row: Row | undefined) {
+  if (!row) return
+  e.preventDefault()
+  openRowMenu(row, new DOMRect(e.clientX, e.clientY, 0, 0))
+}
+function duplicateSelected() {
+  if (!db.canEditContent.value) return
+  const rows = checked.value.size ? checkedRows() : [rowOfItem(sel.value?.focus.row ?? -1)].filter((r): r is Row => !!r)
+  if (rows.length) duplicateRows(db, rows)
+}
+
 function focusGrid() {
   scroller.value?.focus({ preventScroll: true })
 }
@@ -330,6 +352,11 @@ function clearSelectedCells() {
 function onKey(e: KeyboardEvent) {
   if (editing.value || e.isComposing) return
   if (e.target !== scroller.value) return
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'd') {
+    e.preventDefault()
+    duplicateSelected()
+    return
+  }
   if ((e.key === 'Delete' || e.key === 'Backspace') && checked.value.size) {
     e.preventDefault()
     deleteChecked()
@@ -758,6 +785,7 @@ defineExpose({ sel, checked, startEdit, pasteMatrix, store, rowVirtualizer, colV
             :style="{ transform: `translateY(${r.top}px)`, [anyWrap && r.item?.kind === 'row' ? 'minHeight' : 'height']: `${anyWrap && r.item?.kind === 'row' ? sizes.row : r.v.size}px`, width: `${totalWidth}px` }"
             @dragover="onRowDragOver($event, r.v.index)"
             @drop="onRowDrop"
+            @contextmenu="onRowContext($event, r.row)"
           >
             <!-- Group header -->
             <template v-if="r.item?.kind === 'group'">
@@ -781,10 +809,14 @@ defineExpose({ sel, checked, startEdit, pasteMatrix, store, rowVirtualizer, colV
             <template v-else>
               <div class="me-db-td me-db-gutter" :style="{ width: `${gutter}px` }">
                 <span
-                  v-if="r.row && canMove"
+                  v-if="r.row"
                   class="me-db-row-handle"
-                  draggable="true"
-                  :title="m.dragToMove"
+                  role="button"
+                  tabindex="-1"
+                  :draggable="canMove"
+                  :title="canMove ? `${m.dragToMove} · ${m.rowActions}` : m.rowActions"
+                  :aria-label="m.rowActions"
+                  @click="openRowMenu(r.row, $event.currentTarget as HTMLElement)"
                   @dragstart="onRowDragStart($event, r.row)"
                   @dragend="drag = null"
                 ><GripVertical /></span>
@@ -862,7 +894,9 @@ defineExpose({ sel, checked, startEdit, pasteMatrix, store, rowVirtualizer, colV
 
     <div v-if="checked.size" class="me-db-selection-bar" role="toolbar" :aria-label="fmt(m.selected, { count: checked.size })">
       <span class="me-db-selection-count">{{ fmt(m.selected, { count: checked.size }) }}</span>
+      <button v-if="db.canEditContent.value" type="button" class="me-db-text-button" data-bulk="duplicate" @click="duplicateSelected"><Copy />{{ m.duplicate }}</button>
       <button v-if="db.canEditContent.value" type="button" class="me-db-text-button me-db-danger" data-bulk="delete" @click="deleteChecked"><Trash2 />{{ m.deleteRows }}</button>
+      <button type="button" class="me-db-icon-button" data-bulk="more" :aria-label="m.moreActions" :title="m.moreActions" @click="rowMenu = { rows: checkedRows(), anchor: $event.currentTarget as HTMLElement }"><Ellipsis /></button>
       <button type="button" class="me-db-text-button" data-bulk="clear" @click="checked = new Set()"><X />{{ m.clearSelection }}</button>
     </div>
 
@@ -875,6 +909,7 @@ defineExpose({ sel, checked, startEdit, pasteMatrix, store, rowVirtualizer, colV
       :initial-text="editing.text"
       @close="endEdit"
     />
+    <RowMenu v-if="rowMenu" :rows="rowMenu.rows" :anchor="rowMenu.anchor" @done="checked = new Set()" @close="rowMenu = null" />
     <PropertyMenu v-if="headerMenu" :prop="headerMenu.prop" :anchor="headerMenu.anchor" :column="headerMenu.col" @close="headerMenu = null" />
     <PropertyEditor v-if="addProp" :anchor="addProp" @close="addProp = null" />
     <DbPopover v-if="aggMenu" :anchor="aggMenu.anchor" :scope="db.scope.value" @close="aggMenu = null">

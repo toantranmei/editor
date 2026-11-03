@@ -1,4 +1,4 @@
-import type { FileValue, Prop, PropType, View, ViewConfig, ViewType } from './types'
+import type { DatabaseSource, FileValue, Prop, PropType, Row, View, ViewConfig, ViewType } from './types'
 
 /** UUIDv7 (time-ordered), as the contract's ids: clients may create them. */
 export function uuidv7(now = Date.now()): string {
@@ -124,4 +124,13 @@ export function coverImage(value: unknown): string | null {
   if (!Array.isArray(value)) return null
   const img = (value as FileValue[]).find(f => !!f?.url && (/\.(png|jpe?g|gif|webp|avif|svg)(\?|#|$)/i.test(f.url) || f.url.startsWith('blob:') || f.url.startsWith('data:image')))
   return img?.url ?? null
+}
+
+/** Copies every writable value (not formulas, rollups, created_* …) of each row into a new row right after it. */
+export function duplicateRows(db: { props: { value: Prop[] }, source: DatabaseSource }, rows: Row[]): void {
+  const keep = new Set(db.props.value.filter(p => !isReadOnly(p.type)).map(p => p.id))
+  for (const row of [...rows].reverse()) {
+    const values = Object.fromEntries(Object.entries(row.values).filter(([k, v]) => keep.has(k) && v !== null && v !== undefined))
+    db.source.createRow({ values, after: row.id })
+  }
 }

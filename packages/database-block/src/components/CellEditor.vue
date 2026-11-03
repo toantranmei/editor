@@ -18,6 +18,8 @@ import SearchPicker from './SearchPicker.vue'
 const props = defineProps<{
   prop: Prop
   row: Row
+  /** Bulk edit: every write goes to these rows (the row menu on checked rows). */
+  rowIds?: string[]
   anchor: HTMLElement | DOMRect | null
   /** Text typed to start editing (replaces the value, like a spreadsheet). */
   initialText?: string | null
@@ -55,7 +57,7 @@ const local = ref<unknown>(current.value)
 function write(value: unknown) {
   if (!db.canEditContent.value || isReadOnly(type.value)) return
   local.value = isEmptyValue(value) ? null : value
-  db.source.setCell(props.row.id, props.prop.id, isEmptyValue(value) ? null : value)
+  for (const id of props.rowIds ?? [props.row.id]) db.source.setCell(id, props.prop.id, isEmptyValue(value) ? null : value)
 }
 
 /** Commits the text draft; returns false when it can't be parsed (number). */

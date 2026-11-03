@@ -5,7 +5,7 @@ import {
 } from '../src'
 import { createMemorySource, sampleDatabase } from '../src/memory-source'
 import { RowStore } from '../src/row-store'
-import { positionAfter, uuidv7 } from '../src/util'
+import { duplicateRows, positionAfter, uuidv7 } from '../src/util'
 
 const p = (type: Prop['type'], config?: Prop['config'], id = type): Prop => ({ id, name: id, type, position: 'a0', config })
 const flush = () => new Promise(r => setTimeout(r, 0))
@@ -15,10 +15,11 @@ describe('filter operators (contract 1.3)', () => {
     expect(opsFor(p('text'))).toEqual(['equals', 'not_equals', 'contains', 'not_contains', 'starts_with', 'ends_with', 'is_empty', 'is_not_empty'])
     expect(opsFor(p('title'))).toContain('starts_with')
     expect(opsFor(p('number'))).toEqual(['=', '!=', '>', '>=', '<', '<=', 'is_empty', 'is_not_empty'])
-    expect(opsFor(p('select'))).toEqual(['is', 'is_not', 'is_any_of', 'is_none_of'])
-    expect(opsFor(p('status'))).toEqual(['is', 'is_not', 'is_any_of', 'is_none_of'])
-    for (const t of ['multi_select', 'person', 'relation'] as const) expect(opsFor(p(t))).toEqual(['contains', 'not_contains', 'contains_any', 'contains_all'])
-    expect(opsFor(p('date'))).toEqual(['is', 'before', 'after', 'on_or_before', 'on_or_after', 'between', 'is_relative'])
+    expect(opsFor(p('select'))).toEqual(['is', 'is_not', 'is_any_of', 'is_none_of', 'is_empty', 'is_not_empty'])
+    expect(opsFor(p('status'))).toEqual(['is', 'is_not', 'is_any_of', 'is_none_of', 'is_empty', 'is_not_empty'])
+    for (const t of ['multi_select', 'person', 'relation'] as const) expect(opsFor(p(t))).toEqual(['contains', 'not_contains', 'contains_any', 'contains_all', 'is_empty', 'is_not_empty'])
+    expect(opsFor(p('date'))).toEqual(['is_relative', 'is', 'before', 'after', 'on_or_before', 'on_or_after', 'between', 'is_empty', 'is_not_empty'])
+    expect(opsFor(p('files'))).toEqual(['is_not_empty', 'is_empty'])
     expect(opsFor(p('checkbox'))).toEqual(['is'])
     // Formula / rollup follow their result type.
     expect(opsFor(p('formula', { result_type: 'number' }))).toContain('>=')
@@ -35,6 +36,17 @@ describe('filter operators (contract 1.3)', () => {
     expect(withOp({ prop: 'text', op: 'contains', value: 'x' }, 'is_empty', p('text'))).toEqual({ prop: 'text', op: 'is_empty' })
     expect(valueInput(p('date'), 'is_relative')).toBe('relative')
     expect(valueInput(p('date'), 'between')).toBe('date_range')
+  })
+
+  it('duplicates rows with their writable values only, right after each original', () => {
+    const calls: Array<{ values?: Record<string, unknown>, after?: string | null }> = []
+    const props = [p('title'), p('number'), p('formula'), p('created_time')]
+    const source = { createRow: (init: { values?: Record<string, unknown>, after?: string | null }) => { calls.push(init); return 'new' } }
+    duplicateRows({ props: { value: props }, source } as never, [
+      { id: 'r1', position: 'a', values: { title: 'A', number: 2, formula: 9, created_time: 'x' } },
+      { id: 'r2', position: 'b', values: { title: 'B', number: null } },
+    ])
+    expect(calls).toEqual([{ values: { title: 'B' }, after: 'r2' }, { values: { title: 'A', number: 2 }, after: 'r1' }])
   })
 
   it('normalizes away empty groups', () => {

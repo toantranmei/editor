@@ -243,6 +243,8 @@ export interface DatabaseBlockOptions {
    * it instead of `source.openRow`. `event`: the click, e.g. to open a new tab on Cmd / Ctrl-click.
    */
   openRow?: ((databaseId: string, rowId: string, mode: OpenMode, event?: MouseEvent | KeyboardEvent) => void) | null
+  /** Link to a row (Copy link in the row menu). Without it the menu has no Copy link. */
+  rowUrl?: ((databaseId: string, rowId: string) => string) | null
   /** Called when `createDatabase` or a source call fails. Default: `console.error`. */
   onError?: ((error: unknown) => void) | null
   /** Override any string, per locale. */

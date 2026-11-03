@@ -165,6 +165,12 @@ export interface DatabaseMessages {
   insertRight: string
   duplicateProperty: string
   clearSelection: string
+  rowActions: string
+  openIn: string
+  duplicate: string
+  copyLink: string
+  editProperty: string
+  moreActions: string
   newRowOptions: string
   newAtTop: string
   newAtBottom: string
@@ -364,6 +370,12 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     insertRight: 'Insert right',
     duplicateProperty: 'Duplicate property',
     clearSelection: 'Clear selection',
+    rowActions: 'Row actions',
+    openIn: 'Open in',
+    duplicate: 'Duplicate',
+    copyLink: 'Copy link',
+    editProperty: 'Edit property',
+    moreActions: 'More actions',
     newRowOptions: 'More ways to add',
     newAtTop: 'Add to top',
     newAtBottom: 'Add to bottom',
@@ -559,6 +571,12 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     insertRight: 'Chèn bên phải',
     duplicateProperty: 'Nhân bản thuộc tính',
     clearSelection: 'Bỏ chọn',
+    rowActions: 'Thao tác dòng',
+    openIn: 'Mở trong',
+    duplicate: 'Nhân bản',
+    copyLink: 'Sao chép liên kết',
+    editProperty: 'Sửa thuộc tính',
+    moreActions: 'Thao tác khác',
     newRowOptions: 'Thêm cách tạo khác',
     newAtTop: 'Thêm lên đầu',
     newAtBottom: 'Thêm xuống cuối',
@@ -754,6 +772,12 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     insertRight: '在右侧插入',
     duplicateProperty: '复制属性',
     clearSelection: '取消选择',
+    rowActions: '行操作',
+    openIn: '打开方式',
+    duplicate: '创建副本',
+    copyLink: '复制链接',
+    editProperty: '编辑属性',
+    moreActions: '更多操作',
     newRowOptions: '更多添加方式',
     newAtTop: '添加到顶部',
     newAtBottom: '添加到底部',
