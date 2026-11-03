@@ -3,12 +3,12 @@
  * Row menu (Notion's ⋮⋮ / right-click menu): open in a mode, edit a property of every row it applies to,
  * duplicate, copy link, delete. Applies to `rows` (one row, or the checked rows when the clicked one is checked).
  */
-import { ArrowUpRight, ChevronRight, Copy, Link2, Pencil, Trash2 } from '@lucide/vue'
+import { ArrowUpRight, ChevronRight, Copy, FileText, Link2, Pencil, Trash2 } from '@lucide/vue'
 import { computed, ref } from 'vue'
 import { useDb } from '../context'
 import { fmt } from '../messages'
 import type { OpenMode, Prop, Row } from '../types'
-import { duplicateRows, isReadOnly } from '../util'
+import { duplicateRows, isReadOnly, uuidv7 } from '../util'
 import CellEditor from './CellEditor.vue'
 import DbPopover from './DbPopover.vue'
 import OpenModeIcon from './OpenModeIcon.vue'
@@ -49,6 +49,17 @@ async function copyLink() {
   emit('close')
 }
 
+/** The row's writable values become a template ("New ▾ → Templates"), named after its title. */
+function saveTemplate() {
+  const row = single.value
+  if (!row) return
+  const keep = new Set(writable.value.map(p => p.id))
+  const title = db.props.value.find(p => p.type === 'title')
+  const values = Object.fromEntries(Object.entries(row.values).filter(([k, v]) => keep.has(k) && k !== title?.id && v !== null && v !== undefined))
+  const name = (title && String(row.values[title.id] ?? '').trim()) || m.value.untitled
+  db.saveTemplates([...db.templates.value, { id: uuidv7(), name, values }])
+  emit('close')
+}
 function remove() {
   db.source.deleteRows(props.rows.map(r => r.id))
   emit('done')
@@ -76,6 +87,9 @@ const blank = computed<Row>(() => ({ id: single.value?.id ?? '__rows__', positio
         <template v-if="editable">
           <button type="button" class="me-menu-item" role="menuitem" data-action="duplicate" @click="duplicate">
             <Copy class="me-db-menu-icon" /><span class="me-menu-title">{{ m.duplicate }}</span><kbd class="me-db-menu-end me-db-kbd">⌘D</kbd>
+          </button>
+          <button v-if="single && db.canEditStructure.value" type="button" class="me-menu-item" role="menuitem" data-action="save-template" @click="saveTemplate">
+            <FileText class="me-db-menu-icon" />{{ m.saveAsTemplate }}
           </button>
           <div class="me-db-separator" role="separator" />
           <button type="button" class="me-menu-item is-danger" role="menuitem" data-action="delete" @click="remove">

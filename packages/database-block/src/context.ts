@@ -1,6 +1,6 @@
 import { computed, type ComputedRef, inject, type InjectionKey, reactive, type Ref, ref, shallowReactive, watch } from 'vue'
 import type { DatabaseMessages } from './messages'
-import type { DatabaseBlockOptions, DatabaseSource, FilterGroup, OpenMode, Prop, Row, RowQuery, Sort, View, ViewConfig } from './types'
+import type { DatabaseBlockOptions, DatabaseSource, FilterGroup, OpenMode, Prop, Row, RowQuery, RowTemplate, Sort, View, ViewConfig } from './types'
 import { colorsOf, type RowColors } from './colors'
 import { withHistory } from './history'
 import { normalizeFilter } from './filters'
@@ -44,8 +44,14 @@ export interface DbContext {
    */
   openRow: (rowId: string, event?: MouseEvent | KeyboardEvent | null, mode?: OpenMode) => void
   updateView: (patch: Partial<ViewConfig> | ((config: ViewConfig) => ViewConfig)) => void
-  /** `source.createRow` plus the properties' defaults (`config.default_option_id`) for values not given. */
-  createRow: (init?: { values?: Record<string, unknown>, after?: string | null }) => string
+  /**
+   * `source.createRow` plus the properties' defaults (`config.default_option_id`) and the default template's
+   * values (`template`: a template id, or `false` for none — pasted rows) for values not given.
+   */
+  createRow: (init?: { values?: Record<string, unknown>, after?: string | null }, opts?: { template?: string | false }) => string
+  /** Row templates (title property's `config.templates`). */
+  templates: ComputedRef<RowTemplate[]>
+  saveTemplates: (list: RowTemplate[]) => void
   /**
    * The viewer's unsaved filter / sorts of the current view (Notion's "Reset / Save for everyone"). `view` already
    * shows them; `saveDraft` writes them into the view, `resetDraft` drops them.
@@ -236,13 +242,24 @@ export function createContext(input: {
       for (const k of Object.keys(next)) if (next[k] === undefined) delete next[k]
       source.upsertView({ ...base, config: next })
     },
-    createRow(init = {}) {
-      const values = { ...init.values }
+    createRow(init = {}, opts = {}) {
+      const list = props.value.find(p => p.type === 'title')?.config?.templates ?? []
+      const tpl = opts.template === false ? undefined : list.find(t => (opts.template ? t.id === opts.template : t.default))
+      const values = { ...tpl?.values, ...init.values }
       for (const p of props.value) {
         const d = p.config?.default_option_id
         if (d && (p.type === 'status' || p.type === 'select') && values[p.id] === undefined && p.config?.options?.some(o => o.id === d)) values[p.id] = d
       }
       return source.createRow(Object.keys(values).length || init.values ? { ...init, values } : init)
+    },
+    templates: computed(() => props.value.find(p => p.type === 'title')?.config?.templates ?? []),
+    saveTemplates(list) {
+      const title = props.value.find(p => p.type === 'title')
+      if (!title || !(input.editable() && source.canEditStructure.value)) return
+      const config = { ...title.config }
+      if (list.length) config.templates = list
+      else delete config.templates
+      source.upsertProp({ ...title, config })
     },
     colors: row => colorsOf(view.value?.config.colors, props.value, row),
     undo: history.undo,

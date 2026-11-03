@@ -109,6 +109,10 @@ function onTitleBlur() {
 }
 onBeforeUnmount(saveTitle)
 
+function newFromTemplate(templateId: string) {
+  if (!db.canEditContent.value) return
+  db.openRow(db.createRow({}, { template: templateId }))
+}
 function newRow(where: 'top' | 'bottom' = 'bottom') {
   if (!db.canEditContent.value) return
   const view = viewRef.value
@@ -159,7 +163,7 @@ defineExpose({ db, view: viewRef })
     </div>
     <div class="me-db-topbar">
       <ViewTabs @select="select" />
-      <Toolbar @new-row="newRow" />
+      <Toolbar @new-row="newRow" @new-from-template="newFromTemplate" />
     </div>
     <FilterBar />
     <component :is="VIEWS[type]" v-if="db.view.value" ref="viewRef" :key="db.view.value.id" :full="full" />

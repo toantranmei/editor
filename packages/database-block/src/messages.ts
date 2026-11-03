@@ -165,6 +165,10 @@ export interface DatabaseMessages {
   insertRight: string
   duplicateProperty: string
   clearSelection: string
+  templates: string
+  templatesHint: string
+  saveAsTemplate: string
+  deleteTemplate: string
   onePerson: string
   oneFile: string
   searchDatabases: string
@@ -425,6 +429,10 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     insertRight: 'Insert right',
     duplicateProperty: 'Duplicate property',
     clearSelection: 'Clear selection',
+    templates: 'Templates',
+    templatesHint: "No templates yet. Use a row's menu → Save as template.",
+    saveAsTemplate: 'Save as template',
+    deleteTemplate: 'Delete template',
     onePerson: '1 person',
     oneFile: '1 file',
     searchDatabases: 'Search databases…',
@@ -681,6 +689,10 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     insertRight: 'Chèn bên phải',
     duplicateProperty: 'Nhân bản thuộc tính',
     clearSelection: 'Bỏ chọn',
+    templates: 'Mẫu (template)',
+    templatesHint: 'Chưa có mẫu. Dùng menu của một row → Lưu làm mẫu.',
+    saveAsTemplate: 'Lưu làm mẫu',
+    deleteTemplate: 'Xoá mẫu',
     onePerson: '1 người',
     oneFile: '1 tệp',
     searchDatabases: 'Tìm database…',
@@ -937,6 +949,10 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     insertRight: '在右侧插入',
     duplicateProperty: '复制属性',
     clearSelection: '取消选择',
+    templates: '模板',
+    templatesHint: '还没有模板。使用行菜单 → 另存为模板。',
+    saveAsTemplate: '另存为模板',
+    deleteTemplate: '删除模板',
     onePerson: '1 人',
     oneFile: '1 个文件',
     searchDatabases: '搜索数据库…',

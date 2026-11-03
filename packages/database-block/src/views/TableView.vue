@@ -485,7 +485,7 @@ async function pasteMatrix(matrix: string[][], seg: number, index: number, col: 
     const values = { ...extra.get(li) }
     const gv = groupValue(key)
     if (gv !== undefined && groupProp.value) values[groupProp.value.id] = gv
-    last = db.createRow({ values, after: last })
+    last = db.createRow({ values, after: last }, { template: false })
   }
 }
 

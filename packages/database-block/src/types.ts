@@ -45,6 +45,8 @@ export interface PropConfig {
   fn?: RollupFn
   /** formula */
   expression?: string
+  /** title: row templates of the database. */
+  templates?: RowTemplate[]
   /** unique_id */
   prefix?: string
   /** select / multi_select: keep options sorted (new ones land in order). */
@@ -96,6 +98,12 @@ export type RelativeDate =
 export interface FilterCondition { prop: string, op: FilterOp, value?: unknown }
 export type FilterGroup = { and: FilterNode[] } | { or: FilterNode[] }
 export type FilterNode = FilterCondition | FilterGroup
+
+/**
+ * A row template (New ▾): property values a new row starts with. Kept in the title property's
+ * `config.templates` (database-wide, synced with the schema); `default` is used by "New".
+ */
+export interface RowTemplate { id: string, name: string, values: Record<string, unknown>, default?: boolean }
 
 /** A conditional color rule (`config.colors`): rows (or one cell) matching `condition` get `color`. */
 export interface ColorRule { id: string, condition: FilterCondition, color: OptionColor, scope?: 'row' | 'prop' }

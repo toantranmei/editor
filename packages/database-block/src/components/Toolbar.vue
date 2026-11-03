@@ -4,7 +4,7 @@
  * buttons (a label shows next to an active filter / sort while there is room), then the "New" split button (main
  * part adds a row, the chevron opens "add to top / bottom" and "Open pages in").
  */
-import { ArrowDownToLine, ArrowUpDown, ArrowUpToLine, Check, ChevronDown, Ellipsis, Group, ListFilter, Lock, Search, SlidersHorizontal } from '@lucide/vue'
+import { ArrowDownToLine, ArrowUpDown, ArrowUpToLine, Check, ChevronDown, Ellipsis, FileText, Group, ListFilter, Lock, Search, SlidersHorizontal, Star, Trash2 } from '@lucide/vue'
 import { computed, ref, shallowRef, watch } from 'vue'
 import { useDb } from '../context'
 import { countConditions } from '../filters'
@@ -15,7 +15,7 @@ import OpenModeIcon from './OpenModeIcon.vue'
 import SortBuilder from './SortBuilder.vue'
 import ViewSettings from './ViewSettings.vue'
 
-const emit = defineEmits<{ newRow: [where?: 'top' | 'bottom'] }>()
+const emit = defineEmits<{ newRow: [where?: 'top' | 'bottom'], newFromTemplate: [templateId: string] }>()
 const db = useDb()
 const m = computed(() => db.m.value)
 type Panel = 'filter' | 'sort' | 'group' | 'properties' | 'settings' | 'new'
@@ -117,6 +117,19 @@ const panelLabel = computed(() => {
       <FilterBuilder v-if="open.panel === 'filter'" />
       <SortBuilder v-else-if="open.panel === 'sort'" />
       <div v-else-if="open.panel === 'new'" class="me-menu me-db-menu" role="menu">
+        <div class="me-menu-label">{{ m.templates }}</div>
+        <div v-for="t in db.templates.value" :key="t.id" class="me-menu-item me-db-template-row" :data-template="t.id">
+          <button type="button" class="me-db-template-name" role="menuitem" @click="open = null; emit('newFromTemplate', t.id)">
+            <FileText class="me-db-menu-icon" /><span class="me-menu-title">{{ t.name }}</span>
+          </button>
+          <span v-if="t.default" class="me-db-menu-value" data-template-default>{{ m.defaultBadge }}</span>
+          <template v-if="db.canEditStructure.value">
+            <button type="button" class="me-db-icon-button" :aria-label="m.setAsDefault" :title="m.setAsDefault" data-template-set-default @click="db.saveTemplates(db.templates.value.map(x => ({ ...x, default: x.id === t.id ? !t.default : false })))"><Star /></button>
+            <button type="button" class="me-db-icon-button" :aria-label="m.deleteTemplate" :title="m.deleteTemplate" data-template-delete @click="db.saveTemplates(db.templates.value.filter(x => x.id !== t.id))"><Trash2 /></button>
+          </template>
+        </div>
+        <p v-if="!db.templates.value.length" class="me-db-hint">{{ m.templatesHint }}</p>
+        <div class="me-db-separator" role="separator" />
         <template v-if="ordered">
           <button type="button" class="me-menu-item" role="menuitem" data-new="top" @click="add('top')"><ArrowUpToLine class="me-db-menu-icon" />{{ m.newAtTop }}</button>
           <button type="button" class="me-menu-item" role="menuitem" data-new="bottom" @click="add('bottom')"><ArrowDownToLine class="me-db-menu-icon" />{{ m.newAtBottom }}</button>
