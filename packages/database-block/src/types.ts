@@ -82,7 +82,7 @@ export interface FileValue { id: string, name: string, url: string }
 
 // ── 1.3 View ──────────────────────────────────────────────────────────────────
 
-export type ViewType = 'table' | 'board' | 'calendar' | 'timeline' | 'gallery' | 'list' | 'chart' | 'pivot'
+export type ViewType = 'table' | 'board' | 'calendar' | 'timeline' | 'gallery' | 'list' | 'chart' | 'pivot' | 'form'
 
 export type TextOp = 'equals' | 'not_equals' | 'contains' | 'not_contains' | 'starts_with' | 'ends_with' | 'is_empty' | 'is_not_empty'
 export type NumberOp = '=' | '!=' | '>' | '>=' | '<' | '<=' | 'is_empty' | 'is_not_empty'
@@ -148,6 +148,9 @@ export interface ViewConfig {
   colors?: ColorRule[]
   /** Table: sub-items — a relation to this database holding each row's parent; parents list, sub-items nest. */
   sub_items?: string
+  /** Form: description under the title, required questions (property ids). */
+  form_description?: string
+  form_required?: string[]
   /** Table: draw the lines between columns (default true). */
   vertical_lines?: boolean
   /** Inline table: lines shown before "Load more" (default 50, 0 = no limit). */

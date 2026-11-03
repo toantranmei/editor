@@ -10,7 +10,7 @@ export interface DatabaseMessages {
   openFullPage: string
   openDatabase: string
   /** View types. */
-  viewTypes: Record<'table' | 'board' | 'calendar' | 'timeline' | 'gallery' | 'list' | 'chart' | 'pivot', string>
+  viewTypes: Record<'table' | 'board' | 'calendar' | 'timeline' | 'gallery' | 'list' | 'chart' | 'pivot' | 'form', string>
   addView: string
   renameView: string
   duplicateView: string
@@ -165,6 +165,14 @@ export interface DatabaseMessages {
   insertRight: string
   duplicateProperty: string
   clearSelection: string
+  formDescription: string
+  formAnswer: string
+  formSubmit: string
+  formSent: string
+  formAgain: string
+  formNoQuestions: string
+  required: string
+  formRequiredError: string
   subItems: string
   addSubItem: string
   parentItem: string
@@ -275,7 +283,7 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     error: 'Something went wrong',
     openFullPage: 'Open as full page',
     openDatabase: 'Open database {title}',
-    viewTypes: { table: 'Table', board: 'Board', calendar: 'Calendar', timeline: 'Timeline', gallery: 'Gallery', list: 'List', chart: 'Chart', pivot: 'Pivot' },
+    viewTypes: { table: 'Table', board: 'Board', calendar: 'Calendar', timeline: 'Timeline', gallery: 'Gallery', list: 'List', chart: 'Chart', pivot: 'Pivot', form: 'Form' },
     addView: 'Add view',
     renameView: 'Rename',
     duplicateView: 'Duplicate',
@@ -440,6 +448,14 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     insertRight: 'Insert right',
     duplicateProperty: 'Duplicate property',
     clearSelection: 'Clear selection',
+    formDescription: 'Description (optional)',
+    formAnswer: 'Your answer',
+    formSubmit: 'Submit',
+    formSent: 'Thanks! Your answers were added.',
+    formAgain: 'Submit another response',
+    formNoQuestions: 'No questions: show properties in this view to ask them.',
+    required: 'Required',
+    formRequiredError: 'This question is required.',
     subItems: 'Sub-items',
     addSubItem: 'Add sub-item',
     parentItem: 'Parent item',
@@ -538,7 +554,7 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     error: 'Đã có lỗi xảy ra',
     openFullPage: 'Mở toàn trang',
     openDatabase: 'Mở cơ sở dữ liệu {title}',
-    viewTypes: { table: 'Bảng', board: 'Bảng Kanban', calendar: 'Lịch', timeline: 'Dòng thời gian', gallery: 'Thư viện', list: 'Danh sách', chart: 'Biểu đồ', pivot: 'Bảng tổng hợp' },
+    viewTypes: { table: 'Bảng', board: 'Bảng Kanban', calendar: 'Lịch', timeline: 'Dòng thời gian', gallery: 'Thư viện', list: 'Danh sách', chart: 'Biểu đồ', pivot: 'Bảng tổng hợp', form: 'Biểu mẫu' },
     addView: 'Thêm chế độ xem',
     renameView: 'Đổi tên',
     duplicateView: 'Nhân bản',
@@ -711,6 +727,14 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     insertRight: 'Chèn bên phải',
     duplicateProperty: 'Nhân bản thuộc tính',
     clearSelection: 'Bỏ chọn',
+    formDescription: 'Mô tả (không bắt buộc)',
+    formAnswer: 'Câu trả lời',
+    formSubmit: 'Gửi',
+    formSent: 'Cảm ơn! Câu trả lời đã được thêm.',
+    formAgain: 'Gửi câu trả lời khác',
+    formNoQuestions: 'Chưa có câu hỏi: hiện thuộc tính trong view này để hỏi.',
+    required: 'Bắt buộc',
+    formRequiredError: 'Câu này bắt buộc.',
     subItems: 'Mục con',
     addSubItem: 'Thêm mục con',
     parentItem: 'Mục cha',
@@ -809,7 +833,7 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     error: '出错了',
     openFullPage: '以整页打开',
     openDatabase: '打开数据库 {title}',
-    viewTypes: { table: '表格', board: '看板', calendar: '日历', timeline: '时间线', gallery: '画廊', list: '列表', chart: '图表', pivot: '数据透视' },
+    viewTypes: { table: '表格', board: '看板', calendar: '日历', timeline: '时间线', gallery: '画廊', list: '列表', chart: '图表', pivot: '数据透视', form: '表单' },
     addView: '添加视图',
     renameView: '重命名',
     duplicateView: '创建副本',
@@ -982,6 +1006,14 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     insertRight: '在右侧插入',
     duplicateProperty: '复制属性',
     clearSelection: '取消选择',
+    formDescription: '描述（可选）',
+    formAnswer: '你的回答',
+    formSubmit: '提交',
+    formSent: '谢谢！你的回答已添加。',
+    formAgain: '再提交一份',
+    formNoQuestions: '没有问题：在此视图中显示属性即可提问。',
+    required: '必填',
+    formRequiredError: '此问题为必填项。',
     subItems: '子项',
     addSubItem: '添加子项',
     parentItem: '父项',
