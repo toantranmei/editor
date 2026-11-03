@@ -4,7 +4,7 @@
  * switcher, per-layout settings such as wrap / freeze, card cover and size, dates, chart and pivot setup, and
  * "Open pages in").
  */
-import { Check, Eye, EyeOff, GripVertical } from '@lucide/vue'
+import { Check, Eye, EyeOff, GripVertical, Lock, LockOpen } from '@lucide/vue'
 import { computed, ref } from 'vue'
 import { useDb } from '../context'
 import type { ChartKind, OpenMode, Prop, ValueFn, ViewConfig, ViewType } from '../types'
@@ -396,6 +396,12 @@ const value = (e: Event) => (e.target as HTMLSelectElement).value
         >
           <OpenModeIcon :mode="mode" class="me-db-menu-icon" /><span class="me-menu-title">{{ m.openModes[mode] }}</span>
           <Check v-if="db.openMode.value === mode" class="me-db-menu-end" />
+        </button>
+      </template>
+      <template v-if="db.canLock.value">
+        <div class="me-db-separator" role="separator" />
+        <button type="button" class="me-menu-item" role="menuitemcheckbox" :aria-checked="db.locked.value" data-setting="lock" @click="db.source.setMeta({ locked: !db.locked.value })">
+          <Lock v-if="!db.locked.value" class="me-db-menu-icon" /><LockOpen v-else class="me-db-menu-icon" />{{ db.locked.value ? m.unlockDatabase : m.lockDatabase }}
         </button>
       </template>
     </template>

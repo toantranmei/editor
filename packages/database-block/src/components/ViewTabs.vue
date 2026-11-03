@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /** View tabs: switch, add (type picker), rename, duplicate, delete. */
-import { Copy, Pencil, Plus, Trash2 } from '@lucide/vue'
+import { ArrowUpRight, Copy, Link2, Pencil, Plus, Trash2 } from '@lucide/vue'
 import { computed, nextTick, ref, shallowRef } from 'vue'
 import { useDb } from '../context'
 import { fmt } from '../messages'
@@ -50,8 +50,24 @@ function commitRename(v: View) {
   renaming.value = null
   if (name && name !== v.name) db.source.upsertView({ ...v, name })
 }
+async function copyViewLink(v: View) {
+  menu.value = null
+  const url = db.options.viewUrl?.(db.databaseId, v.id)
+  if (!url) return
+  try {
+    await navigator.clipboard.writeText(url)
+  }
+  catch (error) {
+    db.report(error)
+  }
+}
+function openFull(v: View, e: MouseEvent) {
+  menu.value = null
+  emit('select', v.id)
+  db.options.open?.(db.databaseId, e)
+}
 function onTabClick(v: View, e: MouseEvent) {
-  if (db.view.value?.id === v.id && db.canEditStructure.value) menu.value = { view: v, anchor: e.currentTarget as HTMLElement }
+  if (db.view.value?.id === v.id && (db.canEditStructure.value || db.options.viewUrl || db.options.open)) menu.value = { view: v, anchor: e.currentTarget as HTMLElement }
   else emit('select', v.id)
 }
 </script>
@@ -97,9 +113,13 @@ function onTabClick(v: View, e: MouseEvent) {
     </DbPopover>
     <DbPopover v-if="menu" :anchor="menu.anchor" :scope="db.scope.value" :label="menu.view.name" @close="menu = null">
       <div class="me-menu me-db-menu" role="menu">
-        <button type="button" class="me-menu-item" role="menuitem" @click="startRename(menu.view)"><Pencil class="me-db-menu-icon" />{{ m.renameView }}</button>
-        <button type="button" class="me-menu-item" role="menuitem" data-duplicate-view @click="duplicate(menu.view)"><Copy class="me-db-menu-icon" />{{ m.duplicateView }}</button>
-        <button v-if="views.length > 1" type="button" class="me-menu-item is-danger" role="menuitem" data-delete-view @click="remove(menu.view)"><Trash2 class="me-db-menu-icon" />{{ m.deleteView }}</button>
+        <button v-if="db.canEditStructure.value" type="button" class="me-menu-item" role="menuitem" @click="startRename(menu.view)"><Pencil class="me-db-menu-icon" />{{ m.renameView }}</button>
+        <button v-if="db.options.viewUrl" type="button" class="me-menu-item" role="menuitem" data-copy-view-link @click="copyViewLink(menu.view)"><Link2 class="me-db-menu-icon" />{{ m.copyLinkToView }}</button>
+        <button v-if="db.options.open" type="button" class="me-menu-item" role="menuitem" data-open-full @click="openFull(menu.view, $event)"><ArrowUpRight class="me-db-menu-icon" />{{ m.openAsFullPage }}</button>
+        <template v-if="db.canEditStructure.value">
+          <button type="button" class="me-menu-item" role="menuitem" data-duplicate-view @click="duplicate(menu.view)"><Copy class="me-db-menu-icon" />{{ m.duplicateView }}</button>
+          <button v-if="views.length > 1" type="button" class="me-menu-item is-danger" role="menuitem" data-delete-view @click="remove(menu.view)"><Trash2 class="me-db-menu-icon" />{{ m.deleteView }}</button>
+        </template>
       </div>
     </DbPopover>
   </div>

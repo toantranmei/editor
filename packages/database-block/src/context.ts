@@ -20,6 +20,10 @@ export interface DbContext {
   locale: ComputedRef<string>
   canEditContent: ComputedRef<boolean>
   canEditStructure: ComputedRef<boolean>
+  /** Lock database is on (`meta.locked`): structure edits are off even for editors. */
+  locked: ComputedRef<boolean>
+  /** Whoever may change the structure may lock / unlock. */
+  canLock: ComputedRef<boolean>
   search: Ref<string>
   query: ComputedRef<RowQuery>
   /** Attributes for popovers teleported to <body> (theme scope). */
@@ -99,7 +103,9 @@ export function createContext(input: {
     m: computed(() => input.m()),
     locale,
     canEditContent: computed(() => input.editable() && source.canEditContent.value),
-    canEditStructure: computed(() => input.editable() && source.canEditStructure.value),
+    canEditStructure: computed(() => input.editable() && source.canEditStructure.value && !source.meta.value?.locked),
+    locked: computed(() => !!source.meta.value?.locked),
+    canLock: computed(() => input.editable() && source.canEditStructure.value),
     search: input.search,
     query: computed(() => (input.search.value.trim() ? { search: input.search.value.trim() } : {})),
     scope: computed(() => input.scope()),
@@ -130,7 +136,9 @@ export function createContext(input: {
     updateView(patch) {
       const v = view.value
       if (!v) return
-      const config = typeof patch === 'function' ? patch(v.config) : { ...v.config, ...patch }
+      let config = typeof patch === 'function' ? patch(v.config) : { ...v.config, ...patch }
+      // Locked: only filters and sorts change (like Notion's lock, where people can still filter and sort).
+      if (source.meta.value?.locked) config = { ...v.config, filter: config.filter, sorts: config.sorts }
       const filter = normalizeFilter(config.filter)
       const next = { ...config }
       if (filter) next.filter = filter

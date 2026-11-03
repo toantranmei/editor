@@ -4,7 +4,7 @@
  * buttons (a label shows next to an active filter / sort while there is room), then the "New" split button (main
  * part adds a row, the chevron opens "add to top / bottom" and "Open pages in").
  */
-import { ArrowDownToLine, ArrowUpDown, ArrowUpToLine, Check, ChevronDown, Ellipsis, Group, ListFilter, Search, SlidersHorizontal } from '@lucide/vue'
+import { ArrowDownToLine, ArrowUpDown, ArrowUpToLine, Check, ChevronDown, Ellipsis, Group, ListFilter, Lock, Search, SlidersHorizontal } from '@lucide/vue'
 import { computed, ref, shallowRef, watch } from 'vue'
 import { useDb } from '../context'
 import { countConditions } from '../filters'
@@ -60,6 +60,7 @@ const panelLabel = computed(() => {
 
 <template>
   <div class="me-db-toolbar" role="toolbar" :aria-label="m.viewOptions">
+    <span v-if="db.locked.value" class="me-db-locked" data-locked :title="m.lockedHint"><Lock />{{ m.locked }}</span>
     <button
       :ref="el => (buttons.filter = el as HTMLElement)"
       type="button"

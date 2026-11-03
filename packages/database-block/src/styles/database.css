@@ -419,6 +419,8 @@
   .me-db-color-rules { display: flex; flex-direction: column; gap: var(--me-space-3); padding-top: var(--me-space-2); }
   .me-db-color-rule { display: flex; flex-direction: column; gap: var(--me-space-2); padding: var(--me-space-3); border: var(--me-border-width-thin) solid var(--me-database-border); border-radius: var(--me-radius-md); background: var(--me-db-cc-bg, transparent); }
   .me-db-color-rule .me-db-row > .me-menu-label { flex: none; min-width: var(--me-database-cell-min-width); }
+  .me-db-locked { display: inline-flex; align-items: center; gap: var(--me-space-1); padding: 0 var(--me-space-2); color: var(--me-database-muted-color); font-size: var(--me-font-size-xs); }
+  .me-db-locked svg { width: var(--me-font-size-xs); height: var(--me-font-size-xs); }
   .me-db-kbd { color: var(--me-color-text-muted); font: inherit; font-size: var(--me-font-size-xs); }
   .me-db-open {
     position: absolute;

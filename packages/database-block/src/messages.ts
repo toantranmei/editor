@@ -165,6 +165,12 @@ export interface DatabaseMessages {
   insertRight: string
   duplicateProperty: string
   clearSelection: string
+  locked: string
+  lockedHint: string
+  lockDatabase: string
+  unlockDatabase: string
+  copyLinkToView: string
+  openAsFullPage: string
   groups: string
   conditionalColor: string
   conditionalColorHint: string
@@ -411,6 +417,12 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     insertRight: 'Insert right',
     duplicateProperty: 'Duplicate property',
     clearSelection: 'Clear selection',
+    locked: 'Locked',
+    lockedHint: 'Properties, views and layout are locked. Data can still be edited.',
+    lockDatabase: 'Lock database',
+    unlockDatabase: 'Unlock database',
+    copyLinkToView: 'Copy link to view',
+    openAsFullPage: 'Open as full page',
     groups: 'Groups',
     conditionalColor: 'Conditional color',
     conditionalColorHint: 'Color rows or cells that match a condition, e.g. overdue tasks in red.',
@@ -653,6 +665,12 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     insertRight: 'Chèn bên phải',
     duplicateProperty: 'Nhân bản thuộc tính',
     clearSelection: 'Bỏ chọn',
+    locked: 'Đã khoá',
+    lockedHint: 'Thuộc tính, view và bố cục đã bị khoá. Dữ liệu vẫn sửa được.',
+    lockDatabase: 'Khoá database',
+    unlockDatabase: 'Mở khoá database',
+    copyLinkToView: 'Sao chép liên kết tới view',
+    openAsFullPage: 'Mở toàn trang',
     groups: 'Các nhóm',
     conditionalColor: 'Màu theo điều kiện',
     conditionalColorHint: 'Tô màu row hoặc ô khớp điều kiện, ví dụ việc quá hạn tô đỏ.',
@@ -895,6 +913,12 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     insertRight: '在右侧插入',
     duplicateProperty: '复制属性',
     clearSelection: '取消选择',
+    locked: '已锁定',
+    lockedHint: '属性、视图和布局已锁定，数据仍可编辑。',
+    lockDatabase: '锁定数据库',
+    unlockDatabase: '解锁数据库',
+    copyLinkToView: '复制视图链接',
+    openAsFullPage: '以整页打开',
     groups: '分组',
     conditionalColor: '条件颜色',
     conditionalColorHint: '为符合条件的行或单元格着色，例如将逾期任务标为红色。',

@@ -216,7 +216,8 @@ export interface RowQuery { search?: string }
 export type FormulaCheck = { ok: true, type?: 'number' | 'string' | 'boolean' | 'date' } | { ok: false, error: string, position?: number, code?: string }
 
 export interface DatabaseSource {
-  meta: Ref<{ title: string, icon?: string | null } | undefined>
+  /** `locked`: Lock database — properties, views and layout can't change (data still can). */
+  meta: Ref<{ title: string, icon?: string | null, locked?: boolean } | undefined>
   props: Ref<Prop[]>
   views: Ref<View[]>
   version: Ref<number>
@@ -239,7 +240,7 @@ export interface DatabaseSource {
   deleteProp: (id: string) => void
   upsertView: (view: View) => void
   deleteView: (id: string) => void
-  setMeta: (meta: { title?: string, icon?: string | null }) => void
+  setMeta: (meta: { title?: string, icon?: string | null, locked?: boolean }) => void
   /**
    * Opens a row. `mode` is the view's "Open pages in" setting (`config.open_in`, default `side_peek`), passed since
    * 0.2; older sources simply ignore it. `DatabaseBlockOptions.openRow` (when set) is called instead.
@@ -275,6 +276,8 @@ export interface DatabaseBlockOptions {
    * it instead of `source.openRow`. `event`: the click, e.g. to open a new tab on Cmd / Ctrl-click.
    */
   openRow?: ((databaseId: string, rowId: string, mode: OpenMode, event?: MouseEvent | KeyboardEvent) => void) | null
+  /** Link to a view of the database ("Copy link to view" in the tab menu). */
+  viewUrl?: ((databaseId: string, viewId: string) => string) | null
   /** Link to a row (Copy link in the row menu). Without it the menu has no Copy link. */
   rowUrl?: ((databaseId: string, rowId: string) => string) | null
   /** Called when `createDatabase` or a source call fails. Default: `console.error`. */

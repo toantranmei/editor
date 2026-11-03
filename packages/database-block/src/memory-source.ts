@@ -21,7 +21,7 @@ export interface MemoryRow extends Row {
 
 export interface MemorySourceInit {
   databaseId?: string
-  meta?: { title: string, icon?: string | null }
+  meta?: { title: string, icon?: string | null, locked?: boolean }
   props: Prop[]
   views: View[]
   rows?: MemoryRow[]
