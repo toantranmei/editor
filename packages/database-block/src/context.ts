@@ -38,6 +38,8 @@ export interface DbContext {
    */
   openRow: (rowId: string, event?: MouseEvent | KeyboardEvent | null, mode?: OpenMode) => void
   updateView: (patch: Partial<ViewConfig> | ((config: ViewConfig) => ViewConfig)) => void
+  /** `source.createRow` plus the properties' defaults (`config.default_option_id`) for values not given. */
+  createRow: (init?: { values?: Record<string, unknown>, after?: string | null }) => string
   report: (error: unknown) => void
 }
 
@@ -132,6 +134,14 @@ export function createContext(input: {
       else delete next.filter
       for (const k of Object.keys(next)) if (next[k] === undefined) delete next[k]
       source.upsertView({ ...v, config: next })
+    },
+    createRow(init = {}) {
+      const values = { ...init.values }
+      for (const p of props.value) {
+        const d = p.config?.default_option_id
+        if (d && (p.type === 'status' || p.type === 'select') && values[p.id] === undefined && p.config?.options?.some(o => o.id === d)) values[p.id] = d
+      }
+      return source.createRow(Object.keys(values).length || init.values ? { ...init, values } : init)
     },
     report,
   }

@@ -79,7 +79,7 @@ const rowsOf = (line: number) => {
 const coverUrl = (row: Row) => (coverProp.value ? coverImage(cellValue(row, coverProp.value)) : null)
 const fit = computed(() => !!db.view.value?.config.fit_image)
 function newCard(e: MouseEvent) {
-  const id = db.source.createRow({})
+  const id = db.createRow({})
   db.openRow(id, e)
 }
 </script>

@@ -112,7 +112,7 @@ function newRow(where: 'top' | 'bottom' = 'bottom') {
   if (!db.canEditContent.value) return
   const view = viewRef.value
   if (type.value === 'table' && view?.newRow) return view.newRow(undefined, where === 'top')
-  const id = props.source.createRow(where === 'top' ? { after: null } : {})
+  const id = db.createRow(where === 'top' ? { after: null } : {})
   db.openRow(id)
 }
 

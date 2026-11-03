@@ -57,7 +57,7 @@ watch(() => {
 })
 const segment = (i: number) => store.value?.segments.value[i]
 function newRow(e: MouseEvent) {
-  const id = db.source.createRow({})
+  const id = db.createRow({})
   db.openRow(id, e)
 }
 </script>

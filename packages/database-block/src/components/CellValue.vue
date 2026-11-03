@@ -41,6 +41,24 @@ const href = computed(() => {
   return undefined
 })
 const isNumber = computed(() => type.value === 'number')
+/** Number shown as a bar / ring: fill = value / divide_by (default 100), clamped to 0..1. */
+const meter = computed(() => {
+  const show = props.prop.config?.show_as
+  if (!isNumber.value || (show !== 'bar' && show !== 'ring') || typeof props.value !== 'number') return null
+  const full = Number(props.prop.config?.divide_by) || 100
+  const ratio = Math.max(0, Math.min(1, props.value / full))
+  return { kind: show, ratio, color: props.prop.config?.show_color ?? 'green', number: props.prop.config?.show_number !== false }
+})
+/** URL with "Show full URL" off: the host only. */
+const linkText = computed(() => {
+  if (props.prop.type !== 'url' || props.prop.config?.full_url !== false || !href.value) return text.value
+  try {
+    return new URL(href.value).host
+  }
+  catch {
+    return text.value
+  }
+})
 const isCheckbox = computed(() => props.prop.type === 'checkbox' || (props.prop.type === 'formula' && typeof props.value === 'boolean'))
 const initials = (name: string) => name.split(/\s+/).filter(Boolean).slice(-2).map(w => w[0]).join('').toUpperCase()
 </script>
@@ -68,7 +86,15 @@ const initials = (name: string) => name.split(/\s+/).filter(Boolean).slice(-2).m
     <template v-else-if="files.length">
       <a v-for="f in files" :key="f.id" class="me-db-file" :href="f.url" target="_blank" rel="noopener" @click.stop>{{ f.name }}</a>
     </template>
-    <a v-else-if="href" class="me-db-link" :href="href" target="_blank" rel="noopener" @click.stop>{{ text }}</a>
+    <span v-else-if="meter" class="me-db-meter" :class="`is-${meter.kind}`" :data-color="meter.color === 'default' ? undefined : meter.color" role="meter" :aria-valuenow="Number(value)" aria-valuemin="0" :aria-valuemax="Number(prop.config?.divide_by) || 100" :aria-label="text">
+      <svg v-if="meter.kind === 'ring'" class="me-db-ring" viewBox="0 0 36 36" aria-hidden="true">
+        <circle class="me-db-ring-track" cx="18" cy="18" r="15.9155" pathLength="100" />
+        <circle class="me-db-ring-fill" cx="18" cy="18" r="15.9155" pathLength="100" :stroke-dasharray="`${meter.ratio * 100} 100`" />
+      </svg>
+      <span v-else class="me-db-bar"><span class="me-db-bar-fill" :style="{ inlineSize: `${meter.ratio * 100}%` }" /></span>
+      <span v-if="meter.number" class="me-db-meter-number">{{ text }}</span>
+    </span>
+    <a v-else-if="href" class="me-db-link" :href="href" target="_blank" rel="noopener" @click.stop>{{ linkText }}</a>
     <span v-else class="me-db-text">{{ text }}</span>
   </span>
 </template>

@@ -102,7 +102,7 @@ function newCard(seg: number, e?: MouseEvent) {
   const values: Record<string, unknown> = {}
   const v = valueFor(key)
   if (p && v !== undefined && v !== null) values[p.id] = v
-  const id = db.source.createRow({ values })
+  const id = db.createRow({ values })
   db.openRow(id, e)
 }
 

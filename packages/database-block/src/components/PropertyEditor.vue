@@ -8,6 +8,7 @@ import { useDb } from '../context'
 import type { DateDisplay, FormulaCheck, NumberFormat, Prop, PropConfig, PropType, RollupFn, SelectOption } from '../types'
 import { clone, CREATABLE_TYPES, OPTION_TYPES, placeColumn, positionAfter, uuidv7 } from '../util'
 import DbPopover from './DbPopover.vue'
+import NumberShowAs from './NumberShowAs.vue'
 import OptionsList from './OptionsList.vue'
 import PropIcon from './PropIcon.vue'
 
@@ -28,7 +29,10 @@ const name = ref(props.prop?.name ?? '')
 const config = ref<PropConfig>(clone(props.prop?.config) ?? {})
 
 const NUMBER_FORMATS: NumberFormat[] = ['number', 'percent', 'currency']
-const DATE_FORMATS: DateDisplay[] = ['dmy', 'mdy', 'ymd', 'relative']
+const DATE_FORMATS: DateDisplay[] = ['full', 'short', 'dmy', 'mdy', 'ymd', 'relative']
+/** Currencies Intl formats (Notion's list, most used first). */
+const CURRENCIES = ['VND', 'USD', 'EUR', 'GBP', 'JPY', 'CNY', 'KRW', 'SGD', 'THB', 'HKD', 'TWD', 'AUD', 'CAD', 'NZD', 'CHF', 'INR', 'IDR', 'MYR', 'PHP', 'BRL', 'MXN', 'RUB', 'TRY', 'ZAR', 'SEK', 'NOK', 'DKK', 'PLN', 'AED', 'SAR']
+const SHOW_AS = ['number', 'bar', 'ring'] as const
 const ROLLUP_FNS: RollupFn[] = ['count', 'count_values', 'sum', 'avg', 'min', 'max', 'median', 'percent_checked', 'show_original', 'earliest', 'latest', 'range']
 
 function defaultsFor(t: PropType): PropConfig {
@@ -94,7 +98,29 @@ const valid = computed(() => {
   return true
 })
 
-function save() {
+// An existing property saves as it is edited (like Notion); a new one is created with Save.
+let saveTimer: ReturnType<typeof setTimeout> | undefined
+watch([name, config], () => {
+  if (!editing.value) return
+  clearTimeout(saveTimer)
+  saveTimer = setTimeout(() => save(false), 300)
+}, { deep: true })
+function close() {
+  if (editing.value && saveTimer) {
+    clearTimeout(saveTimer)
+    save(false)
+  }
+  emit('close')
+}
+onBeforeUnmount(() => clearTimeout(saveTimer))
+function patchConfig(patch: Partial<PropConfig>) {
+  const next: PropConfig = { ...config.value, ...patch }
+  for (const k of Object.keys(patch)) if (patch[k] === undefined) delete next[k]
+  config.value = next
+}
+
+function save(andClose = true) {
+  saveTimer = undefined
   if (!valid.value) return
   const c: PropConfig = { ...config.value }
   if (type.value === 'formula' && check.value?.ok && check.value.type) c.result_type = check.value.type
@@ -108,14 +134,15 @@ function save() {
   const view = db.view.value
   if (!props.prop && view && props.place) db.updateView({ visible: placeColumn(view, db.props.value, prop.id, props.place.next, props.place.side) })
   else if (!props.prop && view?.config.visible) db.updateView({ visible: [...view.config.visible, prop.id] })
+  if (!andClose) return
   emit('saved', prop)
   emit('close')
 }
 </script>
 
 <template>
-  <DbPopover :anchor="anchor" :scope="db.scope.value" :label="editing ? prop!.name : m.addProperty" @close="emit('close')">
-    <form class="me-db-menu me-db-prop-editor" @submit.prevent="save">
+  <DbPopover :anchor="anchor" :scope="db.scope.value" :label="editing ? prop!.name : m.addProperty" @close="close">
+    <form class="me-db-menu me-db-prop-editor" @submit.prevent="save()">
       <label class="me-db-field">
         <span class="me-menu-label">{{ m.propertyName }}</span>
         <input v-model="name" class="me-input" :aria-label="m.propertyName" autofocus>
@@ -148,17 +175,20 @@ function save() {
         </label>
         <label v-if="config.format === 'currency'" class="me-db-field">
           <span class="me-menu-label">{{ m.currency }}</span>
-          <input v-model="config.currency" class="me-input" placeholder="VND">
+          <select :value="config.currency ?? 'VND'" class="me-input me-db-select" data-setting="currency" @change="patchConfig({ currency: ($event.target as HTMLSelectElement).value })">
+            <option v-for="c in CURRENCIES" :key="c" :value="c">{{ c }}</option>
+          </select>
         </label>
         <label class="me-db-field">
           <span class="me-menu-label">{{ m.decimals }}</span>
           <input :value="config.decimals ?? ''" type="number" min="0" max="10" class="me-input" @input="config.decimals = ($event.target as HTMLInputElement).value === '' ? undefined : Number(($event.target as HTMLInputElement).value)">
         </label>
+        <NumberShowAs :config="config" @change="patchConfig" />
       </template>
 
       <div v-else-if="OPTION_TYPES.has(type)" class="me-db-field">
         <span class="me-menu-label">{{ m.editOptions }}</span>
-        <OptionsList :options="config.options ?? []" @change="o => (config.options = o)" />
+        <OptionsList :config="config" :status="type === 'status'" @change="patchConfig" />
       </div>
 
       <template v-else-if="type === 'date'">
@@ -173,7 +203,19 @@ function save() {
           <span>{{ m.includeTime }}</span>
           <input v-model="config.time" type="checkbox" class="me-db-switch">
         </label>
+        <label class="me-db-field">
+          <span class="me-menu-label">{{ m.timeFormat }}</span>
+          <select :value="config.hour12 ? '12' : '24'" class="me-input me-db-select" data-setting="hour12" @change="patchConfig({ hour12: ($event.target as HTMLSelectElement).value === '12' || undefined })">
+            <option value="24">{{ m.hour24 }}</option>
+            <option value="12">{{ m.hour12 }}</option>
+          </select>
+        </label>
       </template>
+
+      <label v-else-if="type === 'url'" class="me-db-toggle-row">
+        <span>{{ m.showFullUrl }}</span>
+        <input type="checkbox" class="me-db-switch" data-setting="full_url" :checked="config.full_url !== false" @change="patchConfig({ full_url: ($event.target as HTMLInputElement).checked ? undefined : false })">
+      </label>
 
       <div v-else-if="type === 'formula'" class="me-db-field">
         <span class="me-menu-label">{{ m.formula }}</span>
@@ -221,9 +263,12 @@ function save() {
         <input v-model="config.prefix" class="me-input" placeholder="TASK">
       </label>
 
-      <div class="me-db-actions">
+      <div v-if="!editing" class="me-db-actions">
         <button type="button" class="me-btn" @click="emit('close')">{{ m.cancel }}</button>
         <button type="submit" class="me-btn me-btn--primary" :disabled="!valid">{{ m.save }}</button>
+      </div>
+      <div v-else class="me-db-actions">
+        <button type="button" class="me-btn me-btn--primary" data-done @click="close">{{ m.done }}</button>
       </div>
     </form>
   </DbPopover>

@@ -97,7 +97,7 @@ function onDrop(day: string) {
 function addOn(day: string, e?: MouseEvent) {
   const p = dateProp.value
   if (!p || p.type !== 'date') return
-  const id = db.source.createRow({ values: { [p.id]: { start: day } } })
+  const id = db.createRow({ values: { [p.id]: { start: day } } })
   db.openRow(id, e)
 }
 </script>

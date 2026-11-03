@@ -76,10 +76,12 @@ export const hasTime = (s: string | undefined) => !!s && s.includes('T')
 /** Day part (`YYYY-MM-DD`, local) of a date value bound. */
 export const dayOf = (s: string) => (hasTime(s) ? isoDay(parseIso(s)!) : s.slice(0, 10))
 
-export function formatDateString(s: string, display: DateDisplay | undefined, locale: string, now = new Date()): string {
+/** `hour12`: 12-hour clock ("3:05 PM"), else 24-hour ("15:05"). */
+export function formatDateString(s: string, display: DateDisplay | undefined, locale: string, now = new Date(), hour12 = false): string {
   const d = parseIso(s)
   if (!d) return s
-  const time = hasTime(s) ? ` ${pad(d.getHours())}:${pad(d.getMinutes())}` : ''
+  const h = d.getHours()
+  const time = !hasTime(s) ? '' : hour12 ? ` ${h % 12 || 12}:${pad(d.getMinutes())} ${h < 12 ? 'AM' : 'PM'}` : ` ${pad(h)}:${pad(d.getMinutes())}`
   const dd = pad(d.getDate())
   const mm = pad(d.getMonth() + 1)
   const yyyy = d.getFullYear()
@@ -96,6 +98,9 @@ export function formatDateString(s: string, display: DateDisplay | undefined, lo
       }
     }
     case 'dmy': return `${dd}/${mm}/${yyyy}${time}`
+    // Full: "November 4, 2026" / "4 tháng 11, 2026"; short: the locale's numeric date.
+    case 'full': return new Intl.DateTimeFormat(intlLocale(locale), { day: 'numeric', month: 'long', year: 'numeric' }).format(d) + time
+    case 'short': return new Intl.DateTimeFormat(intlLocale(locale), { day: '2-digit', month: '2-digit', year: 'numeric' }).format(d) + time
     default: {
       // Locale default: en → Oct 30, 2026; vi → 30/10/2026; zh → 2026/10/30.
       if (locale === 'en') return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(d) + time
@@ -107,8 +112,9 @@ export function formatDateString(s: string, display: DateDisplay | undefined, lo
 
 export function formatDateValue(v: DateValue, prop: Prop, locale: string, now?: Date): string {
   const display = prop.config?.format as DateDisplay | undefined
-  const start = formatDateString(v.start, display, locale, now)
-  return v.end ? `${start} → ${formatDateString(v.end, display, locale, now)}` : start
+  const h12 = !!prop.config?.hour12
+  const start = formatDateString(v.start, display, locale, now, h12)
+  return v.end ? `${start} → ${formatDateString(v.end, display, locale, now, h12)}` : start
 }
 
 /** Parses typed / pasted dates: ISO, `30/10/2026`, `10/30/2026` (en), `2026/10/30`, optional `HH:mm`, ranges with `→`. */
@@ -170,8 +176,8 @@ export function displayText(prop: Prop, value: unknown, ctx: ValueContext): stri
     case 'date':
     case 'created_time':
     case 'last_edited_time': {
-      if (typeof value === 'number') return formatDateString(new Date(value).toISOString(), prop.config?.format as DateDisplay, ctx.locale, ctx.now)
-      if (typeof value === 'string') return formatDateString(value, prop.config?.format as DateDisplay, ctx.locale, ctx.now)
+      if (typeof value === 'number') return formatDateString(new Date(value).toISOString(), prop.config?.format as DateDisplay, ctx.locale, ctx.now, !!prop.config?.hour12)
+      if (typeof value === 'string') return formatDateString(value, prop.config?.format as DateDisplay, ctx.locale, ctx.now, !!prop.config?.hour12)
       return formatDateValue(value as DateValue, prop, ctx.locale, ctx.now)
     }
     case 'person':

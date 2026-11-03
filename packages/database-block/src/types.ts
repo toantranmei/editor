@@ -45,10 +45,24 @@ export interface PropConfig {
   expression?: string
   /** unique_id */
   prefix?: string
+  /** select / multi_select: keep options sorted (new ones land in order). */
+  option_sort?: 'asc' | 'desc'
+  /** status / select: option new rows start with. */
+  default_option_id?: string
+  /** number / numeric rollup: draw the value as a bar or a ring (`divide_by` = full, default 100). */
+  show_as?: 'number' | 'bar' | 'ring'
+  show_color?: OptionColor
+  divide_by?: number
+  /** bar / ring: also print the number (default true). */
+  show_number?: boolean
+  /** date / created_time / last_edited_time: 12-hour clock. */
+  hour12?: boolean
+  /** url: show the whole URL; off: the host only. */
+  full_url?: boolean
   [key: string]: unknown
 }
 
-export type DateDisplay = 'dmy' | 'mdy' | 'ymd' | 'relative'
+export type DateDisplay = 'full' | 'short' | 'dmy' | 'mdy' | 'ymd' | 'relative'
 
 export interface Prop {
   id: string

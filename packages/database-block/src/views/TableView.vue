@@ -485,7 +485,7 @@ async function pasteMatrix(matrix: string[][], seg: number, index: number, col: 
     const values = { ...extra.get(li) }
     const gv = groupValue(key)
     if (gv !== undefined && groupProp.value) values[groupProp.value.id] = gv
-    last = db.source.createRow({ values, after: last })
+    last = db.createRow({ values, after: last })
   }
 }
 
@@ -501,7 +501,7 @@ function newRow(seg?: number, top = false) {
   const gv = groupValue(key)
   const values = gv !== undefined && groupProp.value ? { [groupProp.value.id]: gv } : {}
   const last = !top && !store.value?.grouped && !db.view.value?.config.sorts?.length && itemCount.value ? rowOfItem(itemCount.value - 1)?.id : undefined
-  const id = db.source.createRow(top ? { values, after: null } : last ? { values, after: last } : { values })
+  const id = db.createRow(top ? { values, after: null } : last ? { values, after: last } : { values })
   pendingEdit.value = id
   startTypeAhead()
   clearTimeout(pendingTimer)

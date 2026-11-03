@@ -80,7 +80,7 @@ export interface DatabaseMessages {
   currency: string
   decimals: string
   dateFormat: string
-  dateFormats: Record<'dmy' | 'mdy' | 'ymd' | 'relative', string>
+  dateFormats: Record<'full' | 'short' | 'dmy' | 'mdy' | 'ymd' | 'relative', string>
   includeTime: string
   formula: string
   formulaPlaceholder: string
@@ -165,6 +165,22 @@ export interface DatabaseMessages {
   insertRight: string
   duplicateProperty: string
   clearSelection: string
+  showAs: string
+  showAsKinds: Record<'number' | 'bar' | 'ring', string>
+  divideBy: string
+  showNumber: string
+  timeFormat: string
+  hour12: string
+  hour24: string
+  showFullUrl: string
+  appliesToAllViews: string
+  optionSort: string
+  optionSorts: Record<'manual' | 'asc' | 'desc', string>
+  setAsDefault: string
+  defaultBadge: string
+  moveToGroup: string
+  optionColor: string
+  done: string
   groupByThis: string
   ungroup: string
   sortLowHigh: string
@@ -289,7 +305,7 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     currency: 'Currency',
     decimals: 'Decimal places',
     dateFormat: 'Date format',
-    dateFormats: { dmy: 'Day/Month/Year', mdy: 'Month/Day/Year', ymd: 'Year/Month/Day', relative: 'Relative' },
+    dateFormats: { full: 'Full date', short: 'Short date', dmy: 'Day/Month/Year', mdy: 'Month/Day/Year', ymd: 'Year/Month/Day', relative: 'Relative' },
     includeTime: 'Include time',
     formula: 'Formula',
     formulaPlaceholder: 'prop("Price") * prop("Qty")',
@@ -376,6 +392,22 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     insertRight: 'Insert right',
     duplicateProperty: 'Duplicate property',
     clearSelection: 'Clear selection',
+    showAs: 'Show as',
+    showAsKinds: { number: 'Number', bar: 'Bar', ring: 'Ring' },
+    divideBy: 'Divide by',
+    showNumber: 'Show number',
+    timeFormat: 'Time format',
+    hour12: '12 hour',
+    hour24: '24 hour',
+    showFullUrl: 'Show full URL',
+    appliesToAllViews: 'Changes apply to all views showing this property.',
+    optionSort: 'Sort',
+    optionSorts: { manual: 'Manual', asc: 'Alphabetical', desc: 'Reverse alphabetical' },
+    setAsDefault: 'Set as default',
+    defaultBadge: 'Default',
+    moveToGroup: 'Group',
+    optionColor: 'Color',
+    done: 'Done',
     groupByThis: 'Group',
     ungroup: 'Ungroup',
     sortLowHigh: 'Sort low → high',
@@ -496,7 +528,7 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     currency: 'Tiền tệ',
     decimals: 'Số chữ số thập phân',
     dateFormat: 'Định dạng ngày',
-    dateFormats: { dmy: 'Ngày/Tháng/Năm', mdy: 'Tháng/Ngày/Năm', ymd: 'Năm/Tháng/Ngày', relative: 'Tương đối' },
+    dateFormats: { full: 'Ngày đầy đủ', short: 'Ngày rút gọn', dmy: 'Ngày/Tháng/Năm', mdy: 'Tháng/Ngày/Năm', ymd: 'Năm/Tháng/Ngày', relative: 'Tương đối' },
     includeTime: 'Kèm giờ',
     formula: 'Công thức',
     formulaPlaceholder: 'prop("Giá") * prop("SL")',
@@ -583,6 +615,22 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     insertRight: 'Chèn bên phải',
     duplicateProperty: 'Nhân bản thuộc tính',
     clearSelection: 'Bỏ chọn',
+    showAs: 'Hiển thị dạng',
+    showAsKinds: { number: 'Số', bar: 'Thanh', ring: 'Vòng' },
+    divideBy: 'Chia cho',
+    showNumber: 'Hiện số',
+    timeFormat: 'Định dạng giờ',
+    hour12: '12 giờ',
+    hour24: '24 giờ',
+    showFullUrl: 'Hiện URL đầy đủ',
+    appliesToAllViews: 'Thay đổi áp dụng cho mọi view hiện thuộc tính này.',
+    optionSort: 'Sắp xếp',
+    optionSorts: { manual: 'Thủ công', asc: 'Theo bảng chữ cái', desc: 'Ngược bảng chữ cái' },
+    setAsDefault: 'Đặt làm mặc định',
+    defaultBadge: 'Mặc định',
+    moveToGroup: 'Nhóm',
+    optionColor: 'Màu',
+    done: 'Xong',
     groupByThis: 'Nhóm theo cột này',
     ungroup: 'Bỏ nhóm',
     sortLowHigh: 'Sắp xếp thấp → cao',
@@ -703,7 +751,7 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     currency: '货币',
     decimals: '小数位数',
     dateFormat: '日期格式',
-    dateFormats: { dmy: '日/月/年', mdy: '月/日/年', ymd: '年/月/日', relative: '相对时间' },
+    dateFormats: { full: '完整日期', short: '短日期', dmy: '日/月/年', mdy: '月/日/年', ymd: '年/月/日', relative: '相对时间' },
     includeTime: '包含时间',
     formula: '公式',
     formulaPlaceholder: 'prop("价格") * prop("数量")',
@@ -790,6 +838,22 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     insertRight: '在右侧插入',
     duplicateProperty: '复制属性',
     clearSelection: '取消选择',
+    showAs: '显示为',
+    showAsKinds: { number: '数字', bar: '进度条', ring: '圆环' },
+    divideBy: '除以',
+    showNumber: '显示数字',
+    timeFormat: '时间格式',
+    hour12: '12 小时制',
+    hour24: '24 小时制',
+    showFullUrl: '显示完整网址',
+    appliesToAllViews: '更改将应用于显示此属性的所有视图。',
+    optionSort: '排序',
+    optionSorts: { manual: '手动', asc: '按字母顺序', desc: '按字母倒序' },
+    setAsDefault: '设为默认',
+    defaultBadge: '默认',
+    moveToGroup: '分组',
+    optionColor: '颜色',
+    done: '完成',
     groupByThis: '分组',
     ungroup: '取消分组',
     sortLowHigh: '从低到高排序',
