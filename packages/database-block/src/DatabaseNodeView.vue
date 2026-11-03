@@ -6,8 +6,8 @@
 import { Database } from '@lucide/vue'
 import { NodeViewWrapper, nodeViewProps } from '@tiptap/vue-3'
 import { useEditable, useScope } from '@toantranmei/editor'
-import { computed, shallowRef, watch } from 'vue'
-import { DatabaseView } from './lazy'
+import { computed, onBeforeUnmount, onMounted, provide, shallowRef, watch } from 'vue'
+import { DatabaseView, loadingTextKey, reservedHeights } from './lazy'
 import { databaseMessages } from './messages'
 import { resolveSource } from './sources'
 import type { DatabaseBlockOptions, DatabaseSource } from './types'
@@ -18,6 +18,7 @@ const databaseId = computed(() => (props.node.attrs.databaseId as string | null)
 const inline = computed(() => props.node.attrs.inline !== false)
 const locale = computed(() => (props.editor.storage.meiConfig?.locale ?? 'vi') as 'vi' | 'en' | 'zh')
 const m = computed(() => databaseMessages(locale.value, options.value.messages))
+provide(loadingTextKey, computed(() => m.value.loading))
 const scope = useScope(() => props.editor)
 const editable = useEditable(props.editor)
 
@@ -45,6 +46,26 @@ watch([databaseId, () => options.value.source], async ([id, factory]) => {
     else console.error('[database-block]', error)
   }
 }, { immediate: true })
+
+// --- Placeholder size: the last rendered height of this database view (this session), else a typical table ---
+const ui = shallowRef<HTMLElement | null>(null)
+const heightKey = computed(() => `${databaseId.value}:${(props.node.attrs.viewId as string | null) ?? ''}`)
+const reservedStyle = computed(() => {
+  const h = inline.value ? reservedHeights.get(heightKey.value) : undefined
+  return h ? { '--me-db-reserved-height': `${h}px` } : undefined
+})
+let observer: ResizeObserver | null = null
+onMounted(() => {
+  if (typeof ResizeObserver === 'undefined' || !ui.value) return
+  observer = new ResizeObserver(() => {
+    const el = ui.value
+    // Only a fully rendered view counts (no loading placeholder inside).
+    if (!el || !inline.value || state.value !== 'ready' || el.querySelector('.is-loading')) return
+    if (el.offsetHeight > 0) reservedHeights.set(heightKey.value, el.offsetHeight)
+  })
+  observer.observe(ui.value)
+})
+onBeforeUnmount(() => observer?.disconnect())
 
 function setView(viewId: string) {
   if (props.editor.isEditable && viewId !== props.node.attrs.viewId) props.updateAttributes({ viewId })
@@ -79,9 +100,10 @@ function openLink(e: MouseEvent | KeyboardEvent) {
     :class="{ 'is-selected': selected, 'is-link': !inline }"
     data-type="database-view"
     :data-database-id="databaseId ?? undefined"
+    :style="reservedStyle"
   >
-    <div class="me-db-ui" contenteditable="false" @mousedown="onMouseDown">
-    <div v-if="state === 'loading'" class="me-db-empty">{{ m.loading }}</div>
+    <div ref="ui" class="me-db-ui" contenteditable="false" @mousedown="onMouseDown">
+    <div v-if="state === 'loading'" class="me-db-empty" :class="{ 'is-loading': inline }" aria-busy="true">{{ m.loading }}</div>
     <div v-else-if="state === 'missing' || !source" class="me-db-empty is-missing">{{ m.notFound }}</div>
     <a
       v-else-if="!inline"

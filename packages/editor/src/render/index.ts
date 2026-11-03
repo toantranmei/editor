@@ -20,8 +20,9 @@ export type {
 export { attr, escapeHtml, safeUrl } from './html'
 export { highlightCode } from './highlight'
 export { hydrateMermaid, type HydrateMermaidOptions } from './mermaid'
-import { baseTokensCss, overridesCss } from '../theme/css'
-import type { ThemeTokens } from '../theme/tokens'
+import { baseTokensCss, LAYER, overridesCss, safePairs } from '../theme/css'
+import { cssVar, declarations, flatten, type TokenTree } from '../theme/define'
+import { semanticDark, type ThemeTokens } from '../theme/tokens'
 
 export { baseTokensCss, overridesCss }
 
@@ -149,13 +150,68 @@ export async function renderHTMLAsync(doc: JSONContent | null | undefined, optio
   return renderHTML(doc, options)
 }
 
+/** Light / dark token overrides for a server-rendered page that follows the OS colour scheme. */
+export interface RenderTokensOptions {
+  /**
+   * Overrides for every mode (light, and dark unless `dark` overrides them): a token tree like `<MeiEditor :tokens>`
+   * (`{ color: { text: '#222' } }`) or a flat map (`{ 'color.text': '#222' }`, `{ '--me-color-text': '#222' }`).
+   */
+  light?: ThemeTokens | Record<string, string>
+  /** Overrides for dark mode (same shapes), applied under `prefers-color-scheme: dark` and `html.dark` / `.me-dark`. */
+  dark?: ThemeTokens['dark'] | Record<string, string>
+}
+
+/** The `{ light, dark }` form needs `light` (`{ light: {} }` for defaults only): `{ dark }` alone stays the overrides
+ * form (`ThemeTokens` with its `dark` part), as before 0.4, with no OS dark mode. */
+const isSchemeOptions = (o: object): o is RenderTokensOptions => {
+  const keys = Object.keys(o)
+  return keys.includes('light') && keys.every(k => k === 'light' || k === 'dark')
+}
+
+/** `[cssVar, value]` pairs of a token tree or flat map (`components` are not prefixed, like `overridesCss`). */
+function tokenPairs(tokens: object | undefined): [string, string][] {
+  const out: [string, string][] = []
+  for (const [key, value] of Object.entries(tokens ?? {})) {
+    if (key === 'dark') continue
+    if (typeof value === 'string') out.push([key.startsWith('--') ? key : cssVar(key), value])
+    else if (value && typeof value === 'object') out.push(...flatten(value as TokenTree, key === 'components' ? '' : key))
+  }
+  return safePairs(out)
+}
+
+/** Default dark tokens + `dark` overrides under `prefers-color-scheme: dark` (unless the editor is forced light). */
+function schemeCss({ light, dark }: RenderTokensOptions): string {
+  const scope = '.me-scope'
+  const lightPairs = tokenPairs(light)
+  // A token tree's own `dark` part counts too (`{ light: notesTokens }` with `notesTokens.dark`).
+  const own = (light as { dark?: unknown } | undefined)?.dark
+  const darkPairs = [...tokenPairs(own && typeof own === 'object' ? own : undefined), ...tokenPairs(dark)]
+  const defaults = declarations(flatten(semanticDark as unknown as TokenTree))
+  return [
+    `@media (prefers-color-scheme: dark){@layer ${LAYER}{:where(${scope}:not(.me-light)){${defaults}}}}`,
+    lightPairs.length ? `${scope}{${declarations(lightPairs)}}` : '',
+    darkPairs.length
+      ? [
+          `html.dark ${scope}:not(.me-light),${scope}.me-dark{${declarations(darkPairs)}}`,
+          `@media (prefers-color-scheme: dark){${scope}:not(.me-light){${declarations(darkPairs)}}}`,
+        ].join('\n')
+      : '',
+  ].filter(Boolean).join('\n')
+}
+
 /**
  * `<style id="mei-editor-tokens">` with the editor's default design tokens (light + dark).
  * The editor injects them at runtime; server-rendered pages put this in `<head>` (next to
  * `style.css`). A `<MeiEditor>` mounted later on the page reuses it instead of adding another.
- * `overrides` (token overrides) are appended, unlayered, for `.me-scope`.
+ *
+ * - `renderTokensStyle(overrides)`: token overrides (`ThemeTokens`), unlayered, for `.me-scope`; dark follows
+ *   `html.dark` / `.me-dark` (like the editor).
+ * - `renderTokensStyle({ light, dark })` (`light` required, may be `{}`): the page also follows the OS,
+ *   `@media (prefers-color-scheme: dark)` switches to the default dark tokens plus `dark` (published pages without a
+ *   theme toggle). `{ dark }` alone is the overrides form above.
  */
-export function renderTokensStyle(overrides?: ThemeTokens): string {
-  const css = [baseTokensCss(), overridesCss(overrides)].filter(Boolean).join('\n').replace(/<\/style/gi, '<\\/style')
+export function renderTokensStyle(options?: ThemeTokens | RenderTokensOptions): string {
+  const extra = options && isSchemeOptions(options) ? schemeCss(options) : overridesCss(options as ThemeTokens | undefined)
+  const css = [baseTokensCss(), extra].filter(Boolean).join('\n').replace(/<\/style/gi, '<\\/style')
   return `<style id="mei-editor-tokens">${css}</style>`
 }

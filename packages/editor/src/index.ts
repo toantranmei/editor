@@ -7,6 +7,9 @@ export { MeiEditorPlugin, type MeiEditorPluginOptions } from './plugin'
 export { createExtensions, type MeiExtensionsOptions } from './extensions'
 export { MeiConfig, type ImageUploader, type MeiConfigStorage } from './config'
 export { BlockDrop } from './extensions/block-drop'
+export {
+  FileDrop, pendingUpload, runUpload, uploadsSettled, type FileDropStorage, type PendingUpload, type UploadError,
+} from './extensions/file-drop'
 export { Callout } from './extensions/callout'
 export { Column, Columns } from './extensions/columns'
 export { ImageBlock } from './extensions/image-block'
@@ -56,4 +59,6 @@ export { useClickOutside } from './composables/useClickOutside'
 export { useEditable } from './composables/useEditable'
 export { useScope } from './composables/useScope'
 
+// Types only: the runtime lives in `@toantranmei/editor/collaboration` (Yjs stays out of the main chunk).
+export type { MeiCollaboration, MeiPresence, PresenceUser } from './collaboration'
 export type { Editor, JSONContent } from '@tiptap/vue-3'

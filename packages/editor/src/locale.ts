@@ -40,6 +40,11 @@ export interface EditorMessages {
     caption: string
     uploading: string
     uploadFailed: string
+    /** Pasted / dropped image in a format browsers can't show (HEIC, TIFF…). */
+    badType: string
+    retry: string
+    /** An upload whose tab went away (still "uploading" after 2 minutes). */
+    uploadInterrupted: string
     align: string
     alignments: { left: string, center: string, right: string }
     captionToggle: string
@@ -121,6 +126,10 @@ export interface EditorMessages {
     invalidLink: string
     uploading: string
     download: string
+    retry: string
+    /** An upload whose tab went away (still "uploading" after 2 minutes). */
+    uploadInterrupted: string
+    delete: string
   }
   datePicker: {
     endDate: string
@@ -211,6 +220,9 @@ export const vi: EditorMessages = {
     caption: 'Thêm chú thích...',
     uploading: 'Đang tải lên...',
     uploadFailed: 'Tải ảnh lên thất bại.',
+    badType: 'Định dạng ảnh không được hỗ trợ.',
+    retry: 'Thử lại',
+    uploadInterrupted: 'Tải lên bị gián đoạn.',
     align: 'Căn lề',
     alignments: { left: 'Căn trái', center: 'Căn giữa', right: 'Căn phải' },
     captionToggle: 'Chú thích',
@@ -298,6 +310,9 @@ export const vi: EditorMessages = {
     invalidLink: 'Link không hợp lệ.',
     uploading: 'Đang tải lên...',
     download: 'Tải xuống',
+    retry: 'Thử lại',
+    uploadInterrupted: 'Tải lên bị gián đoạn.',
+    delete: 'Xoá',
   },
   datePicker: {
     endDate: 'Ngày kết thúc',
@@ -401,6 +416,9 @@ export const en: EditorMessages = {
     caption: 'Write a caption...',
     uploading: 'Uploading...',
     uploadFailed: 'Upload failed.',
+    badType: 'This image format is not supported.',
+    retry: 'Retry',
+    uploadInterrupted: 'Upload interrupted.',
     align: 'Align',
     alignments: { left: 'Align left', center: 'Align center', right: 'Align right' },
     captionToggle: 'Caption',
@@ -488,6 +506,9 @@ export const en: EditorMessages = {
     invalidLink: 'Invalid link.',
     uploading: 'Uploading...',
     download: 'Download',
+    retry: 'Retry',
+    uploadInterrupted: 'Upload interrupted.',
+    delete: 'Delete',
   },
   datePicker: {
     endDate: 'End date',
@@ -591,6 +612,9 @@ export const zh: EditorMessages = {
     caption: '添加说明...',
     uploading: '正在上传...',
     uploadFailed: '上传失败。',
+    badType: '不支持此图片格式。',
+    retry: '重试',
+    uploadInterrupted: '上传已中断。',
     align: '对齐',
     alignments: { left: '左对齐', center: '居中', right: '右对齐' },
     captionToggle: '说明',
@@ -678,6 +702,9 @@ export const zh: EditorMessages = {
     invalidLink: '链接无效。',
     uploading: '正在上传...',
     download: '下载',
+    retry: '重试',
+    uploadInterrupted: '上传已中断。',
+    delete: '删除',
   },
   datePicker: {
     endDate: '结束日期',

@@ -60,7 +60,8 @@ const props = withDefaults(defineProps<{
    * Edit a shared Yjs document (read once, at mount). The `Y.Doc` is the source of truth:
    * `modelValue` is ignored and `update:modelValue` is not emitted — listen to `change`
    * (cheap, no payload to serialize) and read the document yourself when needed.
-   * Undo / redo become Yjs undo (only your own changes).
+   * Undo / redo become Yjs undo (only your own changes). With `presence` (an awareness + `resolveUser`), remote
+   * carets and selections are drawn and the local caret is published (not while read-only).
    */
   collaboration?: MeiCollaboration
 }>(), {

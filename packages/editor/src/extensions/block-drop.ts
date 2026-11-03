@@ -50,6 +50,67 @@ const NESTABLE = ['bulletList', 'orderedList', 'taskList', 'details', 'callout']
 
 export const blockDropKey = new PluginKey('blockDrop')
 
+const rectOf = (view: EditorView, pos: number) => {
+  const dom = view.nodeDOM(pos)
+  return dom instanceof HTMLElement ? dom.getBoundingClientRect() : null
+}
+
+/** A block under (or nearest to) a point: its container, and whether the point is in the block's top half. */
+export interface BlockAtPoint {
+  container: PMNode
+  /** -1 for the doc. */
+  containerPos: number
+  block: { node: PMNode, pos: number, rect: DOMRect }
+  /** False when the point is below every block (`block` is then the last one). */
+  hit: boolean
+  before: boolean
+}
+
+/**
+ * Geometry-only lookup (`posAtCoords` fails over node views, gaps and the gutter): the container under the point
+ * (a column or the doc), then its child block at the point's height, or the last one.
+ */
+export function blockAtPoint(view: EditorView, x: number, y: number, containers: string[] = ['doc', 'column']): BlockAtPoint | null {
+  const { doc } = view.state
+  let container: PMNode = doc
+  let containerPos = -1
+  let start = 0
+  doc.descendants((node, pos) => {
+    if (containers.includes(node.type.name) && node.type.name !== 'doc') {
+      const r = rectOf(view, pos)
+      if (r && x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) {
+        container = node
+        containerPos = pos
+        start = pos + 1
+      }
+      return false
+    }
+    // Only walk into wrappers that hold containers (e.g. `columns`).
+    return node.type.name === 'columns'
+  })
+  type Hit = BlockAtPoint['block']
+  let hit = null as Hit | null
+  let last = null as Hit | null
+  container.forEach((child, offset) => {
+    if (hit) return
+    const pos = start + offset
+    const rect = rectOf(view, pos)
+    if (!rect) return
+    if (y < rect.bottom) hit = { node: child, pos, rect }
+    last = { node: child, pos, rect }
+  })
+  const block = hit ?? last
+  if (!block) return null
+  return { container, containerPos, block, hit: !!hit, before: !!hit && y < block.rect.top + block.rect.height / 2 }
+}
+
+/** Position between blocks nearest to a point (before / after the block at its height). */
+export function blockGapAtPoint(view: EditorView, x: number, y: number, containers?: string[]): number | null {
+  const at = blockAtPoint(view, x, y, containers)
+  if (!at) return null
+  return at.before ? at.block.pos : at.block.pos + at.block.node.nodeSize
+}
+
 /**
  * Notion-style drop for blocks dragged from the drag handle:
  * - between blocks (top level or in a column), never inside a list item by accident;
@@ -96,11 +157,6 @@ export const BlockDrop = Extension.create<BlockDropOptions, BlockDropStorage>({
       })
     }
 
-    const rectOf = (view: EditorView, pos: number) => {
-      const dom = view.nodeDOM(pos)
-      return dom instanceof HTMLElement ? dom.getBoundingClientRect() : null
-    }
-
     /** True if the dragged slice contains columns (no columns inside columns). */
     const draggingColumns = (view: EditorView) => {
       let found = false
@@ -119,38 +175,9 @@ export const BlockDrop = Extension.create<BlockDropOptions, BlockDropStorage>({
     let dragStartX: number | null = null
     const findDropTarget = (view: EditorView, x: number, y: number): DropTarget | null => {
       const { doc, selection } = view.state
-      let container: PMNode = doc
-      let containerPos = -1
-      let start = 0
-
-      doc.descendants((node, pos) => {
-        if (containers.includes(node.type.name) && node.type.name !== 'doc') {
-          const r = rectOf(view, pos)
-          if (r && x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) {
-            container = node
-            containerPos = pos
-            start = pos + 1
-          }
-          return false
-        }
-        // Only walk into wrappers that hold containers (e.g. `columns`).
-        return node.type.name === 'columns'
-      })
-
-      // Child block at the pointer's height (or the last one).
-      type Hit = { node: PMNode, pos: number, rect: DOMRect }
-      let hit = null as Hit | null
-      let last = null as Hit | null
-      container.forEach((child, offset) => {
-        if (hit) return
-        const pos = start + offset
-        const rect = rectOf(view, pos)
-        if (!rect) return
-        if (y < rect.bottom) hit = { node: child, pos, rect }
-        last = { node: child, pos, rect }
-      })
-      const block = hit ?? last
-      if (!block) return null
+      const at = blockAtPoint(view, x, y, containers)
+      if (!at) return null
+      const { container, containerPos, block } = at
       const { rect } = block
       const isSelf = block.pos >= selection.from && block.pos < selection.to
 
@@ -182,7 +209,7 @@ export const BlockDrop = Extension.create<BlockDropOptions, BlockDropStorage>({
         }
       }
 
-      const before = !!hit && y < rect.top + rect.height / 2
+      const { before } = at
       // Indented drop below a list/toggle/callout → nest at its end.
       if (!before && !isSelf && NESTABLE.includes(block.node.type.name) && x > rect.left + NEST_INDENT && !draggingColumns(view)) {
         const end = block.pos + block.node.nodeSize

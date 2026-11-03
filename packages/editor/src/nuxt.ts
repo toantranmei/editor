@@ -26,6 +26,7 @@ export const RUNTIME_DEPS = [
   '@tiptap/pm/model',
   '@tiptap/pm/state',
   '@tiptap/pm/tables',
+  '@tiptap/pm/transform',
   '@tiptap/pm/view',
   '@tiptap/starter-kit',
   '@tiptap/suggestion',

@@ -4,8 +4,11 @@ import type { BlockType } from './block-items'
 import type { FormatAction } from './define-block'
 import { type EditorMessages, type LocaleName, vi } from './locale'
 
-/** Uploads an image file and resolves to its public URL. */
-export type ImageUploader = (file: File) => Promise<string>
+/**
+ * Uploads an image file and resolves to its public URL. `onProgress` (0..1) is optional to call:
+ * the image block shows it while the upload runs.
+ */
+export type ImageUploader = (file: File, onProgress?: (fraction: number) => void) => Promise<string>
 
 export interface MeiConfigStorage {
   messages: EditorMessages

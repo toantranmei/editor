@@ -1,12 +1,16 @@
 import { mergeAttributes, Node } from '@tiptap/core'
 import { blockNodeView } from '../nodeviews/renderer'
 import FileView from '../nodeviews/FileView.vue'
+import { uploadAttributes } from './upload-attrs'
 
 export type FileKind = 'file' | 'audio' | 'video'
 
 export interface FileBlockOptions {
-  /** Uploads a file and resolves to its URL. Without it files are inlined as base64. */
-  upload: ((file: File, kind: FileKind) => Promise<string>) | null
+  /**
+   * Uploads a file and resolves to its URL. Without it files are inlined as base64.
+   * `onProgress` (0..1) is optional to call: the block shows it while the upload runs.
+   */
+  upload: ((file: File, kind: FileKind, onProgress?: (fraction: number) => void) => Promise<string>) | null
   /** Max size in MB. */
   maxSize: number
 }
@@ -32,7 +36,10 @@ export const FileBlock = Node.create<FileBlockOptions>({
       parseHTML: (el: HTMLElement) => el.getAttribute(`data-${name}`) ?? fallback,
       renderHTML: (attrs: Record<string, any>) => (attrs[name] == null ? {} : { [`data-${name}`]: attrs[name] }),
     })
-    return { src: attr('src'), name: attr('name'), size: attr('size'), mime: attr('mime'), kind: attr('kind', 'file') }
+    return {
+      src: attr('src'), name: attr('name'), size: attr('size'), mime: attr('mime'), kind: attr('kind', 'file'),
+      ...uploadAttributes(),
+    }
   },
 
   parseHTML: () => [{ tag: 'div[data-type="file"]' }],

@@ -5,6 +5,7 @@ import { collectExtensions, type BlockDefinition } from '../define-block'
 import { BlockDrop } from './block-drop'
 import { BlockId } from './block-id'
 import { BlockSelection } from './block-selection'
+import { FileDrop } from './file-drop'
 import { MarkdownPaste } from './markdown-paste'
 import { Placeholder } from './placeholder'
 import { BgColor, BlockColor, TextColor } from './color-marks'
@@ -23,7 +24,7 @@ export interface MeiExtensionsOptions extends Partial<MeiConfigStorage> {
 
 /**
  * Editor core (always loaded) + the extensions of the given blocks.
- * Core: paragraphs, text marks, links, history, colors, slash menu, drag & drop,
+ * Core: paragraphs, text marks, links, history, colors, slash menu, drag & drop, file paste / drop,
  * block selection, block ids and the unknown-block fallback.
  */
 export function createExtensions({ blocks, undoRedo = true, ...config }: MeiExtensionsOptions): AnyExtension[] {
@@ -55,6 +56,8 @@ export function createExtensions({ blocks, undoRedo = true, ...config }: MeiExte
     BgColor,
     BlockColor,
     SlashCommand,
+    // Pasted / dropped files become image and file blocks (before markdownPaste).
+    FileDrop,
     MarkdownPaste,
     BlockDrop,
     BlockSelection,

@@ -43,9 +43,38 @@ export function baseTokensCss(): string {
   ].join('\n')
 }
 
+// A value or name that could leave its declaration (or the <style>) is dropped: braces, `;`, `<>`, comments
+// (`/*` could swallow the next rules) and backslash escapes (`\7d` is a `}`).
+const UNSAFE_CSS = /[{};<>\\]|\/\*|\*\//
+
+/** True when a quote is never closed (it would run a string over the closing brace). `"it's"` is balanced. */
+function unbalancedQuotes(v: string): boolean {
+  let open = ''
+  for (const ch of v) {
+    if (open) {
+      if (ch === open) open = ''
+    }
+    else if (ch === '"' || ch === "'") open = ch
+  }
+  return open !== ''
+}
+
+export const unsafeCss = (v: string) => UNSAFE_CSS.test(v) || unbalancedQuotes(v)
+
+const isDev = () => typeof process !== 'undefined' && process.env?.NODE_ENV !== 'production'
+
+/** Keeps the safe `[name, value]` pairs; warns in development about each dropped one. */
+export function safePairs(pairs: [string, string][]): [string, string][] {
+  return pairs.filter(([k, v]) => {
+    const ok = !unsafeCss(k) && !unsafeCss(v)
+    if (!ok && isDev()) console.warn(`[mei-editor] token "${k}" dropped: its name or value is not safe in CSS ({ } ; < > \\ comments, unclosed quotes)`)
+    return ok
+  })
+}
+
 function overridePairs(tokens: Omit<ThemeTokens, 'dark'>): [string, string][] {
   const { components, ...semantic } = tokens
-  return [...flatten(semantic as TokenTree), ...flatten((components ?? {}) as TokenTree)]
+  return safePairs([...flatten(semantic as TokenTree), ...flatten((components ?? {}) as TokenTree)])
 }
 
 /**

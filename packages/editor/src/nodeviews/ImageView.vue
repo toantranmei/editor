@@ -11,6 +11,8 @@ import { useClickOutside } from '../composables/useClickOutside'
 import { useEditable } from '../composables/useEditable'
 import { useScope } from '../composables/useScope'
 import { isSameOrigin, isWebUrl, safeUrl } from '../safe-url'
+import { runUpload, type UploadError } from '../extensions/file-drop'
+import { useUploadState } from '../composables/useUploadState'
 
 const props = defineProps(nodeViewProps)
 const editable = useEditable(props.editor)
@@ -24,6 +26,17 @@ const uploading = ref(false)
 const fileInput = ref<HTMLInputElement | null>(null)
 const figure = ref<HTMLElement | null>(null)
 const scope = useScope(() => props.editor)
+
+// --- Pasted / dropped image (FileDrop): local preview, progress, error + retry ----------
+// `local`: this tab owns the file; `remote`: another tab uploads it; `interrupted`: stale (> 2 min, nobody here).
+const { pending, state: uploadState } = useUploadState(props.editor, () => props.node)
+const uploadError = computed(() => props.node.attrs.error as UploadError | null)
+const isPending = computed(() => !props.node.attrs.src && (!!props.node.attrs.uploading || !!uploadError.value))
+const progress = computed(() => `${Math.round((pending.value?.progress ?? 0) * 100)}%`)
+const uploadErrorText = computed(() => {
+  const e = uploadError.value
+  return e === 'tooLarge' ? m.value.tooLarge(config.value.maxImageSize) : e === 'badType' ? m.value.badType : m.value.uploadFailed
+})
 
 const readAsDataUrl = (file: File) => new Promise<string>((resolve, reject) => {
   const reader = new FileReader()
@@ -190,8 +203,37 @@ const cropStyle = computed(() => {
 </script>
 
 <template>
-  <NodeViewWrapper class="me-media" :class="{ 'is-readonly-empty': !editable && !node.attrs.src }">
-    <div v-if="!node.attrs.src" class="me-media-empty" contenteditable="false" @dragover.prevent @drop="onDrop">
+  <NodeViewWrapper class="me-media" :class="{ 'is-readonly-empty': !editable && !node.attrs.src && !isPending }">
+    <div v-if="isPending" class="me-media-pending" :class="{ 'is-failed': !!uploadError || uploadState === 'interrupted' }" contenteditable="false">
+      <img v-if="pending?.preview" :src="pending.preview" :alt="node.attrs.alt || ''" class="me-media-preview" draggable="false">
+      <div class="me-media-status" role="status">
+        <template v-if="uploadState === 'interrupted'">
+          <!-- Its tab went away mid-upload: any editor can remove it. -->
+          <span class="me-error me-media-status-error">{{ m.uploadInterrupted }}</span>
+          <button v-if="editable" type="button" class="me-btn" @click="deleteNode()">
+            <Trash /> {{ m.delete }}
+          </button>
+        </template>
+        <template v-else-if="!uploadError">
+          <span>{{ m.uploading }}</span>
+          <!-- Progress and Delete only in the tab that owns the file; others just see it uploading. -->
+          <span v-if="pending" class="me-media-progress"><span class="me-media-progress-bar" :style="{ width: progress }" /></span>
+          <button v-if="editable && pending" type="button" class="me-btn" @click="deleteNode()">
+            <Trash /> {{ m.delete }}
+          </button>
+        </template>
+        <template v-else>
+          <span class="me-error me-media-status-error">{{ uploadErrorText }}</span>
+          <button v-if="editable && pending && uploadError === 'failed'" type="button" class="me-btn" @click="runUpload(editor, node.attrs.uploadId)">
+            <RefreshCw /> {{ m.retry }}
+          </button>
+          <button v-if="editable" type="button" class="me-btn" @click="deleteNode()">
+            <Trash /> {{ m.delete }}
+          </button>
+        </template>
+      </div>
+    </div>
+    <div v-else-if="!node.attrs.src" class="me-media-empty" contenteditable="false" @dragover.prevent @drop="onDrop">
       <div class="me-tabs">
         <button
           v-for="t in (['upload', 'link'] as const)"
