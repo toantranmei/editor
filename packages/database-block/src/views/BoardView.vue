@@ -153,6 +153,7 @@ const loadMore = (key: string | null | undefined) => (limits.value = { ...limits
           type="button"
           class="me-db-card"
           :class="{ 'is-drop-before': over?.seg === i && over.before === row.id, 'is-dragging': dragging?.id === row.id }"
+          :data-cc="db.colors(row).row"
           :draggable="db.canEditContent.value"
           :data-row-id="row.id"
           @dragstart="onDragStart($event, row, i)"

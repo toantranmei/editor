@@ -205,7 +205,7 @@ const rendered = computed(() => {
   return vRows.value.map((v) => {
     const item = s?.itemAt(v.index)
     const row = item?.kind === 'row' ? s!.rowAt(item.seg, item.index) : undefined
-    return { v, item, row, top: v.start - sizes.value.header }
+    return { v, item, row, top: v.start - sizes.value.header, cc: row ? db.colors(row) : undefined }
   })
 })
 watch(rendered, (list) => {
@@ -779,6 +779,7 @@ defineExpose({ sel, checked, startEdit, pasteMatrix, store, rowVirtualizer, colV
               'is-dragging': !!r.row && drag?.id === r.row.id,
             }"
             role="row"
+            :data-cc="r.cc?.row"
             :data-row="r.v.index"
             :data-index="r.v.index"
             :aria-rowindex="r.v.index + 1"
@@ -830,6 +831,7 @@ defineExpose({ sel, checked, startEdit, pasteMatrix, store, rowVirtualizer, colV
                     class="me-db-td"
                     role="gridcell"
                     :data-col="sl.col"
+                    :data-cc="cols[sl.col] ? r.cc?.cells[cols[sl.col]!.id] : undefined"
                     :class="{
                       'is-first': sl.col === 0,
                       'is-frozen': sl.left !== undefined,

@@ -6,6 +6,7 @@ import {
 import { createMemorySource, sampleDatabase } from '../src/memory-source'
 import { RowStore } from '../src/row-store'
 import { duplicateRows, positionAfter, uuidv7 } from '../src/util'
+import { colorsOf } from '../src/colors'
 
 const p = (type: Prop['type'], config?: Prop['config'], id = type): Prop => ({ id, name: id, type, position: 'a0', config })
 const flush = () => new Promise(r => setTimeout(r, 0))
@@ -47,6 +48,18 @@ describe('filter operators (contract 1.3)', () => {
       { id: 'r2', position: 'b', values: { title: 'B', number: null } },
     ])
     expect(calls).toEqual([{ values: { title: 'B' }, after: 'r2' }, { values: { title: 'A', number: 2 }, after: 'r1' }])
+  })
+
+  it('colors rows and cells by the first matching rule', () => {
+    const props = [p('number'), p('select', { options: [{ id: 'hi', name: 'High', color: 'red' }] })]
+    const rules = [
+      { id: 'a', condition: { prop: 'select', op: 'is' as const, value: 'hi' }, color: 'red' as const },
+      { id: 'b', condition: { prop: 'number', op: '>' as const, value: 5 }, color: 'green' as const },
+      { id: 'c', condition: { prop: 'number', op: '>' as const, value: 1 }, color: 'blue' as const, scope: 'prop' as const },
+    ]
+    expect(colorsOf(rules, props, { id: 'r', position: 'a', values: { select: 'hi', number: 9 } })).toEqual({ row: 'red', cells: { number: 'blue' } })
+    expect(colorsOf(rules, props, { id: 'r', position: 'a', values: { number: 9 } })).toEqual({ row: 'green', cells: { number: 'blue' } })
+    expect(colorsOf(rules, props, { id: 'r', position: 'a', values: { number: 0 } })).toEqual({ cells: {} })
   })
 
   it('normalizes away empty groups', () => {

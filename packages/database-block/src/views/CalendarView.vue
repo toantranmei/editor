@@ -155,6 +155,7 @@ function addOn(day: string, e?: MouseEvent) {
             :key="r.id"
             type="button"
             class="me-db-event"
+            :data-cc="db.colors(r).row"
             :draggable="canMove"
             :data-row-id="r.id"
             @dragstart="dragging = { id: r.id, from: d.id }"

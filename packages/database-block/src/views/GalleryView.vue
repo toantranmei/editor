@@ -97,7 +97,7 @@ function newCard(e: MouseEvent) {
           <button v-if="row === 'add'" type="button" class="me-db-card is-new" :style="{ height: `${cardH}px` }" data-new-card @click="newCard($event)">
             <Plus />{{ m.newRow }}
           </button>
-          <button v-else-if="row" type="button" class="me-db-card" :data-row-id="row.id" :style="{ height: `${cardH}px` }" @click="db.openRow(row.id, $event)">
+          <button v-else-if="row" type="button" class="me-db-card" :data-row-id="row.id" :data-cc="db.colors(row).row" :style="{ height: `${cardH}px` }" @click="db.openRow(row.id, $event)">
             <span v-if="coverProp" class="me-db-cover">
               <img v-if="coverUrl(row)" :src="coverUrl(row)!" alt="" loading="lazy" decoding="async" class="me-db-cover-img">
               <ImageIcon v-else class="me-db-cover-empty" />

@@ -396,6 +396,21 @@
   .me-db-prop-row .me-db-row-handle { opacity: 1; }
   .me-db-prop-row .me-db-row-handle.is-placeholder { visibility: hidden; }
   .me-db-prop-row.is-over { box-shadow: 0 calc(-1 * var(--me-border-width-medium)) 0 var(--me-color-accent); }
+  /* Conditional colors (data-cc on a row, card or cell). */
+  [data-cc="gray"] { --me-db-cc-bg: var(--me-palette-gray-bg); }
+  [data-cc="brown"] { --me-db-cc-bg: var(--me-palette-brown-bg); }
+  [data-cc="orange"] { --me-db-cc-bg: var(--me-palette-orange-bg); }
+  [data-cc="yellow"] { --me-db-cc-bg: var(--me-palette-yellow-bg); }
+  [data-cc="green"] { --me-db-cc-bg: var(--me-palette-green-bg); }
+  [data-cc="blue"] { --me-db-cc-bg: var(--me-palette-blue-bg); }
+  [data-cc="purple"] { --me-db-cc-bg: var(--me-palette-purple-bg); }
+  [data-cc="pink"] { --me-db-cc-bg: var(--me-palette-pink-bg); }
+  [data-cc="red"] { --me-db-cc-bg: var(--me-palette-red-bg); }
+  .me-db-tr[data-cc] > .me-db-td, .me-db-td[data-cc], .me-db-card[data-cc], .me-db-list-row[data-cc], .me-db-event[data-cc] { background-color: var(--me-db-cc-bg); }
+  .me-db-details > summary { display: flex; align-items: center; gap: var(--me-space-2); cursor: pointer; }
+  .me-db-color-rules { display: flex; flex-direction: column; gap: var(--me-space-3); padding-top: var(--me-space-2); }
+  .me-db-color-rule { display: flex; flex-direction: column; gap: var(--me-space-2); padding: var(--me-space-3); border: var(--me-border-width-thin) solid var(--me-database-border); border-radius: var(--me-radius-md); background: var(--me-db-cc-bg, transparent); }
+  .me-db-color-rule .me-db-row > .me-menu-label { flex: none; min-width: var(--me-database-cell-min-width); }
   .me-db-kbd { color: var(--me-color-text-muted); font: inherit; font-size: var(--me-font-size-xs); }
   .me-db-open {
     position: absolute;

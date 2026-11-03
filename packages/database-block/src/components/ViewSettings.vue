@@ -9,6 +9,7 @@ import { computed, ref } from 'vue'
 import { useDb } from '../context'
 import type { ChartKind, OpenMode, Prop, ValueFn, ViewConfig, ViewType } from '../types'
 import { groupableTypes, switchLayout, visibleIds } from '../util'
+import ColorRules from './ColorRules.vue'
 import OpenModeIcon from './OpenModeIcon.vue'
 import PropIcon from './PropIcon.vue'
 
@@ -312,6 +313,10 @@ const value = (e: Event) => (e.target as HTMLSelectElement).value
         </label>
       </template>
 
+      <details v-if="['table', 'board', 'gallery', 'list', 'calendar'].includes(view?.type ?? '')" class="me-db-details" data-setting="colors" :open="!!c.colors?.length">
+        <summary class="me-menu-label">{{ m.conditionalColor }}<span v-if="c.colors?.length" class="me-db-menu-value">{{ c.colors.length }}</span></summary>
+        <ColorRules />
+      </details>
       <template v-if="opensRows">
         <div class="me-db-separator" role="separator" />
         <div class="me-menu-label">{{ m.openPagesIn }}</div>

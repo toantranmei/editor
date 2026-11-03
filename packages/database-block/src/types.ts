@@ -95,6 +95,9 @@ export interface FilterCondition { prop: string, op: FilterOp, value?: unknown }
 export type FilterGroup = { and: FilterNode[] } | { or: FilterNode[] }
 export type FilterNode = FilterCondition | FilterGroup
 
+/** A conditional color rule (`config.colors`): rows (or one cell) matching `condition` get `color`. */
+export interface ColorRule { id: string, condition: FilterCondition, color: OptionColor, scope?: 'row' | 'prop' }
+
 export interface Sort { prop: string, dir: 'asc' | 'desc' }
 export interface GroupBy { prop: string, hide_empty?: boolean, order?: string[] }
 
@@ -122,6 +125,8 @@ export interface ViewConfig {
   wraps?: Record<string, boolean>
   /** Table: number of leading columns kept in view while scrolling sideways. Default 1 (the title). */
   freeze?: number
+  /** Conditional colors, first match wins (row / card, or per cell with scope `prop`). */
+  colors?: ColorRule[]
   /** Table: draw the lines between columns (default true). */
   vertical_lines?: boolean
   /** How rows open from this view. Default `side_peek`. */

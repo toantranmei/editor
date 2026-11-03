@@ -75,7 +75,7 @@ function newRow(e: MouseEvent) {
           <span class="me-db-group-count">{{ segment(it.item.seg)?.count }}</span>
         </template>
         <template v-else-if="it.row">
-          <button type="button" class="me-db-list-open" :data-row-id="it.row.id" @click="db.openRow(it.row.id, $event)">
+          <button type="button" class="me-db-list-open me-db-list-row" :data-row-id="it.row.id" :data-cc="db.colors(it.row).row" @click="db.openRow(it.row.id, $event)">
             <FileText class="me-db-menu-icon" />
             <span class="me-db-list-title">{{ title ? String(cellValue(it.row, title) ?? '') || m.untitled : m.untitled }}</span>
           </button>

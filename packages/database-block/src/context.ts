@@ -1,6 +1,7 @@
 import { computed, type ComputedRef, inject, type InjectionKey, reactive, type Ref, shallowReactive } from 'vue'
 import type { DatabaseMessages } from './messages'
-import type { DatabaseBlockOptions, DatabaseSource, OpenMode, Prop, RowQuery, View, ViewConfig } from './types'
+import type { DatabaseBlockOptions, DatabaseSource, OpenMode, Prop, Row, RowQuery, View, ViewConfig } from './types'
+import { colorsOf, type RowColors } from './colors'
 import { normalizeFilter } from './filters'
 import type { ValueContext } from './values'
 import { byPosition, visibleProps } from './util'
@@ -40,6 +41,8 @@ export interface DbContext {
   updateView: (patch: Partial<ViewConfig> | ((config: ViewConfig) => ViewConfig)) => void
   /** `source.createRow` plus the properties' defaults (`config.default_option_id`) for values not given. */
   createRow: (init?: { values?: Record<string, unknown>, after?: string | null }) => string
+  /** Conditional colors of a row in the current view (`config.colors`). */
+  colors: (row: Row) => RowColors
   report: (error: unknown) => void
 }
 
@@ -143,6 +146,7 @@ export function createContext(input: {
       }
       return source.createRow(Object.keys(values).length || init.values ? { ...init, values } : init)
     },
+    colors: row => colorsOf(view.value?.config.colors, props.value, row),
     report,
   }
   return ctx

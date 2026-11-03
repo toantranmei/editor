@@ -165,6 +165,16 @@ export interface DatabaseMessages {
   insertRight: string
   duplicateProperty: string
   clearSelection: string
+  conditionalColor: string
+  conditionalColorHint: string
+  addColorRule: string
+  deleteColorRule: string
+  background: string
+  applyTo: string
+  entireRow: string
+  thisProperty: string
+  property: string
+  operator: string
   searchProperty: string
   shownProps: string
   hiddenProps: string
@@ -400,6 +410,16 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     insertRight: 'Insert right',
     duplicateProperty: 'Duplicate property',
     clearSelection: 'Clear selection',
+    conditionalColor: 'Conditional color',
+    conditionalColorHint: 'Color rows or cells that match a condition, e.g. overdue tasks in red.',
+    addColorRule: 'New color rule',
+    deleteColorRule: 'Delete rule',
+    background: 'Background',
+    applyTo: 'Apply to',
+    entireRow: 'Entire row',
+    thisProperty: 'This property',
+    property: 'Property',
+    operator: 'Operator',
     searchProperty: 'Search for a property…',
     shownProps: 'Shown',
     hiddenProps: 'Hidden',
@@ -631,6 +651,16 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     insertRight: 'Chèn bên phải',
     duplicateProperty: 'Nhân bản thuộc tính',
     clearSelection: 'Bỏ chọn',
+    conditionalColor: 'Màu theo điều kiện',
+    conditionalColorHint: 'Tô màu row hoặc ô khớp điều kiện, ví dụ việc quá hạn tô đỏ.',
+    addColorRule: 'Thêm quy tắc màu',
+    deleteColorRule: 'Xoá quy tắc',
+    background: 'Màu nền',
+    applyTo: 'Áp dụng cho',
+    entireRow: 'Cả row',
+    thisProperty: 'Chỉ ô thuộc tính này',
+    property: 'Thuộc tính',
+    operator: 'Toán tử',
     searchProperty: 'Tìm thuộc tính…',
     shownProps: 'Đang hiện',
     hiddenProps: 'Đang ẩn',
@@ -862,6 +892,16 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     insertRight: '在右侧插入',
     duplicateProperty: '复制属性',
     clearSelection: '取消选择',
+    conditionalColor: '条件颜色',
+    conditionalColorHint: '为符合条件的行或单元格着色，例如将逾期任务标为红色。',
+    addColorRule: '新建颜色规则',
+    deleteColorRule: '删除规则',
+    background: '背景',
+    applyTo: '应用于',
+    entireRow: '整行',
+    thisProperty: '仅此属性',
+    property: '属性',
+    operator: '运算符',
     searchProperty: '搜索属性…',
     shownProps: '已显示',
     hiddenProps: '已隐藏',
