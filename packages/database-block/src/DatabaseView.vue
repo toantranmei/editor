@@ -6,6 +6,7 @@
 import { Maximize2 } from '@lucide/vue'
 import { baseTokensCss, type LocaleName } from '@toantranmei/editor'
 import { computed, onBeforeUnmount, provide, ref, watch } from 'vue'
+import FilterBar from './components/FilterBar.vue'
 import Toolbar from './components/Toolbar.vue'
 import ViewTabs from './components/ViewTabs.vue'
 import { createContext, DB_KEY } from './context'
@@ -144,6 +145,7 @@ defineExpose({ db, view: viewRef })
       <ViewTabs @select="select" />
       <Toolbar @new-row="newRow" />
     </div>
+    <FilterBar />
     <component :is="VIEWS[type]" v-if="db.view.value" ref="viewRef" :key="db.view.value.id" :full="full" />
     <div v-else class="me-db-empty is-loading">{{ m.loading }}</div>
   </div>

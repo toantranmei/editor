@@ -165,6 +165,9 @@ export interface DatabaseMessages {
   insertRight: string
   duplicateProperty: string
   clearSelection: string
+  rules: string
+  reset: string
+  saveForEveryone: string
   locked: string
   lockedHint: string
   lockDatabase: string
@@ -417,6 +420,9 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     insertRight: 'Insert right',
     duplicateProperty: 'Duplicate property',
     clearSelection: 'Clear selection',
+    rules: 'rules',
+    reset: 'Reset',
+    saveForEveryone: 'Save for everyone',
     locked: 'Locked',
     lockedHint: 'Properties, views and layout are locked. Data can still be edited.',
     lockDatabase: 'Lock database',
@@ -665,6 +671,9 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     insertRight: 'Chèn bên phải',
     duplicateProperty: 'Nhân bản thuộc tính',
     clearSelection: 'Bỏ chọn',
+    rules: 'quy tắc',
+    reset: 'Đặt lại',
+    saveForEveryone: 'Lưu cho mọi người',
     locked: 'Đã khoá',
     lockedHint: 'Thuộc tính, view và bố cục đã bị khoá. Dữ liệu vẫn sửa được.',
     lockDatabase: 'Khoá database',
@@ -913,6 +922,9 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     insertRight: '在右侧插入',
     duplicateProperty: '复制属性',
     clearSelection: '取消选择',
+    rules: '条规则',
+    reset: '重置',
+    saveForEveryone: '为所有人保存',
     locked: '已锁定',
     lockedHint: '属性、视图和布局已锁定，数据仍可编辑。',
     lockDatabase: '锁定数据库',

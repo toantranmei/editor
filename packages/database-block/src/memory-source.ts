@@ -383,7 +383,9 @@ export function createMemorySource(init: MemorySourceInit): MemorySource {
   let cacheVersion = -1
   function query(viewId: string, q?: RowQuery, override?: Partial<ViewConfig>): MemoryRow[] {
     const view = viewOf(viewId)
-    const config = { ...view?.config, ...override }
+    const config: ViewConfig = { ...view?.config, ...override }
+    if (q && 'filter' in q) config.filter = q.filter ?? undefined
+    if (q?.sorts) config.sorts = q.sorts
     const key = JSON.stringify([viewId, config.filter, config.sorts, q?.search ?? '', props.value.length])
     if (cacheVersion !== version.value) {
       cache = new Map()

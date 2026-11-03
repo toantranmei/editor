@@ -40,6 +40,10 @@ watch(() => db.ui.openFilter, () => {
   const el = buttons.value.filter
   if (el) open.value = { panel: 'filter', anchor: el }
 })
+watch(() => db.ui.openSort, () => {
+  const el = buttons.value.sort
+  if (el) open.value = { panel: 'sort', anchor: el }
+})
 function openSearch() {
   searching.value = true
   requestAnimationFrame?.(() => searchInput.value?.focus())
@@ -74,7 +78,7 @@ const panelLabel = computed(() => {
     >
       <ListFilter /><span v-if="filters" class="me-db-tool-label">{{ m.filter }}</span><span v-if="filters" class="me-db-badge">{{ filters }}</span>
     </button>
-    <button type="button" class="me-db-tool" :class="{ 'is-on': sorts > 0 }" data-tool="sort" :aria-label="m.sort" :title="m.sort" :aria-expanded="open?.panel === 'sort'" @click="toggle('sort', $event)">
+    <button :ref="el => (buttons.sort = el as HTMLElement)" type="button" class="me-db-tool" :class="{ 'is-on': sorts > 0 }" data-tool="sort" :aria-label="m.sort" :title="m.sort" :aria-expanded="open?.panel === 'sort'" @click="toggle('sort', $event)">
       <ArrowUpDown /><span v-if="sorts" class="me-db-tool-label">{{ m.sort }}</span><span v-if="sorts" class="me-db-badge">{{ sorts }}</span>
     </button>
     <button v-if="hasGroup" type="button" class="me-db-tool" :class="{ 'is-on': !!db.view.value?.config.group_by }" data-tool="group" :aria-label="m.group" :title="m.group" :aria-expanded="open?.panel === 'group'" @click="toggle('group', $event)">

@@ -93,6 +93,11 @@ describe('filter builder', () => {
     // A group with an "or" inside.
     popover().querySelector<HTMLButtonElement>('[data-add-group]')!.click()
     await settle()
+    // Filter changes are the viewer's draft (filter bar: Reset / Save for everyone) until saved.
+    expect(source.views.value.find(v => v.id === 'v-table')!.config.filter).toBeUndefined()
+    expect(wrapper.find('[data-filterbar] [data-draft-save]').exists()).toBe(true)
+    await wrapper.find('[data-draft-save]').trigger('click')
+    await settle()
     const view = source.views.value.find(v => v.id === 'v-table')!
     expect(view.config.filter).toEqual({
       and: [
@@ -104,6 +109,8 @@ describe('filter builder', () => {
     const join = popover().querySelector<HTMLSelectElement>('.me-db-builder-row[data-index="1"] .me-db-builder-join select')!
     join.value = 'or'
     join.dispatchEvent(new Event('change'))
+    await settle()
+    await wrapper.find('[data-draft-save]').trigger('click')
     await settle()
     expect(Object.keys(source.views.value.find(v => v.id === 'v-table')!.config.filter!)).toEqual(['or'])
     // The table re-queried with the new filter (badge shows 2 conditions).

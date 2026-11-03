@@ -1,6 +1,6 @@
-import { computed, type ComputedRef, inject, type InjectionKey, reactive, type Ref, shallowReactive } from 'vue'
+import { computed, type ComputedRef, inject, type InjectionKey, reactive, type Ref, ref, shallowReactive, watch } from 'vue'
 import type { DatabaseMessages } from './messages'
-import type { DatabaseBlockOptions, DatabaseSource, OpenMode, Prop, Row, RowQuery, View, ViewConfig } from './types'
+import type { DatabaseBlockOptions, DatabaseSource, FilterGroup, OpenMode, Prop, Row, RowQuery, Sort, View, ViewConfig } from './types'
 import { colorsOf, type RowColors } from './colors'
 import { normalizeFilter } from './filters'
 import type { ValueContext } from './values'
@@ -34,7 +34,7 @@ export interface DbContext {
   /** Adds people / rows (from `people()` / `searchRows()` results) to the name caches. */
   remember: (people: Array<{ id: string, name: string, avatar?: string }>, rows?: Array<{ id: string, title: string }>) => void
   /** Cross-component UI requests (e.g. a header menu asking the toolbar to open the filter builder). */
-  ui: { openFilter: number }
+  ui: { openFilter: number, openSort: number }
   /** "Open pages in" of the current view (default `side_peek`). */
   openMode: ComputedRef<OpenMode>
   /**
@@ -45,6 +45,13 @@ export interface DbContext {
   updateView: (patch: Partial<ViewConfig> | ((config: ViewConfig) => ViewConfig)) => void
   /** `source.createRow` plus the properties' defaults (`config.default_option_id`) for values not given. */
   createRow: (init?: { values?: Record<string, unknown>, after?: string | null }) => string
+  /**
+   * The viewer's unsaved filter / sorts of the current view (Notion's "Reset / Save for everyone"). `view` already
+   * shows them; `saveDraft` writes them into the view, `resetDraft` drops them.
+   */
+  draft: ComputedRef<{ filter?: FilterGroup | null, sorts?: Sort[] } | null>
+  saveDraft: () => void
+  resetDraft: () => void
   /** Conditional colors of a row in the current view (`config.colors`). */
   colors: (row: Row) => RowColors
   report: (error: unknown) => void
@@ -75,7 +82,35 @@ export function createContext(input: {
   const names = { people: new Map<string, string>(), avatars: new Map<string, string>(), rows: new Map<string, string>() }
   const namesVersion = shallowReactive({ n: 0 })
   const views = computed(() => [...source.views.value].sort(byPosition))
-  const view = computed(() => views.value.find(v => v.id === input.viewId()) ?? views.value[0])
+  const saved = computed(() => views.value.find(v => v.id === input.viewId()) ?? views.value[0])
+  // Unsaved filter / sorts per view id (this viewer, this session).
+  const drafts = ref<Record<string, { filter?: FilterGroup | null, sorts?: Sort[] }>>({})
+  const draft = computed(() => (saved.value ? drafts.value[saved.value.id] ?? null : null))
+  /** The saved view with the viewer's draft on top: what every component reads. */
+  const view = computed<View | undefined>(() => {
+    const v = saved.value
+    const d = v && drafts.value[v.id]
+    if (!v || !d) return v
+    const config: ViewConfig = { ...v.config }
+    if ('filter' in d) {
+      if (d.filter) config.filter = d.filter
+      else delete config.filter
+    }
+    if (d.sorts) config.sorts = d.sorts
+    return { ...v, config }
+  })
+  // A draft equal to the saved config is no draft.
+  watch([drafts, saved], () => {
+    const v = saved.value
+    const d = v && drafts.value[v.id]
+    if (!v || !d) return
+    const same = (!('filter' in d) || JSON.stringify(d.filter ?? undefined) === JSON.stringify(v.config.filter))
+      && (!d.sorts || JSON.stringify(d.sorts) === JSON.stringify(v.config.sorts ?? []))
+    if (same) {
+      const { [v.id]: _, ...rest } = drafts.value
+      drafts.value = rest
+    }
+  }, { deep: true })
   const props = computed(() => [...source.props.value].sort(byPosition))
   const report = (error: unknown) => (input.options.onError ? input.options.onError(error) : console.error('[database-block]', error))
   const locale = computed(() => input.locale())
@@ -107,7 +142,13 @@ export function createContext(input: {
     locked: computed(() => !!source.meta.value?.locked),
     canLock: computed(() => input.editable() && source.canEditStructure.value),
     search: input.search,
-    query: computed(() => (input.search.value.trim() ? { search: input.search.value.trim() } : {})),
+    query: computed(() => {
+      const q: RowQuery = input.search.value.trim() ? { search: input.search.value.trim() } : {}
+      const d = draft.value
+      if (d && 'filter' in d) q.filter = normalizeFilter(d.filter ?? undefined) ?? null
+      if (d?.sorts) q.sorts = d.sorts
+      return q
+    }),
     scope: computed(() => input.scope()),
     valueCtx: computed(() => {
       void namesVersion.n
@@ -119,7 +160,7 @@ export function createContext(input: {
     }),
     names,
     remember,
-    ui: reactive({ openFilter: 0 }),
+    ui: reactive({ openFilter: 0, openSort: 0 }),
     openMode,
     openRow(rowId, event, mode) {
       const wanted: OpenMode = mode ?? (event && (event.metaKey || event.ctrlKey) ? 'full_page' : openMode.value)
@@ -133,18 +174,59 @@ export function createContext(input: {
         report(error)
       }
     },
+    draft,
+    saveDraft() {
+      const v = saved.value
+      const d = draft.value
+      if (!v || !d || !(input.editable() && source.canEditStructure.value)) return
+      const config: ViewConfig = { ...v.config }
+      if ('filter' in d) {
+        const f = normalizeFilter(d.filter ?? undefined)
+        if (f) config.filter = f
+        else delete config.filter
+      }
+      if (d.sorts) {
+        if (d.sorts.length) config.sorts = d.sorts
+        else delete config.sorts
+      }
+      const { [v.id]: _, ...rest } = drafts.value
+      drafts.value = rest
+      source.upsertView({ ...v, config })
+    },
+    resetDraft() {
+      const v = saved.value
+      if (!v) return
+      const { [v.id]: _, ...rest } = drafts.value
+      drafts.value = rest
+    },
     updateView(patch) {
       const v = view.value
       if (!v) return
       let config = typeof patch === 'function' ? patch(v.config) : { ...v.config, ...patch }
-      // Locked: only filters and sorts change (like Notion's lock, where people can still filter and sort).
-      if (source.meta.value?.locked) config = { ...v.config, filter: config.filter, sorts: config.sorts }
+      // Filter / sort changes are the viewer's draft until "Save for everyone" (Notion), the rest saves at once.
+      const base = saved.value!
+      const rest = (c: ViewConfig) => { const { filter: _f, sorts: _s, ...o } = c; return JSON.stringify(o) }
+      const filterChanged = JSON.stringify(config.filter ?? null) !== JSON.stringify(v.config.filter ?? null)
+      const sortsChanged = JSON.stringify(config.sorts ?? []) !== JSON.stringify(v.config.sorts ?? [])
+      if ((filterChanged || sortsChanged) && rest(config) === rest(v.config)) {
+        const d = { ...drafts.value[base.id] }
+        if (filterChanged) d.filter = config.filter ?? null
+        if (sortsChanged) d.sorts = config.sorts ?? []
+        drafts.value = { ...drafts.value, [base.id]: d }
+        return
+      }
+      // Locked: only filters and sorts change (the draft above), like Notion's lock.
+      if (source.meta.value?.locked) return
+      // Keep the viewer's draft out of the saved view.
+      const d = drafts.value[base.id]
+      if (d && 'filter' in d && !filterChanged) config = { ...config, filter: base.config.filter }
+      if (d?.sorts && !sortsChanged) config = { ...config, sorts: base.config.sorts }
       const filter = normalizeFilter(config.filter)
       const next = { ...config }
       if (filter) next.filter = filter
       else delete next.filter
       for (const k of Object.keys(next)) if (next[k] === undefined) delete next[k]
-      source.upsertView({ ...v, config: next })
+      source.upsertView({ ...base, config: next })
     },
     createRow(init = {}) {
       const values = { ...init.values }

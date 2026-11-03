@@ -210,7 +210,16 @@ export interface Person { id: string, name: string, avatar?: string }
  * Transient query options this block adds (not part of a view's saved config): the toolbar search box.
  * Optional third argument of `rows` / `groups` / `rowsInGroup` / `aggregate`; sources may ignore it.
  */
-export interface RowQuery { search?: string }
+export interface RowQuery {
+  search?: string
+  /**
+   * The viewer's unsaved filter / sorts (Notion's "Reset / Save for everyone"): when present they replace the
+   * view's saved `filter` / `sorts` for this query (`null` filter = no filter). Sources that ignore them show
+   * the saved ones until the viewer saves.
+   */
+  filter?: FilterGroup | null
+  sorts?: Sort[]
+}
 
 /** Result of the optional `validateFormula`. */
 export type FormulaCheck = { ok: true, type?: 'number' | 'string' | 'boolean' | 'date' } | { ok: false, error: string, position?: number, code?: string }

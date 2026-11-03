@@ -421,6 +421,15 @@
   .me-db-color-rule .me-db-row > .me-menu-label { flex: none; min-width: var(--me-database-cell-min-width); }
   .me-db-locked { display: inline-flex; align-items: center; gap: var(--me-space-1); padding: 0 var(--me-space-2); color: var(--me-database-muted-color); font-size: var(--me-font-size-xs); }
   .me-db-locked svg { width: var(--me-font-size-xs); height: var(--me-font-size-xs); }
+  /* Filter bar (chips of the sorts and filters, Reset / Save for everyone). */
+  .me-db-filterbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--me-space-2); padding: var(--me-space-1) 0 var(--me-space-2); border-bottom: var(--me-border-width-thin) solid var(--me-database-border); }
+  .me-db-chip-button { display: inline-flex; align-items: center; gap: var(--me-space-1); height: var(--me-toolbar-button-size); padding: 0 var(--me-space-3); border: var(--me-border-width-thin) solid var(--me-database-border); border-radius: var(--me-rounded-full); background: none; color: var(--me-database-toolbar-button-active); font: inherit; font-size: var(--me-font-size-xs); cursor: pointer; }
+  .me-db-chip-button:hover { background: var(--me-database-hover-bg); }
+  .me-db-chip-button.is-draft { border-style: dashed; }
+  .me-db-chip-button svg { width: var(--me-font-size-xs); height: var(--me-font-size-xs); }
+  .me-db-filterbar-sep { align-self: stretch; width: var(--me-border-width-thin); background: var(--me-database-border); }
+  .me-db-filterbar-end { display: inline-flex; gap: var(--me-space-2); margin-left: auto; }
+  .me-db-save-draft { height: var(--me-toolbar-button-size); }
   .me-db-kbd { color: var(--me-color-text-muted); font: inherit; font-size: var(--me-font-size-xs); }
   .me-db-open {
     position: absolute;
