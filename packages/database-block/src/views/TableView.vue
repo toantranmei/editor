@@ -130,13 +130,76 @@ watch(resizing, (now, before) => {
 // ── Virtualizers ──
 // happy-dom / hidden containers report a 0 rect: fall back to a viewport-sized one so a window still renders.
 const observeRect = rectWithFallback(1200, 520)
-const itemCount = computed(() => {
+const baseCount = computed(() => {
   void store.value?.tick.value
   void store.value?.segments.value
   void store.value?.collapsed.value
   return store.value?.itemCount() ?? 0
 })
-const itemAt = (i: number): Item | undefined => store.value?.itemAt(i)
+
+// ── Sub-items (`config.sub_items` = a relation to this database pointing at the parent row) ──
+// The store lists the parents (the query keeps rows without a parent); an expanded parent's sub-items are
+// inserted right under it (one level), read with a `contains` filter on the parent property.
+type TItem = Item | { kind: 'child', row: Row, parent: string }
+const subProp = computed(() => db.props.value.find(p => p.id === db.view.value?.config.sub_items && p.type === 'relation'))
+const expanded = shallowRef<Array<{ id: string, at: number, rows: Row[] }>>([])
+const itemCount = computed(() => baseCount.value + expanded.value.reduce((n, e) => n + e.rows.length, 0))
+function itemAt(i: number): TItem | undefined {
+  let offset = 0
+  for (const e of expanded.value) {
+    if (i <= e.at + offset) break
+    if (i <= e.at + offset + e.rows.length) return { kind: 'child', row: e.rows[i - offset - e.at - 1]!, parent: e.id }
+    offset += e.rows.length
+  }
+  return store.value?.itemAt(i - offset)
+}
+/** Store index of a displayed index (children before it skipped). */
+function baseIndex(i: number): number {
+  let offset = 0
+  for (const e of expanded.value) {
+    if (i <= e.at + offset) break
+    offset += e.rows.length
+  }
+  return i - offset
+}
+async function loadChildren(id: string): Promise<Row[]> {
+  const p = subProp.value
+  const v = db.view.value
+  if (!p || !v) return []
+  const page = await db.source.rows(v.id, { offset: 0, limit: 200 }, { filter: { and: [{ prop: p.id, op: 'contains', value: id }] }, sorts: v.config.sorts ?? [] })
+  return page.rows
+}
+const isExpanded = (id: string) => expanded.value.some(e => e.id === id)
+async function toggleSub(row: Row, displayIndex: number) {
+  if (isExpanded(row.id)) {
+    expanded.value = expanded.value.filter(e => e.id !== row.id)
+    return
+  }
+  try {
+    const rows = await loadChildren(row.id)
+    const at = baseIndex(displayIndex)
+    expanded.value = [...expanded.value, { id: row.id, at, rows }].sort((a, b) => a.at - b.at)
+  }
+  catch (error) {
+    db.report(error)
+  }
+}
+/** A new sub-item under `parent` (row menu → Add sub-item), shown at once. */
+async function addSubItem(parent: Row) {
+  const p = subProp.value
+  if (!p) return
+  db.createRow({ values: { [p.id]: [parent.id] }, after: parent.id })
+  if (!isExpanded(parent.id)) {
+    const i = rendered.value.find(r => r.row?.id === parent.id)?.v.index
+    if (i !== undefined) await toggleSub(parent, i)
+  }
+}
+// Writes re-read the open sub-item lists; another view / filter / grouping closes them.
+watch(() => db.source.version.value, async () => {
+  if (!expanded.value.length) return
+  expanded.value = await Promise.all(expanded.value.map(async e => ({ ...e, rows: await loadChildren(e.id).catch(() => e.rows) })))
+})
+watch(() => [db.view.value?.id, subProp.value?.id, JSON.stringify(db.view.value?.config.filter), JSON.stringify(db.view.value?.config.sorts), db.view.value?.config.group_by?.prop], () => (expanded.value = []))
 const rowVirtualizer = useVirtualizer(computed(() => ({
   count: itemCount.value,
   getScrollElement: () => scroller.value,
@@ -164,6 +227,7 @@ function measureRow(el: unknown) {
 }
 watch(() => store.value?.collapsed.value, () => rowVirtualizer.value.measure())
 watch(() => store.value?.segments.value, () => rowVirtualizer.value.measure())
+watch(expanded, () => rowVirtualizer.value.measure())
 
 const vRows = computed(() => rowVirtualizer.value.getVirtualItems())
 /** Height of everything in the scroller; the token `max-height` caps it, so short tables don't leave a gap. */
@@ -213,8 +277,8 @@ const rendered = computed(() => {
   void store.value?.tick.value
   const s = store.value
   return vRows.value.map((v) => {
-    const item = s?.itemAt(v.index)
-    const row = item?.kind === 'row' ? s!.rowAt(item.seg, item.index) : undefined
+    const item = itemAt(v.index)
+    const row = item?.kind === 'row' ? s!.rowAt(item.seg, item.index) : item?.kind === 'child' ? item.row : undefined
     return { v, item, row, top: v.start - sizes.value.header, cc: row ? db.colors(row) : undefined }
   })
 })
@@ -268,10 +332,10 @@ const sel = ref<GridSelection | null>(null)
 const checked = ref(new Set<string>())
 const editing = shallowRef<{ row: Row, col: number, anchor: HTMLElement | null, text: string | null } | null>(null)
 const pendingEdit = ref<string | null>(null)
-const bounds = computed(() => ({ rows: itemCount.value, cols: cols.value.length, isRow: (i: number) => itemAt(i)?.kind === 'row' }))
+const bounds = computed(() => ({ rows: itemCount.value, cols: cols.value.length, isRow: (i: number) => itemAt(i)?.kind === 'row' || itemAt(i)?.kind === 'child' }))
 const rowOfItem = (index: number) => {
   const item = itemAt(index)
-  return item?.kind === 'row' ? store.value?.rowAt(item.seg, item.index) : undefined
+  return item?.kind === 'row' ? store.value?.rowAt(item.seg, item.index) : item?.kind === 'child' ? item.row : undefined
 }
 
 /** Row menu (⋮⋮ click, right-click, bulk bar ⋯): applies to the checked rows when the row is one of them. */
@@ -782,6 +846,7 @@ defineExpose({ sel, checked, startEdit, pasteMatrix, store, rowVirtualizer, colV
             class="me-db-tr"
             :class="{
               'is-group': r.item?.kind === 'group',
+              'is-child': r.item?.kind === 'child',
               'is-add': r.item?.kind === 'add',
               'is-checked': !!r.row && checked.has(r.row.id),
               'is-drop-before': drag?.over === r.v.index && !drag?.after,
@@ -855,6 +920,19 @@ defineExpose({ sel, checked, startEdit, pasteMatrix, store, rowVirtualizer, colV
                     @dblclick="startEdit(null)"
                     @click="sl.col > 0 && cols[sl.col]?.type === 'checkbox' && sel?.focus.col === sl.col && !$event.shiftKey && startEdit(null)"
                   >
+                    <button
+                      v-if="sl.col === 0 && subProp && r.item?.kind === 'row'"
+                      type="button"
+                      class="me-db-icon-button me-db-subtoggle"
+                      :aria-expanded="isExpanded(r.row.id)"
+                      :aria-label="m.subItems"
+                      :title="m.subItems"
+                      data-subtoggle
+                      @mousedown.stop
+                      @click.stop="toggleSub(r.row, r.v.index)"
+                    >
+                      <ChevronDown v-if="isExpanded(r.row.id)" /><ChevronRight v-else />
+                    </button>
                     <CellValue v-if="cols[sl.col]" :prop="cols[sl.col]!" :value="valueAt(r.row, sl.col)" />
                     <button
                       v-if="sl.col === 0"
@@ -924,7 +1002,7 @@ defineExpose({ sel, checked, startEdit, pasteMatrix, store, rowVirtualizer, colV
       :initial-text="editing.text"
       @close="endEdit"
     />
-    <RowMenu v-if="rowMenu" :rows="rowMenu.rows" :anchor="rowMenu.anchor" @done="checked = new Set()" @close="rowMenu = null" />
+    <RowMenu v-if="rowMenu" :rows="rowMenu.rows" :anchor="rowMenu.anchor" :sub-items="!!subProp" @add-sub="addSubItem" @done="checked = new Set()" @close="rowMenu = null" />
     <PropertyMenu v-if="headerMenu" :prop="headerMenu.prop" :anchor="headerMenu.anchor" :column="headerMenu.col" @close="headerMenu = null" />
     <PropertyEditor v-if="addProp" :anchor="addProp" @close="addProp = null" />
     <DbPopover v-if="aggMenu" :anchor="aggMenu.anchor" :scope="db.scope.value" @close="aggMenu = null">

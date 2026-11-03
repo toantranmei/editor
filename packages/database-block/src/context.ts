@@ -161,6 +161,13 @@ export function createContext(input: {
       const d = draft.value
       if (d && 'filter' in d) q.filter = normalizeFilter(d.filter ?? undefined) ?? null
       if (d?.sorts) q.sorts = d.sorts
+      // Sub-items on (table): the list shows the parents, rows without a parent.
+      const sub = view.value?.type === 'table' ? view.value.config.sub_items : undefined
+      if (sub && props.value.some(p => p.id === sub)) {
+        const base = 'filter' in q ? q.filter : view.value?.config.filter
+        const top = { prop: sub, op: 'is_empty' as const }
+        q.filter = base ? { and: [base, top] } : { and: [top] }
+      }
       return q
     }),
     scope: computed(() => input.scope()),

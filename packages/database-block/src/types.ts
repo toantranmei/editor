@@ -146,6 +146,8 @@ export interface ViewConfig {
   freeze?: number
   /** Conditional colors, first match wins (row / card, or per cell with scope `prop`). */
   colors?: ColorRule[]
+  /** Table: sub-items — a relation to this database holding each row's parent; parents list, sub-items nest. */
+  sub_items?: string
   /** Table: draw the lines between columns (default true). */
   vertical_lines?: boolean
   /** Inline table: lines shown before "Load more" (default 50, 0 = no limit). */

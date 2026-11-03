@@ -165,6 +165,11 @@ export interface DatabaseMessages {
   insertRight: string
   duplicateProperty: string
   clearSelection: string
+  subItems: string
+  addSubItem: string
+  parentItem: string
+  turnOnSubItems: string
+  off: string
   searchFormula: string
   formulaType: string
   formulaTypes: Record<string, string>
@@ -435,6 +440,11 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     insertRight: 'Insert right',
     duplicateProperty: 'Duplicate property',
     clearSelection: 'Clear selection',
+    subItems: 'Sub-items',
+    addSubItem: 'Add sub-item',
+    parentItem: 'Parent item',
+    turnOnSubItems: 'Turn on sub-items',
+    off: 'Off',
     searchFormula: 'Search properties and functions…',
     formulaType: 'Type',
     formulaTypes: { number: 'Number', string: 'Text', boolean: 'Checkbox', date: 'Date' },
@@ -701,6 +711,11 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     insertRight: 'Chèn bên phải',
     duplicateProperty: 'Nhân bản thuộc tính',
     clearSelection: 'Bỏ chọn',
+    subItems: 'Mục con',
+    addSubItem: 'Thêm mục con',
+    parentItem: 'Mục cha',
+    turnOnSubItems: 'Bật mục con',
+    off: 'Tắt',
     searchFormula: 'Tìm thuộc tính và hàm…',
     formulaType: 'Kiểu',
     formulaTypes: { number: 'Số', string: 'Văn bản', boolean: 'Hộp kiểm', date: 'Ngày' },
@@ -967,6 +982,11 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     insertRight: '在右侧插入',
     duplicateProperty: '复制属性',
     clearSelection: '取消选择',
+    subItems: '子项',
+    addSubItem: '添加子项',
+    parentItem: '父项',
+    turnOnSubItems: '开启子项',
+    off: '关闭',
     searchFormula: '搜索属性和函数…',
     formulaType: '类型',
     formulaTypes: { number: '数字', string: '文本', boolean: '复选框', date: '日期' },

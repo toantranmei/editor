@@ -3,7 +3,7 @@
  * Row menu (Notion's ⋮⋮ / right-click menu): open in a mode, edit a property of every row it applies to,
  * duplicate, copy link, delete. Applies to `rows` (one row, or the checked rows when the clicked one is checked).
  */
-import { ArrowUpRight, ChevronRight, Copy, FileText, Link2, Pencil, Trash2 } from '@lucide/vue'
+import { ArrowUpRight, ChevronRight, Copy, FileText, Link2, ListTree, Pencil, Trash2 } from '@lucide/vue'
 import { computed, ref } from 'vue'
 import { useDb } from '../context'
 import { fmt } from '../messages'
@@ -14,8 +14,8 @@ import DbPopover from './DbPopover.vue'
 import OpenModeIcon from './OpenModeIcon.vue'
 import PropIcon from './PropIcon.vue'
 
-const props = defineProps<{ rows: Row[], anchor: HTMLElement | DOMRect }>()
-const emit = defineEmits<{ close: [], done: [] }>()
+const props = defineProps<{ rows: Row[], anchor: HTMLElement | DOMRect, subItems?: boolean }>()
+const emit = defineEmits<{ close: [], done: [], addSub: [parent: Row] }>()
 const db = useDb()
 const m = computed(() => db.m.value)
 const panel = ref<'menu' | 'open' | 'props'>('menu')
@@ -85,6 +85,9 @@ const blank = computed<Row>(() => ({ id: single.value?.id ?? '__rows__', positio
           <Link2 class="me-db-menu-icon" />{{ m.copyLink }}
         </button>
         <template v-if="editable">
+          <button v-if="single && subItems" type="button" class="me-menu-item" role="menuitem" data-action="add-sub" @click="emit('addSub', single!); emit('close')">
+            <ListTree class="me-db-menu-icon" />{{ m.addSubItem }}
+          </button>
           <button type="button" class="me-menu-item" role="menuitem" data-action="duplicate" @click="duplicate">
             <Copy class="me-db-menu-icon" /><span class="me-menu-title">{{ m.duplicate }}</span><kbd class="me-db-menu-end me-db-kbd">⌘D</kbd>
           </button>

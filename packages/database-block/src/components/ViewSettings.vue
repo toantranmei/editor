@@ -8,7 +8,7 @@ import { Check, Eye, EyeOff, GripVertical, Lock, LockOpen } from '@lucide/vue'
 import { computed, ref } from 'vue'
 import { useDb } from '../context'
 import type { ChartKind, OpenMode, Prop, ValueFn, ViewConfig, ViewType } from '../types'
-import { groupableTypes, switchLayout, visibleIds } from '../util'
+import { groupableTypes, positionAfter, switchLayout, uuidv7, visibleIds } from '../util'
 import ColorRules from './ColorRules.vue'
 import OpenModeIcon from './OpenModeIcon.vue'
 import PropIcon from './PropIcon.vue'
@@ -88,6 +88,14 @@ function dropGroup(target: string) {
   const keys = groupKeys.value.map(x => x.key).filter(k => k !== from)
   keys.splice(keys.indexOf(target), 0, from)
   set({ group_by: { ...g, order: keys } })
+}
+/** Relations of this database to itself: what sub-items can use as "Parent item". */
+const selfRelations = computed(() => all.value.filter(p => p.type === 'relation' && (!p.config?.database_id || p.config.database_id === db.databaseId)))
+/** Creates a "Parent item" relation (this database, 1 page) and uses it for sub-items. */
+function turnOnSubItems() {
+  const id = uuidv7()
+  db.source.upsertProp({ id, name: m.value.parentItem, type: 'relation', position: positionAfter(all.value[all.value.length - 1]?.position), config: { database_id: db.databaseId, limit: 1 } })
+  set({ sub_items: id })
 }
 function setGroup(id: string) {
   set({ group_by: id ? { ...c.value.group_by, prop: id } : undefined })
@@ -235,6 +243,14 @@ const value = (e: Event) => (e.target as HTMLSelectElement).value
             <option value="0">{{ m.noLimit }}</option>
           </select>
         </label>
+        <label class="me-db-field">
+          <span class="me-menu-label">{{ m.subItems }}</span>
+          <select class="me-input me-db-select" data-setting="sub_items" :value="c.sub_items ?? ''" :disabled="!editable" @change="set({ sub_items: value($event) || undefined })">
+            <option value="">{{ m.off }}</option>
+            <option v-for="p in selfRelations" :key="p.id" :value="p.id">{{ p.name }}</option>
+          </select>
+        </label>
+        <button v-if="!selfRelations.length && editable" type="button" class="me-db-text-button" data-turn-on-sub-items @click="turnOnSubItems">{{ m.turnOnSubItems }}</button>
         <label class="me-db-toggle-row">
           <span>{{ m.verticalLines }}</span>
           <input type="checkbox" class="me-db-switch" data-setting="vertical_lines" :checked="c.vertical_lines !== false" :disabled="!editable" @change="set({ vertical_lines: checked($event) ? undefined : false })">

@@ -445,6 +445,10 @@
   .me-db-formula-list { display: flex; flex-direction: column; max-height: calc(var(--me-database-calendar-cell-height) * 2.5); overflow-y: auto; }
   .me-db-formula-doc { display: flex; flex-direction: column; gap: var(--me-space-2); font-size: var(--me-font-size-xs); }
   .me-db-mono { font-family: var(--me-font-mono); font-size: var(--me-font-size-xs); white-space: pre-wrap; word-break: break-word; }
+  /* Sub-items: toggle before the title, sub-item rows indented under their parent. */
+  .me-db-subtoggle { flex: none; margin-right: var(--me-space-1); }
+  .me-db-tr.is-child .me-db-td.is-first { padding-left: calc(var(--me-space-8) + var(--me-space-2)); }
+  .me-db-tr.is-child .me-db-td { background-color: var(--me-db-cc-bg, var(--me-database-calendar-outside-bg)); }
   .me-db-kbd { color: var(--me-color-text-muted); font: inherit; font-size: var(--me-font-size-xs); }
   .me-db-open {
     position: absolute;
