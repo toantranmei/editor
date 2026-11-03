@@ -36,8 +36,9 @@ function place() {
   if (!r || !el) return
   const vw = window.innerWidth
   const vh = window.innerHeight
-  const w = el.offsetWidth || r.width
-  const h = el.offsetHeight
+  // scroll sizes: the box may still be clamped by the previous max-height / position.
+  const w = Math.max(el.offsetWidth, el.scrollWidth) || r.width
+  const h = Math.max(el.offsetHeight, el.scrollHeight)
   let left = props.placement === 'right' ? r.right : r.left
   let top = props.placement === 'over' ? r.top : props.placement === 'right' ? r.top : r.bottom
   if (left + w > vw - 8) left = Math.max(8, vw - w - 8)
@@ -67,12 +68,18 @@ function onKeyDown(e: KeyboardEvent) {
   emit('close', 'escape')
 }
 const onWindow = () => place()
+let resizer: ResizeObserver | undefined
 
 onMounted(async () => {
   stack.push(id)
   document.addEventListener('pointerdown', onPointerDown, true)
   document.addEventListener('keydown', onKeyDown, true)
   window.addEventListener('resize', onWindow)
+  // Content that grows after opening (a submenu panel, a loaded list) is placed again.
+  if (typeof ResizeObserver !== 'undefined' && root.value?.firstElementChild) {
+    resizer = new ResizeObserver(() => place())
+    resizer.observe(root.value.firstElementChild)
+  }
   await nextTick()
   place()
   // Second pass once the content has its size.
@@ -84,6 +91,7 @@ onBeforeUnmount(() => {
   document.removeEventListener('pointerdown', onPointerDown, true)
   document.removeEventListener('keydown', onKeyDown, true)
   window.removeEventListener('resize', onWindow)
+  resizer?.disconnect()
 })
 watch(() => props.anchor, () => nextTick(place))
 

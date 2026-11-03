@@ -23,6 +23,7 @@ const startProp = computed(() => db.props.value.find(p => p.id === c.value.start
 const endProp = computed(() => db.props.value.find(p => p.id === c.value.end_prop))
 const title = computed(() => db.props.value.find(p => p.type === 'title'))
 const scale = computed(() => c.value.scale ?? 'day')
+const TIMELINE_SCALES = ['day', 'week', 'month', 'quarter', 'year'] as const
 const scroller = ref<HTMLElement | null>(null)
 const px = ref({ day: Number.parseFloat(T.timelineDay), week: Number.parseFloat(T.timelineWeek), month: Number.parseFloat(T.timelineMonth), row: Number.parseFloat(T.timelineRowHeight), label: Number.parseFloat(T.timelineLabelWidth) })
 watch(scroller, (el) => {
@@ -35,10 +36,11 @@ watch(scroller, (el) => {
     label: cssPx(el, '--me-database-timeline-label-width', T.timelineLabelWidth),
   }
 })
-const dayW = computed(() => px.value[scale.value])
+/** Width of one day: tokens for day / week / month; quarter and year zoom out from the month scale. */
+const dayW = computed(() => (scale.value === 'quarter' ? px.value.month / 2.5 : scale.value === 'year' ? px.value.month / 6 : px.value[scale.value]))
 /** Width of the title column ("Show table" off: no column, titles stay on the bars). */
 const labelW = computed(() => (c.value.show_table === false ? 0 : px.value.label))
-const span = computed(() => (scale.value === 'day' ? 60 : scale.value === 'week' ? 26 * 7 : 730))
+const span = computed(() => ({ day: 60, week: 26 * 7, month: 730, quarter: 3 * 365, year: 5 * 365 })[scale.value])
 const origin = ref(new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate() - 14))
 const firstDay = computed(() => isoDay(origin.value))
 const lastDay = computed(() => isoDay(new Date(origin.value.getFullYear(), origin.value.getMonth(), origin.value.getDate() + span.value - 1)))
@@ -53,6 +55,8 @@ const ticks = computed(() => {
     if (scale.value === 'day') out.push({ left: i * dayW.value, label: String(d.getDate()), major: monthStart })
     else if (scale.value === 'week' && d.getDay() === 1) out.push({ left: i * dayW.value, label: `${d.getDate()}/${d.getMonth() + 1}`, major: monthStart })
     else if (scale.value === 'month' && monthStart) out.push({ left: i * dayW.value, label: new Intl.DateTimeFormat(loc, { month: 'short', year: '2-digit' }).format(d), major: d.getMonth() === 0 })
+    else if (scale.value === 'quarter' && monthStart && d.getMonth() % 3 === 0) out.push({ left: i * dayW.value, label: `Q${d.getMonth() / 3 + 1} ${String(d.getFullYear()).slice(2)}`, major: d.getMonth() === 0 })
+    else if (scale.value === 'year' && monthStart && d.getMonth() % 6 === 0) out.push({ left: i * dayW.value, label: d.getMonth() === 0 ? String(d.getFullYear()) : '', major: d.getMonth() === 0 })
   }
   return out
 })
@@ -164,7 +168,7 @@ const titleOf = (r: Row) => (title.value ? String(cellValue(r, title.value) ?? '
         <button type="button" class="me-db-icon-button" :aria-label="m.previous" @click="shift(-1)"><ChevronLeft /></button>
         <button type="button" class="me-db-icon-button" :aria-label="m.next" @click="shift(1)"><ChevronRight /></button>
         <span class="me-db-timeline-scale">
-          <button v-for="s in (['day', 'week', 'month'] as const)" :key="s" type="button" class="me-db-tool" :class="{ 'is-on': scale === s }" :disabled="!db.canEditStructure.value" @click="db.updateView({ scale: s })">{{ m.scales[s] }}</button>
+          <button v-for="s in TIMELINE_SCALES" :key="s" type="button" class="me-db-tool" :class="{ 'is-on': scale === s }" :disabled="!db.canEditStructure.value" @click="db.updateView({ scale: s })">{{ m.scales[s] }}</button>
         </span>
       </div>
       <div ref="scroller" class="me-db-scroll me-db-timeline-scroll" :style="{ '--me-db-timeline-width': `${width + labelW}px` }">

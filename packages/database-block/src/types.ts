@@ -122,6 +122,8 @@ export interface ViewConfig {
   wraps?: Record<string, boolean>
   /** Table: number of leading columns kept in view while scrolling sideways. Default 1 (the title). */
   freeze?: number
+  /** Table: draw the lines between columns (default true). */
+  vertical_lines?: boolean
   /** How rows open from this view. Default `side_peek`. */
   open_in?: OpenMode
   aggregates?: Record<string, AggregateFn | string>
@@ -137,10 +139,12 @@ export interface ViewConfig {
   show_table?: boolean
   /** calendar */
   date_prop?: string
+  /** calendar: "Show calendar as" one week instead of the month grid. */
+  calendar_as?: 'week'
   /** timeline */
   start_prop?: string
   end_prop?: string
-  scale?: 'day' | 'week' | 'month'
+  scale?: 'day' | 'week' | 'month' | 'quarter' | 'year'
   /** gallery (and board's `card.cover`) */
   cover?: string
   size?: 's' | 'm' | 'l'

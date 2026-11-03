@@ -702,7 +702,7 @@ defineExpose({ sel, checked, startEdit, pasteMatrix, store, rowVirtualizer, colV
 </script>
 
 <template>
-  <div class="me-db-table-wrap">
+  <div class="me-db-table-wrap" :class="{ 'is-no-vlines': db.view.value?.config.vertical_lines === false }">
     <div
       ref="scroller"
       class="me-db-table"

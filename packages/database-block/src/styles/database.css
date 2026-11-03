@@ -125,7 +125,7 @@
   .me-db-check-slot { display: inline-flex; }
   .me-db-check-slot svg { width: var(--me-font-size-sm); height: var(--me-font-size-sm); }
   /* Layout picker in "View options". */
-  .me-db-layouts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--me-space-1); }
+  .me-db-layouts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--me-space-1); }
   .me-db-layout {
     display: flex;
     flex-direction: column;
@@ -201,7 +201,33 @@
   .me-db-hidden-input { position: absolute; width: 0; height: 0; opacity: 0; pointer-events: none; }
   .me-db-row { display: flex; align-items: center; gap: var(--me-space-3); }
   .me-db-select { width: auto; max-width: 100%; }
-  .me-db-switch { accent-color: var(--me-color-accent); }
+  /* Toggle switch (Notion's blue pill) drawn from a checkbox. */
+  .me-db-switch {
+    position: relative;
+    flex: none;
+    width: calc(var(--me-space-8) + var(--me-space-1));
+    height: var(--me-space-6);
+    margin: 0;
+    border-radius: var(--me-rounded-full);
+    background: var(--me-database-default-tag-bg);
+    appearance: none;
+    cursor: pointer;
+    transition: background-color var(--me-duration-fast) ease;
+  }
+  .me-db-switch::after {
+    position: absolute;
+    top: var(--me-space-1);
+    left: var(--me-space-1);
+    width: calc(var(--me-space-6) - var(--me-space-2));
+    height: calc(var(--me-space-6) - var(--me-space-2));
+    border-radius: 50%;
+    background: var(--me-color-bg, var(--me-database-header-bg));
+    content: '';
+    transition: transform var(--me-duration-fast) ease;
+  }
+  .me-db-switch:checked { background: var(--me-color-accent); }
+  .me-db-switch:checked::after { transform: translateX(calc(var(--me-space-8) + var(--me-space-1) - var(--me-space-6))); }
+  .me-db-switch:disabled { opacity: 0.5; cursor: default; }
   .me-db-skeleton {
     display: block;
     width: 60%;
@@ -331,6 +357,7 @@
   }
   .me-db-td { border-right: var(--me-border-width-thin) solid var(--me-database-border); cursor: default; }
   .me-db-td.me-db-gutter { border-right: 0; }
+  .me-db-table-wrap.is-no-vlines .me-db-td, .me-db-table-wrap.is-no-vlines .me-db-th, .me-db-table-wrap.is-no-vlines .me-db-tf { border-right-color: transparent; }
   .me-db-td.is-selected, .me-db-tr.is-checked .me-db-td { background: var(--me-database-selected-bg); }
   .me-db-td.is-active { box-shadow: inset 0 0 0 var(--me-database-active-ring-width) var(--me-database-active-ring); }
   .me-db-td.is-placeholder { position: sticky; }
@@ -364,6 +391,11 @@
   .me-db-swatch-button:hover { background: var(--me-menu-item-hover-bg, var(--me-database-default-tag-bg)); }
   .me-db-swatch-button .me-db-swatch { display: inline-flex; align-items: center; justify-content: center; }
   .me-db-swatch svg { width: var(--me-database-swatch-size); height: var(--me-database-swatch-size); }
+  .me-db-section-head { justify-content: space-between; margin-top: var(--me-space-2); }
+  .me-db-prop-row { cursor: default; }
+  .me-db-prop-row .me-db-row-handle { opacity: 1; }
+  .me-db-prop-row .me-db-row-handle.is-placeholder { visibility: hidden; }
+  .me-db-prop-row.is-over { box-shadow: 0 calc(-1 * var(--me-border-width-medium)) 0 var(--me-color-accent); }
   .me-db-kbd { color: var(--me-color-text-muted); font: inherit; font-size: var(--me-font-size-xs); }
   .me-db-open {
     position: absolute;
@@ -653,6 +685,7 @@
     border-right: var(--me-border-width-thin) solid var(--me-database-border);
     border-bottom: var(--me-border-width-thin) solid var(--me-database-border);
   }
+  .me-db-calendar-grid.is-week .me-db-calendar-day { height: auto; min-height: calc(var(--me-database-calendar-cell-height) * 3); }
   .me-db-calendar-day.is-outside { background: var(--me-database-calendar-outside-bg); }
   .me-db-calendar-day.is-over { background: var(--me-database-drop-bg); }
   .me-db-calendar-date { align-self: flex-end; padding: 0 var(--me-space-2); border-radius: var(--me-rounded-full); color: var(--me-database-muted-color); font-size: var(--me-font-size-xs); }

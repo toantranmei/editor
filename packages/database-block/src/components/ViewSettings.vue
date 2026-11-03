@@ -4,8 +4,8 @@
  * switcher, per-layout settings such as wrap / freeze, card cover and size, dates, chart and pivot setup, and
  * "Open pages in").
  */
-import { Check, Eye, EyeOff } from '@lucide/vue'
-import { computed } from 'vue'
+import { Check, Eye, EyeOff, GripVertical } from '@lucide/vue'
+import { computed, ref } from 'vue'
 import { useDb } from '../context'
 import type { ChartKind, OpenMode, Prop, ValueFn, ViewConfig, ViewType } from '../types'
 import { groupableTypes, switchLayout, visibleIds } from '../util'
@@ -38,6 +38,21 @@ const nonTitle = computed(() => all.value.filter(p => p.type !== 'title'))
 function setShown(ids: string[]) {
   if (usesCards.value) set({ card: { ...c.value.card, props: ids } })
   else set({ visible: ids.filter(id => all.value.find(p => p.id === id)?.type !== 'title') })
+}
+const propQuery = ref('')
+const matches = (p: Prop) => !propQuery.value.trim() || p.name.toLowerCase().includes(propQuery.value.trim().toLowerCase())
+const byId = computed(() => new Map(all.value.map(p => [p.id, p])))
+const shownProps = computed(() => shown.value.map(id => byId.value.get(id)).filter((p): p is Prop => !!p && p.type !== 'title' && matches(p)))
+const hiddenProps = computed(() => nonTitle.value.filter(p => !shown.value.includes(p.id) && matches(p)))
+const dragProp = ref<string | null>(null)
+const overProp = ref<string | null>(null)
+function dropProp(target: string) {
+  const from = dragProp.value
+  dragProp.value = overProp.value = null
+  if (!from || from === target) return
+  const ids = shown.value.filter(id => id !== from)
+  ids.splice(ids.indexOf(target), 0, from)
+  setShown(ids)
 }
 const toggle = (p: Prop) => setShown(shown.value.includes(p.id) ? shown.value.filter(id => id !== p.id) : [...shown.value, p.id])
 
@@ -85,26 +100,40 @@ const value = (e: Event) => (e.target as HTMLSelectElement).value
       </label>
     </template>
 
-    <!-- Properties -->
+    <!-- Properties: search, shown (drag to reorder) and hidden -->
     <template v-else-if="props.panel === 'properties'">
-      <div class="me-db-row">
-        <button type="button" class="me-db-text-button" :disabled="!editable" @click="setShown(nonTitle.map(p => p.id))">{{ m.showAll }}</button>
-        <button type="button" class="me-db-text-button" :disabled="!editable" @click="setShown([])">{{ m.hideAll }}</button>
+      <input v-model="propQuery" class="me-input" :placeholder="m.searchProperty" :aria-label="m.searchProperty" data-prop-search>
+      <div class="me-db-row me-db-section-head">
+        <span class="me-menu-label">{{ m.shownProps }}</span>
+        <button type="button" class="me-db-text-button" :disabled="!editable" data-hide-all @click="setShown([])">{{ m.hideAll }}</button>
       </div>
-      <button
-        v-for="p in nonTitle"
+      <div
+        v-for="p in shownProps"
         :key="p.id"
-        type="button"
-        class="me-menu-item"
+        class="me-menu-item me-db-prop-row"
+        :class="{ 'is-over': overProp === p.id && dragProp !== p.id }"
         :data-prop="p.id"
-        :aria-pressed="shown.includes(p.id)"
-        :disabled="!editable"
-        @click="toggle(p)"
+        :aria-pressed="true"
+        @dragover.prevent="dragProp && (overProp = p.id)"
+        @drop.prevent="dropProp(p.id)"
       >
+        <span class="me-db-row-handle" :draggable="editable" :title="m.dragToMove" @dragstart="dragProp = p.id" @dragend="dragProp = overProp = null"><GripVertical /></span>
         <PropIcon :type="p.type" />
         <span class="me-menu-title">{{ p.name }}</span>
-        <Eye v-if="shown.includes(p.id)" class="me-db-menu-end" /><EyeOff v-else class="me-db-menu-end is-off" />
-      </button>
+        <button type="button" class="me-db-icon-button me-db-menu-end" :disabled="!editable" :aria-label="m.hide" data-toggle @click="toggle(p)"><Eye /></button>
+      </div>
+      <template v-if="hiddenProps.length">
+        <div class="me-db-row me-db-section-head">
+          <span class="me-menu-label">{{ m.hiddenProps }}</span>
+          <button type="button" class="me-db-text-button" :disabled="!editable" data-show-all @click="setShown([...shown, ...hiddenProps.map(p => p.id)])">{{ m.showAll }}</button>
+        </div>
+        <div v-for="p in hiddenProps" :key="p.id" class="me-menu-item me-db-prop-row" :data-prop="p.id" :aria-pressed="false">
+          <span class="me-db-row-handle is-placeholder" />
+          <PropIcon :type="p.type" />
+          <span class="me-menu-title">{{ p.name }}</span>
+          <button type="button" class="me-db-icon-button me-db-menu-end is-off" :disabled="!editable" :aria-label="m.showAll" data-toggle @click="toggle(p)"><EyeOff /></button>
+        </div>
+      </template>
     </template>
 
     <!-- View options: layout, per-layout settings, open mode -->
@@ -135,6 +164,10 @@ const value = (e: Event) => (e.target as HTMLSelectElement).value
         <label class="me-db-toggle-row">
           <span>{{ m.freezeFirst }}</span>
           <input type="checkbox" class="me-db-switch" data-setting="freeze" :checked="(c.freeze ?? 1) > 0" :disabled="!editable" @change="set({ freeze: checked($event) ? undefined : 0 })">
+        </label>
+        <label class="me-db-toggle-row">
+          <span>{{ m.verticalLines }}</span>
+          <input type="checkbox" class="me-db-switch" data-setting="vertical_lines" :checked="c.vertical_lines !== false" :disabled="!editable" @change="set({ vertical_lines: checked($event) ? undefined : false })">
         </label>
       </template>
       <template v-if="view?.type === 'board' || view?.type === 'gallery'">
@@ -167,6 +200,13 @@ const value = (e: Event) => (e.target as HTMLSelectElement).value
             <option v-for="p in dateProps" :key="p.id" :value="p.id">{{ p.name }}</option>
           </select>
         </label>
+        <label class="me-db-field">
+          <span class="me-menu-label">{{ m.calendarAs }}</span>
+          <select class="me-input me-db-select" data-setting="calendar_as" :value="c.calendar_as ?? 'month'" :disabled="!editable" @change="set({ calendar_as: value($event) === 'week' ? 'week' : undefined })">
+            <option value="month">{{ m.calendarModes.month }}</option>
+            <option value="week">{{ m.calendarModes.week }}</option>
+          </select>
+        </label>
         <label class="me-db-toggle-row">
           <span>{{ m.showWeekends }}</span>
           <input type="checkbox" class="me-db-switch" data-setting="weekends" :checked="c.show_weekends !== false" :disabled="!editable" @change="set({ show_weekends: checked($event) ? undefined : false })">
@@ -188,8 +228,8 @@ const value = (e: Event) => (e.target as HTMLSelectElement).value
         </label>
         <label class="me-db-field">
           <span class="me-menu-label">{{ m.scale }}</span>
-          <select class="me-input me-db-select" :value="c.scale ?? 'day'" :disabled="!editable" @change="set({ scale: value($event) as 'day' | 'week' | 'month' })">
-            <option v-for="s in (['day', 'week', 'month'] as const)" :key="s" :value="s">{{ m.scales[s] }}</option>
+          <select class="me-input me-db-select" :value="c.scale ?? 'day'" :disabled="!editable" @change="set({ scale: value($event) as 'day' | 'week' | 'month' | 'quarter' | 'year' })">
+            <option v-for="s in (['day', 'week', 'month', 'quarter', 'year'] as const)" :key="s" :value="s">{{ m.scales[s] }}</option>
           </select>
         </label>
         <label class="me-db-toggle-row">

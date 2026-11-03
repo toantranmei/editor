@@ -123,7 +123,7 @@ export interface DatabaseMessages {
   startProperty: string
   endProperty: string
   scale: string
-  scales: Record<'day' | 'week' | 'month', string>
+  scales: Record<'day' | 'week' | 'month' | 'quarter' | 'year', string>
   noDateProperty: string
   cover: string
   coverNone: string
@@ -165,6 +165,14 @@ export interface DatabaseMessages {
   insertRight: string
   duplicateProperty: string
   clearSelection: string
+  searchProperty: string
+  shownProps: string
+  hiddenProps: string
+  calendarAs: string
+  calendarModes: Record<'month' | 'week', string>
+  verticalLines: string
+  loadLimit: string
+  noLimit: string
   showAs: string
   showAsKinds: Record<'number' | 'bar' | 'ring', string>
   divideBy: string
@@ -354,7 +362,7 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     startProperty: 'Start date',
     endProperty: 'End date',
     scale: 'Scale',
-    scales: { day: 'Day', week: 'Week', month: 'Month' },
+    scales: { day: 'Day', week: 'Week', month: 'Month', quarter: 'Quarter', year: 'Year' },
     noDateProperty: 'Add a date property to use this view',
     cover: 'Card preview',
     coverNone: 'None',
@@ -392,6 +400,14 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     insertRight: 'Insert right',
     duplicateProperty: 'Duplicate property',
     clearSelection: 'Clear selection',
+    searchProperty: 'Search for a property…',
+    shownProps: 'Shown',
+    hiddenProps: 'Hidden',
+    calendarAs: 'Show calendar as',
+    calendarModes: { month: 'Month', week: 'Week' },
+    verticalLines: 'Show vertical lines',
+    loadLimit: 'Load limit',
+    noLimit: 'No limit',
     showAs: 'Show as',
     showAsKinds: { number: 'Number', bar: 'Bar', ring: 'Ring' },
     divideBy: 'Divide by',
@@ -577,7 +593,7 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     startProperty: 'Ngày bắt đầu',
     endProperty: 'Ngày kết thúc',
     scale: 'Tỉ lệ',
-    scales: { day: 'Ngày', week: 'Tuần', month: 'Tháng' },
+    scales: { day: 'Ngày', week: 'Tuần', month: 'Tháng', quarter: 'Quý', year: 'Năm' },
     noDateProperty: 'Thêm một thuộc tính ngày để dùng chế độ xem này',
     cover: 'Ảnh thẻ',
     coverNone: 'Không',
@@ -615,6 +631,14 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     insertRight: 'Chèn bên phải',
     duplicateProperty: 'Nhân bản thuộc tính',
     clearSelection: 'Bỏ chọn',
+    searchProperty: 'Tìm thuộc tính…',
+    shownProps: 'Đang hiện',
+    hiddenProps: 'Đang ẩn',
+    calendarAs: 'Hiển thị lịch dạng',
+    calendarModes: { month: 'Tháng', week: 'Tuần' },
+    verticalLines: 'Hiện đường kẻ dọc',
+    loadLimit: 'Giới hạn tải',
+    noLimit: 'Không giới hạn',
     showAs: 'Hiển thị dạng',
     showAsKinds: { number: 'Số', bar: 'Thanh', ring: 'Vòng' },
     divideBy: 'Chia cho',
@@ -800,7 +824,7 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     startProperty: '开始日期',
     endProperty: '结束日期',
     scale: '刻度',
-    scales: { day: '天', week: '周', month: '月' },
+    scales: { day: '天', week: '周', month: '月', quarter: '季度', year: '年' },
     noDateProperty: '添加一个日期属性以使用此视图',
     cover: '卡片预览',
     coverNone: '无',
@@ -838,6 +862,14 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     insertRight: '在右侧插入',
     duplicateProperty: '复制属性',
     clearSelection: '取消选择',
+    searchProperty: '搜索属性…',
+    shownProps: '已显示',
+    hiddenProps: '已隐藏',
+    calendarAs: '日历显示为',
+    calendarModes: { month: '月', week: '周' },
+    verticalLines: '显示竖线',
+    loadLimit: '加载上限',
+    noLimit: '无限制',
     showAs: '显示为',
     showAsKinds: { number: '数字', bar: '进度条', ring: '圆环' },
     divideBy: '除以',
