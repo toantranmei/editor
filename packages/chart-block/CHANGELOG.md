@@ -1,5 +1,19 @@
 # @toantranmei/chart-block
 
+## 0.1.1
+
+### Patch Changes
+
+- Updated dependencies [0fe3868]
+- Updated dependencies [c90937c]
+- Updated dependencies [28d9509]
+- Updated dependencies [d48d595]
+- Updated dependencies [6681cb8]
+- Updated dependencies [4edb914]
+- Updated dependencies [e76a340]
+- Updated dependencies [70c4afc]
+  - @toantranmei/editor@0.4.0
+
 ## 0.1.0
 
 ### Minor Changes
