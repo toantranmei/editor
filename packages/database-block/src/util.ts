@@ -134,3 +134,10 @@ export function duplicateRows(db: { props: { value: Prop[] }, source: DatabaseSo
     db.source.createRow({ values, after: row.id })
   }
 }
+
+/** Property types a view can group by (Board: only those that make columns). */
+export function groupableTypes(viewType: ViewType | undefined): PropType[] {
+  return viewType === 'board'
+    ? ['select', 'status', 'person', 'checkbox', 'multi_select']
+    : ['select', 'status', 'multi_select', 'person', 'checkbox', 'text', 'url', 'email', 'phone', 'date', 'relation']
+}

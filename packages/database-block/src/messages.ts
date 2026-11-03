@@ -165,6 +165,12 @@ export interface DatabaseMessages {
   insertRight: string
   duplicateProperty: string
   clearSelection: string
+  groupByThis: string
+  ungroup: string
+  sortLowHigh: string
+  sortHighLow: string
+  sortOldNew: string
+  sortNewOld: string
   rowActions: string
   openIn: string
   duplicate: string
@@ -370,6 +376,12 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     insertRight: 'Insert right',
     duplicateProperty: 'Duplicate property',
     clearSelection: 'Clear selection',
+    groupByThis: 'Group',
+    ungroup: 'Ungroup',
+    sortLowHigh: 'Sort low → high',
+    sortHighLow: 'Sort high → low',
+    sortOldNew: 'Sort old → new',
+    sortNewOld: 'Sort new → old',
     rowActions: 'Row actions',
     openIn: 'Open in',
     duplicate: 'Duplicate',
@@ -571,6 +583,12 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     insertRight: 'Chèn bên phải',
     duplicateProperty: 'Nhân bản thuộc tính',
     clearSelection: 'Bỏ chọn',
+    groupByThis: 'Nhóm theo cột này',
+    ungroup: 'Bỏ nhóm',
+    sortLowHigh: 'Sắp xếp thấp → cao',
+    sortHighLow: 'Sắp xếp cao → thấp',
+    sortOldNew: 'Sắp xếp cũ → mới',
+    sortNewOld: 'Sắp xếp mới → cũ',
     rowActions: 'Thao tác dòng',
     openIn: 'Mở trong',
     duplicate: 'Nhân bản',
@@ -772,6 +790,12 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     insertRight: '在右侧插入',
     duplicateProperty: '复制属性',
     clearSelection: '取消选择',
+    groupByThis: '分组',
+    ungroup: '取消分组',
+    sortLowHigh: '从低到高排序',
+    sortHighLow: '从高到低排序',
+    sortOldNew: '从旧到新排序',
+    sortNewOld: '从新到旧排序',
     rowActions: '行操作',
     openIn: '打开方式',
     duplicate: '创建副本',

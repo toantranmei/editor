@@ -4,15 +4,16 @@
  * insert left / right, duplicate, delete. Table-only items (wrap, freeze, insert) show when `column` is given.
  */
 import {
-  ArrowDown, ArrowUp, BetweenVerticalEnd, Check, BetweenVerticalStart, ChevronRight, Copy, EyeOff, ListFilter, Settings2,
+  ArrowDown, ArrowUp, BetweenVerticalEnd, Calculator, Check, BetweenVerticalStart, ChevronRight, Copy, EyeOff, Group, ListFilter, Settings2,
   Snowflake, Trash2, TriangleAlert, WrapText,
 } from '@lucide/vue'
 import { computed, ref } from 'vue'
 import { useDb } from '../context'
-import { defaultCondition, groupItems, groupMode, makeGroup } from '../filters'
+import { defaultCondition, groupItems, groupMode, makeGroup, resultType } from '../filters'
 import { fmt } from '../messages'
 import type { Prop, PropType } from '../types'
-import { clone, CREATABLE_TYPES, placeColumn, positionAfter, uuidv7, visibleIds } from '../util'
+import { aggregatesFor } from '../aggregates'
+import { clone, CREATABLE_TYPES, groupableTypes, placeColumn, positionAfter, uuidv7, visibleIds } from '../util'
 import { isLossyChange } from '../values'
 import DbPopover from './DbPopover.vue'
 import PropertyEditor from './PropertyEditor.vue'
@@ -30,7 +31,7 @@ const m = computed(() => db.m.value)
 const structure = computed(() => db.canEditStructure.value)
 const isTitle = computed(() => props.prop.type === 'title')
 const name = ref(props.prop.name)
-const panel = ref<'menu' | 'types' | 'confirmType' | 'confirmDelete' | 'edit' | 'insert'>('menu')
+const panel = ref<'menu' | 'types' | 'confirmType' | 'confirmDelete' | 'edit' | 'insert' | 'calc'>('menu')
 const insertSide = ref<'left' | 'right'>('right')
 const isTable = computed(() => props.column !== null && props.column !== undefined)
 const config = computed(() => db.view.value?.config ?? {})
@@ -47,6 +48,29 @@ function sort(dir: 'asc' | 'desc') {
   db.updateView(c => ({ ...c, sorts: [{ prop: props.prop.id, dir }, ...(c.sorts ?? []).filter(s => s.prop !== props.prop.id)] }))
   emit('close')
 }
+const canGroup = computed(() => groupableTypes(db.view.value?.type).includes(props.prop.type))
+const groupedHere = computed(() => config.value.group_by?.prop === props.prop.id)
+function group() {
+  db.updateView(c => ({ ...c, group_by: groupedHere.value ? undefined : { prop: props.prop.id } }))
+  emit('close')
+}
+const aggregate = computed(() => config.value.aggregates?.[props.prop.id] ?? null)
+function setAggregate(fn: string | null) {
+  db.updateView((c) => {
+    const aggregates = { ...c.aggregates }
+    if (fn) aggregates[props.prop.id] = fn
+    else delete aggregates[props.prop.id]
+    return { ...c, aggregates }
+  })
+  emit('close')
+}
+/** Notion words sort directions by type: numbers low → high, dates old → new, the rest ascending. */
+const sortLabels = computed(() => {
+  const t = resultType(props.prop)
+  if (t === 'number' || t === 'unique_id') return [m.value.sortLowHigh, m.value.sortHighLow]
+  if (t === 'date' || t === 'created_time' || t === 'last_edited_time') return [m.value.sortOldNew, m.value.sortNewOld]
+  return [m.value.sortAscending, m.value.sortDescending]
+})
 function filter() {
   db.updateView((c) => {
     const f = c.filter ?? { and: [] }
@@ -121,9 +145,14 @@ function remove() {
             <PropIcon :type="prop.type" /><span class="me-menu-title">{{ m.changeType }}</span><ChevronRight class="me-db-menu-end" />
           </button>
         </template>
-        <button type="button" class="me-menu-item" role="menuitem" @click="sort('asc')"><ArrowUp class="me-db-menu-icon" />{{ m.sortAscending }}</button>
-        <button type="button" class="me-menu-item" role="menuitem" @click="sort('desc')"><ArrowDown class="me-db-menu-icon" />{{ m.sortDescending }}</button>
+        <div class="me-db-separator" role="separator" />
         <button type="button" class="me-menu-item" role="menuitem" @click="filter"><ListFilter class="me-db-menu-icon" />{{ m.filterBy }}</button>
+        <button type="button" class="me-menu-item" role="menuitem" data-action="sort-asc" @click="sort('asc')"><ArrowUp class="me-db-menu-icon" />{{ sortLabels[0] }}</button>
+        <button type="button" class="me-menu-item" role="menuitem" data-action="sort-desc" @click="sort('desc')"><ArrowDown class="me-db-menu-icon" />{{ sortLabels[1] }}</button>
+        <button v-if="canGroup" type="button" class="me-menu-item" role="menuitem" data-action="group" @click="group"><Group class="me-db-menu-icon" />{{ groupedHere ? m.ungroup : m.groupByThis }}</button>
+        <button v-if="isTable" type="button" class="me-menu-item" role="menuitem" data-action="calculate" @click="panel = 'calc'">
+          <Calculator class="me-db-menu-icon" /><span class="me-menu-title">{{ m.calculate }}</span><span v-if="aggregate" class="me-db-menu-value">{{ m.aggregates[aggregate] ?? aggregate }}</span><ChevronRight class="me-db-menu-end" />
+        </button>
         <div class="me-db-separator" role="separator" />
         <button v-if="!isTitle" type="button" class="me-menu-item" role="menuitem" data-action="hide" @click="hide"><EyeOff class="me-db-menu-icon" />{{ m.hide }}</button>
         <template v-if="isTable">
@@ -145,6 +174,15 @@ function remove() {
         </template>
       </template>
 
+      <template v-else-if="panel === 'calc'">
+        <div class="me-menu-label">{{ m.calculate }}</div>
+        <button type="button" class="me-menu-item" role="menuitemradio" :aria-checked="!aggregate" @click="setAggregate(null)">
+          <span class="me-menu-title">{{ m.none }}</span><span class="me-db-menu-end me-db-check-slot"><Check v-if="!aggregate" /></span>
+        </button>
+        <button v-for="fn in aggregatesFor(prop)" :key="fn" type="button" class="me-menu-item" role="menuitemradio" :aria-checked="aggregate === fn" :data-fn="fn" @click="setAggregate(fn)">
+          <span class="me-menu-title">{{ m.aggregates[fn] }}</span><span class="me-db-menu-end me-db-check-slot"><Check v-if="aggregate === fn" /></span>
+        </button>
+      </template>
       <template v-else-if="panel === 'types'">
         <div class="me-menu-label">{{ m.changeType }}</div>
         <button

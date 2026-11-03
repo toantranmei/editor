@@ -342,6 +342,7 @@
   .me-db-row-handle { display: inline-flex; flex: none; width: var(--me-database-handle-col-width); color: var(--me-color-handle); cursor: grab; opacity: 0; }
   .me-db-row-handle svg { width: var(--me-database-handle-col-width); height: var(--me-font-size-md); }
   .me-db-tr:hover .me-db-row-handle { opacity: 1; }
+  .me-db-menu-value { margin-left: auto; color: var(--me-color-text-muted); font-size: var(--me-font-size-xs); }
   .me-db-kbd { color: var(--me-color-text-muted); font: inherit; font-size: var(--me-font-size-xs); }
   .me-db-open {
     position: absolute;
@@ -386,7 +387,7 @@
   .me-db-tf.me-db-gutter { justify-content: flex-start; }
   .me-db-tf:hover { background: var(--me-database-hover-bg); }
   .me-db-agg { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .me-db-agg-fn { color: var(--me-database-faint-color); font-size: var(--me-font-size-xs); }
+  .me-db-agg-fn { color: var(--me-database-faint-color); font-size: var(--me-font-size-xs); text-transform: uppercase; }
   .me-db-agg-empty { display: inline-flex; align-items: center; gap: var(--me-space-1); opacity: 0; font-size: var(--me-font-size-xs); }
   .me-db-agg-empty svg { width: var(--me-font-size-xs); height: var(--me-font-size-xs); }
   .me-db-tf:hover .me-db-agg-empty { opacity: 1; }

@@ -8,7 +8,7 @@ import { Check, Eye, EyeOff } from '@lucide/vue'
 import { computed } from 'vue'
 import { useDb } from '../context'
 import type { ChartKind, OpenMode, Prop, ValueFn, ViewConfig, ViewType } from '../types'
-import { switchLayout, visibleIds } from '../util'
+import { groupableTypes, switchLayout, visibleIds } from '../util'
 import OpenModeIcon from './OpenModeIcon.vue'
 import PropIcon from './PropIcon.vue'
 
@@ -20,9 +20,7 @@ const c = computed<ViewConfig>(() => view.value?.config ?? {})
 const editable = computed(() => db.canEditStructure.value)
 const all = computed(() => db.props.value)
 const ofTypes = (...types: string[]) => all.value.filter(p => types.includes(p.type))
-const groupable = computed(() => (view.value?.type === 'board'
-  ? ofTypes('select', 'status', 'person', 'checkbox', 'multi_select')
-  : ofTypes('select', 'status', 'multi_select', 'person', 'checkbox', 'text', 'url', 'email', 'phone', 'date', 'relation')))
+const groupable = computed(() => ofTypes(...groupableTypes(view.value?.type)))
 const dateProps = computed(() => ofTypes('date', 'created_time', 'last_edited_time'))
 const fileProps = computed(() => ofTypes('files'))
 const numberProps = computed(() => all.value.filter(p => p.type === 'number' || (p.type === 'formula' && p.config?.result_type === 'number') || p.type === 'rollup'))
