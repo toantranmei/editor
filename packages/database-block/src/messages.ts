@@ -165,6 +165,10 @@ export interface DatabaseMessages {
   insertRight: string
   duplicateProperty: string
   clearSelection: string
+  propertyDescription: string
+  propertyDescriptionHint: string
+  wrapPageTitles: string
+  showTitle: string
   formDescription: string
   formAnswer: string
   formSubmit: string
@@ -448,6 +452,10 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     insertRight: 'Insert right',
     duplicateProperty: 'Duplicate property',
     clearSelection: 'Clear selection',
+    propertyDescription: 'Description',
+    propertyDescriptionHint: 'Shown when hovering the column',
+    wrapPageTitles: 'Wrap page titles',
+    showTitle: 'Show database title',
     formDescription: 'Description (optional)',
     formAnswer: 'Your answer',
     formSubmit: 'Submit',
@@ -727,6 +735,10 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     insertRight: 'Chèn bên phải',
     duplicateProperty: 'Nhân bản thuộc tính',
     clearSelection: 'Bỏ chọn',
+    propertyDescription: 'Mô tả',
+    propertyDescriptionHint: 'Hiện khi rê chuột lên cột',
+    wrapPageTitles: 'Xuống dòng tiêu đề',
+    showTitle: 'Hiện tiêu đề database',
     formDescription: 'Mô tả (không bắt buộc)',
     formAnswer: 'Câu trả lời',
     formSubmit: 'Gửi',
@@ -1006,6 +1018,10 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     insertRight: '在右侧插入',
     duplicateProperty: '复制属性',
     clearSelection: '取消选择',
+    propertyDescription: '描述',
+    propertyDescriptionHint: '悬停列时显示',
+    wrapPageTitles: '标题换行',
+    showTitle: '显示数据库标题',
     formDescription: '描述（可选）',
     formAnswer: '你的回答',
     formSubmit: '提交',

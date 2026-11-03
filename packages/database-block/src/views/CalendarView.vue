@@ -136,7 +136,7 @@ function addOn(day: string, e?: MouseEvent) {
         <button type="button" class="me-db-icon-button" :aria-label="m.previous" @click="step(-1)"><ChevronLeft /></button>
         <button type="button" class="me-db-icon-button" :aria-label="m.next" @click="step(1)"><ChevronRight /></button>
       </div>
-      <div class="me-db-calendar-grid" :class="{ 'is-weekdays': !weekends, 'is-week': asWeek }" role="grid">
+      <div class="me-db-calendar-grid" :class="{ 'is-weekdays': !weekends, 'is-week': asWeek, 'is-wrap-titles': db.view.value?.config.wrap_titles }" role="grid">
         <span v-for="(w, i) in shownWeekdays" :key="i" class="me-db-calendar-weekday" role="columnheader">{{ w }}</span>
         <div
           v-for="d in shownDays"

@@ -461,6 +461,8 @@
   .me-db-form-required { font-size: var(--me-font-size-xs); color: var(--me-database-muted-color); }
   .me-db-form-sent { display: flex; flex-direction: column; align-items: center; gap: var(--me-space-3); padding: var(--me-space-9) 0; text-align: center; }
   .me-db-form-sent svg { width: var(--me-space-9); height: var(--me-space-9); color: var(--me-palette-green-text); }
+  .me-db-calendar-grid.is-wrap-titles .me-db-event { white-space: normal; text-overflow: clip; }
+  .me-db-th-info { flex: none; width: var(--me-font-size-xs); height: var(--me-font-size-xs); color: var(--me-database-faint-color); }
   .me-db-kbd { color: var(--me-color-text-muted); font: inherit; font-size: var(--me-font-size-xs); }
   .me-db-open {
     position: absolute;

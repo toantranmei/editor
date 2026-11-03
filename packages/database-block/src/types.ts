@@ -47,6 +47,8 @@ export interface PropConfig {
   expression?: string
   /** title: row templates of the database. */
   templates?: RowTemplate[]
+  /** Any property: a description shown when hovering its header (Notion's ⓘ). */
+  description?: string
   /** unique_id */
   prefix?: string
   /** select / multi_select: keep options sorted (new ones land in order). */
@@ -170,6 +172,10 @@ export interface ViewConfig {
   show_table?: boolean
   /** calendar */
   date_prop?: string
+  /** calendar: wrap event titles instead of cutting them. */
+  wrap_titles?: boolean
+  /** Show the database title above this view (default true; Notion's "Show data source title"). */
+  show_title?: boolean
   /** calendar: "Show calendar as" one week instead of the month grid. */
   calendar_as?: 'week'
   /** timeline */

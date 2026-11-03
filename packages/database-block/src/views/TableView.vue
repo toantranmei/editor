@@ -4,7 +4,7 @@
  * Only the rows in view (+ overscan) are requested from the source, in chunk-aligned windows (`RowStore`).
  * Rows have a fixed height and move with `transform`, so scrolling never triggers layout of off-screen rows.
  */
-import { ChevronDown, ChevronRight, Copy, Ellipsis, GripVertical, Plus, Trash2, X } from '@lucide/vue'
+import { ChevronDown, ChevronRight, Copy, Ellipsis, GripVertical, Info, Plus, Trash2, X } from '@lucide/vue'
 import { type ColumnDef, type ColumnSizingState, getCoreRowModel, useVueTable } from '@tanstack/vue-table'
 import { useVirtualizer } from '@tanstack/vue-virtual'
 import { componentTokens } from '@toantranmei/editor'
@@ -820,7 +820,8 @@ defineExpose({ sel, checked, startEdit, pasteMatrix, store, rowVirtualizer, colV
               @dragend="colDrag = null"
             >
               <PropIcon :type="cols[sl.col]!.type" />
-              <span class="me-db-th-name">{{ cols[sl.col]!.name }}</span>
+              <span class="me-db-th-name" :title="cols[sl.col]!.config?.description || undefined">{{ cols[sl.col]!.name }}</span>
+              <Info v-if="cols[sl.col]!.config?.description" class="me-db-th-info" :aria-label="cols[sl.col]!.config!.description" />
               <span class="me-db-resize" :class="{ 'is-active': resizing === cols[sl.col]!.id }" draggable="false" @mousedown.stop.prevent="startResize($event, sl.col)" @touchstart.stop="startResize($event, sl.col)" @click.stop @dragstart.prevent />
             </div>
           </template>

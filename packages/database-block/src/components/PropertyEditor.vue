@@ -178,6 +178,10 @@ function save(andClose = true) {
         <span class="me-menu-label">{{ m.propertyName }}</span>
         <input v-model="name" class="me-input" :aria-label="m.propertyName" autofocus>
       </label>
+      <label class="me-db-field">
+        <span class="me-menu-label">{{ m.propertyDescription }}</span>
+        <input :value="config.description ?? ''" class="me-input" :placeholder="m.propertyDescriptionHint" data-setting="description" @input="patchConfig({ description: ($event.target as HTMLInputElement).value || undefined })">
+      </label>
       <div v-if="!editing" class="me-db-field">
         <span class="me-menu-label">{{ m.propertyType }}</span>
         <div class="me-db-type-grid" role="radiogroup" :aria-label="m.propertyType">

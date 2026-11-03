@@ -294,6 +294,10 @@ const value = (e: Event) => (e.target as HTMLSelectElement).value
           </select>
         </label>
         <label class="me-db-toggle-row">
+          <span>{{ m.wrapPageTitles }}</span>
+          <input type="checkbox" class="me-db-switch" data-setting="wrap_titles" :checked="!!c.wrap_titles" :disabled="!editable" @change="set({ wrap_titles: checked($event) || undefined })">
+        </label>
+        <label class="me-db-toggle-row">
           <span>{{ m.showWeekends }}</span>
           <input type="checkbox" class="me-db-switch" data-setting="weekends" :checked="c.show_weekends !== false" :disabled="!editable" @change="set({ show_weekends: checked($event) ? undefined : false })">
         </label>
@@ -398,6 +402,10 @@ const value = (e: Event) => (e.target as HTMLSelectElement).value
         </label>
       </template>
 
+      <label class="me-db-toggle-row">
+        <span>{{ m.showTitle }}</span>
+        <input type="checkbox" class="me-db-switch" data-setting="show_title" :checked="c.show_title !== false" :disabled="!editable" @change="set({ show_title: checked($event) ? undefined : false })">
+      </label>
       <details v-if="['table', 'board', 'gallery', 'list', 'calendar'].includes(view?.type ?? '')" class="me-db-details" data-setting="colors" :open="!!c.colors?.length">
         <summary class="me-menu-label">{{ m.conditionalColor }}<span v-if="c.colors?.length" class="me-db-menu-value">{{ c.colors.length }}</span></summary>
         <ColorRules />

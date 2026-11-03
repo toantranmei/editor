@@ -85,7 +85,7 @@ const VIEWS = { table: TableView, board: BoardView, calendar: CalendarView, time
 const viewRef = ref<{ newRow?: (seg?: number, top?: boolean) => void } | null>(null)
 
 // ── Title: `source.meta.title`, saved while typing (debounced) and on blur / Enter ──
-const titleShown = computed(() => props.showTitle ?? !props.full)
+const titleShown = computed(() => (props.showTitle ?? !props.full) && db.view.value?.config.show_title !== false)
 const metaTitle = computed(() => props.source.meta.value?.title ?? '')
 const title = ref(metaTitle.value)
 const titleFocused = ref(false)
