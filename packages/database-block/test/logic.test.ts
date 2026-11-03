@@ -7,6 +7,7 @@ import { createMemorySource, sampleDatabase } from '../src/memory-source'
 import { RowStore } from '../src/row-store'
 import { duplicateRows, positionAfter, uuidv7 } from '../src/util'
 import { colorsOf } from '../src/colors'
+import { withHistory } from '../src/history'
 
 const p = (type: Prop['type'], config?: Prop['config'], id = type): Prop => ({ id, name: id, type, position: 'a0', config })
 const flush = () => new Promise(r => setTimeout(r, 0))
@@ -195,6 +196,32 @@ describe('memory source queries', () => {
     const bad = s.validateFormula!('prop("Nope") +') as { ok: false, error: string, position: number }
     expect(bad.ok).toBe(false)
     expect(bad.error).toMatch(/Unknown property|Unexpected/)
+  })
+})
+
+describe('undo / redo', () => {
+  it('undoes and redoes cell writes, one step per task, and brings deleted rows back', async () => {
+    const inner = createMemorySource(sampleDatabase(5))
+    const h = withHistory(inner)
+    const view = inner.views.value[0]!
+    const { rows } = await h.source.rows(view.id, { offset: 0, limit: 5 })
+    const title = inner.props.value.find(x => x.type === 'title')!
+    const r0 = rows[0]!
+    const before = r0.values[title.id]
+    h.source.setCell(r0.id, title.id, 'A')
+    h.source.setCell(r0.id, title.id, 'B')
+    await flush()
+    h.undo()
+    expect((await inner.rows(view.id, { offset: 0, limit: 5 })).rows.find(r => r.id === r0.id)!.values[title.id]).toBe(before)
+    h.redo()
+    expect((await inner.rows(view.id, { offset: 0, limit: 5 })).rows.find(r => r.id === r0.id)!.values[title.id]).toBe('B')
+    await flush()
+    h.source.deleteRows([rows[1]!.id])
+    await flush()
+    expect((await inner.rows(view.id, { offset: 0, limit: 10 })).total).toBe(4)
+    h.undo()
+    expect((await inner.rows(view.id, { offset: 0, limit: 10 })).total).toBe(5)
+    expect(h.canRedo.value).toBe(true)
   })
 })
 

@@ -2,6 +2,7 @@ import { computed, type ComputedRef, inject, type InjectionKey, reactive, type R
 import type { DatabaseMessages } from './messages'
 import type { DatabaseBlockOptions, DatabaseSource, FilterGroup, OpenMode, Prop, Row, RowQuery, Sort, View, ViewConfig } from './types'
 import { colorsOf, type RowColors } from './colors'
+import { withHistory } from './history'
 import { normalizeFilter } from './filters'
 import type { ValueContext } from './values'
 import { byPosition, visibleProps } from './util'
@@ -54,6 +55,11 @@ export interface DbContext {
   resetDraft: () => void
   /** Conditional colors of a row in the current view (`config.colors`). */
   colors: (row: Row) => RowColors
+  /** Undo / redo of the data writes made through this block. */
+  undo: () => void
+  redo: () => void
+  canUndo: Ref<boolean>
+  canRedo: Ref<boolean>
   report: (error: unknown) => void
 }
 
@@ -78,7 +84,9 @@ export function createContext(input: {
   /** Told about every opened row (DatabaseView re-emits it as `open-row`). */
   onOpenRow?: (rowId: string, mode: OpenMode, event?: MouseEvent | KeyboardEvent) => void
 }): DbContext {
-  const { source } = input
+  // Every write through the block can be undone (⌘Z) / redone (⌘⇧Z).
+  const history = withHistory(input.source)
+  const { source } = history
   const names = { people: new Map<string, string>(), avatars: new Map<string, string>(), rows: new Map<string, string>() }
   const namesVersion = shallowReactive({ n: 0 })
   const views = computed(() => [...source.views.value].sort(byPosition))
@@ -237,6 +245,10 @@ export function createContext(input: {
       return source.createRow(Object.keys(values).length || init.values ? { ...init, values } : init)
     },
     colors: row => colorsOf(view.value?.config.colors, props.value, row),
+    undo: history.undo,
+    redo: history.redo,
+    canUndo: history.canUndo,
+    canRedo: history.canRedo,
     report,
   }
   return ctx

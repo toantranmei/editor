@@ -117,11 +117,27 @@ function newRow(where: 'top' | 'bottom' = 'bottom') {
   db.openRow(id)
 }
 
+/** ⌘Z / Ctrl+Z undoes the last data change made in this block, ⌘⇧Z / Ctrl+Y redoes it (not while typing in a field). */
+function onUndoKey(e: KeyboardEvent) {
+  if (!(e.metaKey || e.ctrlKey) || e.altKey) return
+  const k = e.key.toLowerCase()
+  const redo = (k === 'z' && e.shiftKey) || k === 'y'
+  if (k !== 'z' && k !== 'y') return
+  // A field inside the database keeps its own undo (the editor around the block is contenteditable too: ignore it).
+  const field = (e.target as HTMLElement | null)?.closest('input, textarea, select, [contenteditable="true"]')
+  if (field && (e.currentTarget as HTMLElement).contains(field)) return
+  if (redo ? !db.canRedo.value : !db.canUndo.value) return
+  e.preventDefault()
+  e.stopPropagation()
+  if (redo) db.redo()
+  else db.undo()
+}
+
 defineExpose({ db, view: viewRef })
 </script>
 
 <template>
-  <div class="me-db" :class="{ 'is-full': full, 'is-readonly': !db.canEditContent.value, 'has-title': titleShown }" :data-view-type="type">
+  <div class="me-db" :class="{ 'is-full': full, 'is-readonly': !db.canEditContent.value, 'has-title': titleShown }" :data-view-type="type" @keydown="onUndoKey">
     <div v-if="titleShown" class="me-db-header">
       <span v-if="source.meta.value?.icon" class="me-db-icon" aria-hidden="true">{{ source.meta.value.icon }}</span>
       <input

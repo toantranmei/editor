@@ -262,6 +262,8 @@ export interface DatabaseSource {
   upload?: (file: File) => Promise<FileValue>
 
   // ── Additions of this block (optional) ──
+  /** Brings deleted rows back (same ids, values and body); undo uses it when present. */
+  restoreRows?: (ids: string[]) => void
   /** Databases a relation can point to (Relation → "Related to" picker); without it the id is typed. */
   searchDatabases?: (query: string) => Promise<Array<{ id: string, title: string, icon?: string | null, path?: string }>>
   /** Properties of another database (rollup target, two-way names); without it the target id is typed. */
