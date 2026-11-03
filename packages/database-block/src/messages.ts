@@ -165,6 +165,7 @@ export interface DatabaseMessages {
   insertRight: string
   duplicateProperty: string
   clearSelection: string
+  groups: string
   conditionalColor: string
   conditionalColorHint: string
   addColorRule: string
@@ -410,6 +411,7 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     insertRight: 'Insert right',
     duplicateProperty: 'Duplicate property',
     clearSelection: 'Clear selection',
+    groups: 'Groups',
     conditionalColor: 'Conditional color',
     conditionalColorHint: 'Color rows or cells that match a condition, e.g. overdue tasks in red.',
     addColorRule: 'New color rule',
@@ -651,6 +653,7 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     insertRight: 'Chèn bên phải',
     duplicateProperty: 'Nhân bản thuộc tính',
     clearSelection: 'Bỏ chọn',
+    groups: 'Các nhóm',
     conditionalColor: 'Màu theo điều kiện',
     conditionalColorHint: 'Tô màu row hoặc ô khớp điều kiện, ví dụ việc quá hạn tô đỏ.',
     addColorRule: 'Thêm quy tắc màu',
@@ -892,6 +895,7 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     insertRight: '在右侧插入',
     duplicateProperty: '复制属性',
     clearSelection: '取消选择',
+    groups: '分组',
     conditionalColor: '条件颜色',
     conditionalColorHint: '为符合条件的行或单元格着色，例如将逾期任务标为红色。',
     addColorRule: '新建颜色规则',

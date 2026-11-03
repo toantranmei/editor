@@ -69,7 +69,7 @@ const initials = (name: string) => name.split(/\s+/).filter(Boolean).slice(-2).m
       <Check v-if="value" />
     </span>
     <template v-else-if="options.length">
-      <span v-for="opt in options" :key="opt!.id" class="me-db-tag" :data-color="opt!.color === 'default' ? undefined : opt!.color">{{ opt!.name }}</span>
+      <span v-for="opt in options" :key="opt!.id" class="me-db-tag" :class="{ 'is-status': prop.type === 'status' }" :data-color="opt!.color === 'default' ? undefined : opt!.color">{{ opt!.name }}</span>
     </template>
     <template v-else-if="people.length">
       <span v-for="p in people" :key="p.id" class="me-db-person">

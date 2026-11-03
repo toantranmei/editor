@@ -66,7 +66,9 @@
     white-space: nowrap;
   }
   .me-db-tab:hover { color: var(--me-database-tab-active-color); }
-  .me-db-tab.is-active { color: var(--me-database-tab-active-color); border-bottom-color: var(--me-database-tab-active-color); }
+  /* Notion: the current view is a grey pill, not an underline. */
+  .me-db-tab { border-radius: var(--me-database-radius); }
+  .me-db-tab.is-active { color: var(--me-database-tab-active-color); background: var(--me-database-hover-bg); font-weight: var(--me-font-weight-medium); }
   .me-db-tab.is-add { border-bottom-color: transparent; }
   .me-db-tab-input { width: var(--me-database-search-width); height: var(--me-toolbar-button-size); }
   .me-db-tab svg, .me-db-tool svg, .me-db-icon-button svg, .me-db-text-button svg, .me-db-new-row svg, .me-db-open svg, .me-db-new svg {
@@ -92,6 +94,12 @@
   .me-db-tool:hover { background: var(--me-database-hover-bg); }
   .me-db-tool.is-on { color: var(--me-database-toolbar-button-active); }
   .me-db-tool:disabled { opacity: var(--me-button-disabled-opacity); }
+  /* Toolbar icons stay faint until the database is hovered or focused; active ones keep their color. */
+  .me-db-toolbar .me-db-tool:not(.is-on):not(.me-db-new) { transition: opacity var(--me-duration-fast) ease; }
+  .me-db:not(:hover):not(:focus-within) .me-db-toolbar .me-db-tool:not(.is-on):not([aria-expanded="true"]) { opacity: 0.45; }
+  /* Status chips carry a dot in their group color, like Notion. */
+  .me-db-tag.is-status::before { width: calc(var(--me-space-3) + var(--me-space-1)); height: calc(var(--me-space-3) + var(--me-space-1)); flex: none; border-radius: var(--me-rounded-full); background: currentColor; content: ''; }
+  .me-db-tag.is-status { border-radius: var(--me-rounded-full); }
   .me-db-badge {
     min-width: var(--me-font-size-md);
     padding: 0 var(--me-space-1);

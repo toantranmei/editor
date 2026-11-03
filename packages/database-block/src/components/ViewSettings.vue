@@ -57,6 +57,38 @@ function dropProp(target: string) {
 }
 const toggle = (p: Prop) => setShown(shown.value.includes(p.id) ? shown.value.filter(id => id !== p.id) : [...shown.value, p.id])
 
+/** Groups that can be listed up front (option-based properties and checkbox): '' = no value. */
+const groupKeys = computed(() => {
+  const gp = all.value.find(p => p.id === c.value.group_by?.prop)
+  if (!gp) return []
+  const none = { key: '', label: m.value.noValue.replace('{name}', gp.name), color: undefined as string | undefined }
+  let keys: Array<{ key: string, label: string, color?: string }> = []
+  if (gp.type === 'select' || gp.type === 'status' || gp.type === 'multi_select') keys = (gp.config?.options ?? []).map(o => ({ key: o.id, label: o.name, color: o.color }))
+  else if (gp.type === 'checkbox') keys = [{ key: 'true', label: m.value.checked }, { key: 'false', label: m.value.unchecked }]
+  else return []
+  if (gp.type !== 'checkbox') keys.push(none)
+  const order = c.value.group_by?.order
+  if (order?.length) keys.sort((a, b) => (order.indexOf(a.key) + 1 || 1e9) - (order.indexOf(b.key) + 1 || 1e9))
+  return keys
+})
+const isHiddenGroup = (k: string) => !!c.value.group_by?.hidden?.includes(k)
+function toggleGroup(k: string) {
+  const g = c.value.group_by
+  if (!g) return
+  const hidden = isHiddenGroup(k) ? (g.hidden ?? []).filter(x => x !== k) : [...(g.hidden ?? []), k]
+  set({ group_by: { ...g, hidden: hidden.length ? hidden : undefined } })
+}
+const dragGroup = ref<string | null>(null)
+const overGroup = ref<string | null>(null)
+function dropGroup(target: string) {
+  const from = dragGroup.value
+  dragGroup.value = overGroup.value = null
+  const g = c.value.group_by
+  if (from === null || !g || from === target) return
+  const keys = groupKeys.value.map(x => x.key).filter(k => k !== from)
+  keys.splice(keys.indexOf(target), 0, from)
+  set({ group_by: { ...g, order: keys } })
+}
 function setGroup(id: string) {
   set({ group_by: id ? { ...c.value.group_by, prop: id } : undefined })
 }
@@ -99,6 +131,36 @@ const value = (e: Event) => (e.target as HTMLSelectElement).value
         <span>{{ m.hideEmptyGroups }}</span>
         <input type="checkbox" class="me-db-switch" :checked="!!c.group_by.hide_empty" :disabled="!editable" @change="set({ group_by: { ...c.group_by!, hide_empty: ($event.target as HTMLInputElement).checked } })">
       </label>
+      <label v-if="c.group_by" class="me-db-field">
+        <span class="me-menu-label">{{ m.optionSort }}</span>
+        <select class="me-input me-db-select" data-setting="group_sort" :value="c.group_by.sort ?? ''" :disabled="!editable" @change="set({ group_by: { ...c.group_by!, sort: (value($event) || undefined) as 'asc' | 'desc' | undefined } })">
+          <option value="">{{ m.optionSorts.manual }}</option>
+          <option value="asc">{{ m.optionSorts.asc }}</option>
+          <option value="desc">{{ m.optionSorts.desc }}</option>
+        </select>
+      </label>
+      <template v-if="groupKeys.length">
+        <div class="me-db-row me-db-section-head">
+          <span class="me-menu-label">{{ m.groups }}</span>
+          <button type="button" class="me-db-text-button" :disabled="!editable" data-groups-toggle @click="set({ group_by: { ...c.group_by!, hidden: (c.group_by!.hidden?.length ? undefined : groupKeys.map(g => g.key)) } })">{{ c.group_by!.hidden?.length ? m.showAll : m.hideAll }}</button>
+        </div>
+        <div
+          v-for="g in groupKeys"
+          :key="g.key"
+          class="me-menu-item me-db-prop-row"
+          :class="{ 'is-over': overGroup === g.key && dragGroup !== g.key }"
+          :data-group-key="g.key"
+          @dragover.prevent="dragGroup !== null && (overGroup = g.key)"
+          @drop.prevent="dropGroup(g.key)"
+        >
+          <span class="me-db-row-handle" :draggable="editable && !c.group_by!.sort" :title="m.dragToMove" @dragstart="dragGroup = g.key" @dragend="dragGroup = overGroup = null"><GripVertical /></span>
+          <span v-if="g.color" class="me-db-tag" :data-color="g.color === 'default' ? undefined : g.color">{{ g.label }}</span>
+          <span v-else class="me-menu-title">{{ g.label }}</span>
+          <button type="button" class="me-db-icon-button me-db-menu-end" :class="{ 'is-off': isHiddenGroup(g.key) }" :disabled="!editable" :aria-label="m.hide" :aria-pressed="!isHiddenGroup(g.key)" data-toggle-group @click="toggleGroup(g.key)">
+            <EyeOff v-if="isHiddenGroup(g.key)" /><Eye v-else />
+          </button>
+        </div>
+      </template>
     </template>
 
     <!-- Properties: search, shown (drag to reorder) and hidden -->

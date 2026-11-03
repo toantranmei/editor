@@ -99,7 +99,16 @@ export type FilterNode = FilterCondition | FilterGroup
 export interface ColorRule { id: string, condition: FilterCondition, color: OptionColor, scope?: 'row' | 'prop' }
 
 export interface Sort { prop: string, dir: 'asc' | 'desc' }
-export interface GroupBy { prop: string, hide_empty?: boolean, order?: string[] }
+export interface GroupBy {
+  prop: string
+  hide_empty?: boolean
+  /** Manual group order (keys; '' = no value). */
+  order?: string[]
+  /** Sort groups by label instead of the manual / option order. */
+  sort?: 'asc' | 'desc'
+  /** Group keys not shown ('' = no value). */
+  hidden?: string[]
+}
 
 export type AggregateFn =
   | 'count' | 'count_values' | 'count_empty' | 'count_not_empty' | 'percent_empty' | 'percent_not_empty' | 'unique'

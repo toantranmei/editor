@@ -260,7 +260,7 @@ describe('other views', () => {
   it('renders board columns per group and moves a card with setCell on drop', async () => {
     const { source, wrapper } = await setup(30, 'v-board')
     const columns = wrapper.findAll('.me-db-column[data-group]')
-    expect(columns.map(c => c.attributes('data-group'))).toEqual(['', 's-todo', 's-doing', 's-done'])
+    expect(columns.map(c => c.attributes('data-group'))).toEqual(['s-todo', 's-doing', 's-done', ''])
     const card = wrapper.find('.me-db-column[data-group="s-todo"] .me-db-card')
     const id = card.attributes('data-row-id')!
     await card.trigger('dragstart')
