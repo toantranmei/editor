@@ -11,7 +11,7 @@ import type { DatabaseMessages } from './messages'
 export type PropType =
   | 'title' | 'text' | 'number' | 'select' | 'multi_select' | 'status' | 'date' | 'person' | 'files' | 'checkbox'
   | 'url' | 'email' | 'phone' | 'relation' | 'rollup' | 'formula'
-  | 'created_time' | 'last_edited_time' | 'created_by' | 'last_edited_by' | 'unique_id'
+  | 'created_time' | 'last_edited_time' | 'created_by' | 'last_edited_by' | 'unique_id' | 'button'
 
 /** Option color: an editor palette name (`default` = no color). */
 export type OptionColor = PaletteName | 'default'
@@ -37,18 +37,44 @@ export interface PropConfig {
   /** relation */
   database_id?: string
   two_way_prop_id?: string
+  /** relation: at most this many pages (1 = "1 page"). */
+  limit?: number
   /** rollup */
   relation_prop_id?: string
   target_prop_id?: string
   fn?: RollupFn
   /** formula */
   expression?: string
+  /** title: row templates of the database. */
+  templates?: RowTemplate[]
+  /** title: the database's automations (trigger → actions), run by the client that made the triggering write. */
+  automations?: Automation[]
+  /** button: text on the button (default: the property name). */
+  label?: string
+  /** button: what a click does, in order. */
+  actions?: DbAction[]
+  /** Any property: a description shown when hovering its header (Notion's ⓘ). */
+  description?: string
   /** unique_id */
   prefix?: string
+  /** select / multi_select: keep options sorted (new ones land in order). */
+  option_sort?: 'asc' | 'desc'
+  /** status / select: option new rows start with. */
+  default_option_id?: string
+  /** number / numeric rollup: draw the value as a bar or a ring (`divide_by` = full, default 100). */
+  show_as?: 'number' | 'bar' | 'ring'
+  show_color?: OptionColor
+  divide_by?: number
+  /** bar / ring: also print the number (default true). */
+  show_number?: boolean
+  /** date / created_time / last_edited_time: 12-hour clock. */
+  hour12?: boolean
+  /** url: show the whole URL; off: the host only. */
+  full_url?: boolean
   [key: string]: unknown
 }
 
-export type DateDisplay = 'dmy' | 'mdy' | 'ymd' | 'relative'
+export type DateDisplay = 'full' | 'short' | 'dmy' | 'mdy' | 'ymd' | 'relative'
 
 export interface Prop {
   id: string
@@ -59,12 +85,18 @@ export interface Prop {
 }
 
 /** Cell values (JSON) per type. */
-export interface DateValue { start: string, end?: string }
+/**
+ * `remind`: a reminder (`DateRemind`) and `remind_at`, when it is due (RFC 3339, computed in the editor's time zone;
+ * the host notifies whoever set it).
+ */
+export interface DateValue { start: string, end?: string, remind?: DateRemind, remind_at?: string }
+/** Before the date: on the day / at the time, minutes, hours, days or a week before (9:00 for dates without time). */
+export type DateRemind = 'at_time' | '5m' | '10m' | '15m' | '30m' | '1h' | '2h' | '1d' | '2d' | '1w'
 export interface FileValue { id: string, name: string, url: string }
 
 // ── 1.3 View ──────────────────────────────────────────────────────────────────
 
-export type ViewType = 'table' | 'board' | 'calendar' | 'timeline' | 'gallery' | 'list' | 'chart' | 'pivot'
+export type ViewType = 'table' | 'board' | 'calendar' | 'timeline' | 'gallery' | 'list' | 'chart' | 'pivot' | 'form' | 'feed' | 'dashboard'
 
 export type TextOp = 'equals' | 'not_equals' | 'contains' | 'not_contains' | 'starts_with' | 'ends_with' | 'is_empty' | 'is_not_empty'
 export type NumberOp = '=' | '!=' | '>' | '>=' | '<' | '<=' | 'is_empty' | 'is_not_empty'
@@ -81,8 +113,73 @@ export interface FilterCondition { prop: string, op: FilterOp, value?: unknown }
 export type FilterGroup = { and: FilterNode[] } | { or: FilterNode[] }
 export type FilterNode = FilterCondition | FilterGroup
 
+/**
+ * A row template (New ▾): property values a new row starts with. Kept in the title property's
+ * `config.templates` (database-wide, synced with the schema); `default` is used by "New".
+ */
+/**
+ * A row template. `body_from`: the row whose page content new rows get (`source.copyRowBody`). `repeat`: the host makes
+ * a row from it every day / week / month from `start` (RFC 3339), as `by` (Notion's "Duplicate every…").
+ */
+export interface RowTemplate {
+  id: string
+  name: string
+  values: Record<string, unknown>
+  default?: boolean
+  body_from?: string
+  repeat?: { every: TemplateRepeat, start: string, by?: string }
+}
+export type TemplateRepeat = 'day' | 'week' | 'month'
+
+// ── Buttons and automations ───────────────────────────────────────────────────
+
+/**
+ * A value an action writes into a property: `value` is a contract cell value (as `setCell` takes it; `null` clears),
+ * or `dynamic` is resolved when the action runs: `today` / `now` (date: `{ start: 'YYYY-MM-DD' }` / RFC 3339),
+ * `me` (person: `[current user id]`, from `source.currentUserId`).
+ */
+export interface ActionValue { prop: string, value?: unknown, dynamic?: 'today' | 'now' | 'me' }
+
+/**
+ * One step of a button or an automation (Notion's actions). `set_values`: edit properties of the row;
+ * `add_row`: create a row in this database (`open`: open it, buttons only); `open_url`: open `url` or the row's
+ * URL property `prop` (buttons only); `show_confirm`: ask before running the next steps (buttons only).
+ */
+export type DbAction =
+  | { id: string, type: 'set_values', values: ActionValue[] }
+  | { id: string, type: 'add_row', values: ActionValue[], open?: boolean }
+  | { id: string, type: 'open_url', url?: string, prop?: string }
+  | { id: string, type: 'show_confirm', message?: string }
+export type DbActionType = DbAction['type']
+
+/** Config of a `button` property. */
+export interface ButtonConfig { label?: string, actions: DbAction[] }
+
+/**
+ * What starts an automation: a new row, or a property change (`prop` absent = any property; `condition`: only
+ * when the new value matches, a filter condition on `prop`).
+ */
+export type AutomationTrigger =
+  | { type: 'row_added' }
+  | { type: 'prop_changed', prop?: string, condition?: FilterCondition }
+
+/** A database automation (title property's `config.automations`). */
+export interface Automation { id: string, name?: string, enabled: boolean, trigger: AutomationTrigger, actions: DbAction[] }
+
+/** A conditional color rule (`config.colors`): rows (or one cell) matching `condition` get `color`. */
+export interface ColorRule { id: string, condition: FilterCondition, color: OptionColor, scope?: 'row' | 'prop' }
+
 export interface Sort { prop: string, dir: 'asc' | 'desc' }
-export interface GroupBy { prop: string, hide_empty?: boolean, order?: string[] }
+export interface GroupBy {
+  prop: string
+  hide_empty?: boolean
+  /** Manual group order (keys; '' = no value). */
+  order?: string[]
+  /** Sort groups by label instead of the manual / option order. */
+  sort?: 'asc' | 'desc'
+  /** Group keys not shown ('' = no value). */
+  hidden?: string[]
+}
 
 export type AggregateFn =
   | 'count' | 'count_values' | 'count_empty' | 'count_not_empty' | 'percent_empty' | 'percent_not_empty' | 'unique'
@@ -94,6 +191,42 @@ export type OpenMode = 'side_peek' | 'center_peek' | 'full_page'
 
 export type ChartKind = 'bar' | 'line' | 'area' | 'pie' | 'donut' | 'scatter'
 export type ValueFn = 'count' | 'sum' | 'avg' | 'min' | 'max'
+
+/** The chart part of a chart view's config (also a dashboard chart widget's). */
+export interface ChartSpec {
+  chart?: ChartKind
+  x?: { prop: string, bucket?: 'day' | 'week' | 'month' | 'year' }
+  y?: Array<{ prop?: string, fn: ValueFn }>
+  series?: string
+  stacked?: boolean
+}
+
+/**
+ * A dashboard widget (`config.widgets`, in grid order): a chart (the `ChartSpec` fields) or a number card (`fn` of
+ * `prop` over the rows, Notion's calculations; `count` needs no prop). `filter` narrows the rows of this widget (on
+ * top of the view's filter). `span`: 1 = half the width, 2 = the whole width (default 1).
+ */
+export interface DashboardWidget extends ChartSpec {
+  id: string
+  kind: 'chart' | 'number'
+  title?: string
+  span?: 1 | 2
+  /** number: property and calculation (an `AggregateFn`, default `count`). */
+  prop?: string
+  fn?: AggregateFn
+  filter?: FilterGroup
+}
+
+/**
+ * Optional second argument of `chart`: a dashboard widget's chart (`widget` = its id in the view's
+ * `config.widgets`). Its fields replace the view's chart config; `filter`, when present, replaces the view's filter
+ * (`null` = none) like `RowQuery.filter`.
+ */
+export interface ChartQuery extends ChartSpec {
+  widget?: string
+  filter?: FilterGroup | null
+  search?: string
+}
 
 export interface ViewConfig {
   filter?: FilterGroup
@@ -108,11 +241,34 @@ export interface ViewConfig {
   wraps?: Record<string, boolean>
   /** Table: number of leading columns kept in view while scrolling sideways. Default 1 (the title). */
   freeze?: number
+  /** Conditional colors, first match wins (row / card, or per cell with scope `prop`). */
+  colors?: ColorRule[]
+  /** Table / list / board: sub-items — a relation to this database holding each row's parent. */
+  sub_items?: string
+  /**
+   * How sub-items show (Notion's "Show sub-items as"): `nested` (default; parents listed, sub-items under their
+   * parent: ▸ in table / list, "N sub-items" on board cards) or `flat` (every row, sub-items name their parent).
+   */
+  sub_items_display?: 'nested' | 'flat'
+  /** Form: description under the title, required questions (property ids). */
+  form_description?: string
+  form_required?: string[]
+  /** Share form is on (the host's public link answers it): mirrors the last `source.formLink` call. */
+  form_shared?: boolean
+  /** Table: draw the lines between columns (default true). */
+  vertical_lines?: boolean
+  /** Inline table: lines shown before "Load more" (default 50, 0 = no limit). Feed: posts per page (default 10). */
+  load_limit?: number
+  /** Feed: show each row's page content preview (`source.rowPreview`, default true). */
+  feed_preview?: boolean
   /** How rows open from this view. Default `side_peek`. */
   open_in?: OpenMode
   aggregates?: Record<string, AggregateFn | string>
-  /** board / gallery / list / calendar / timeline: card cover (board), shown properties, card size (board). */
-  card?: { cover?: string, props?: string[], size?: 's' | 'm' | 'l' }
+  /**
+   * board / gallery / list / calendar / timeline / feed: card preview (board; `CardPreview`), shown properties, card size
+   * (board), card layout (board / gallery: properties one per line, `list`, the default, or wrapped, `compact`).
+   */
+  card?: { cover?: CardPreview, props?: string[], size?: 's' | 'm' | 'l', layout?: 'list' | 'compact' }
   /** board: tint columns with their option color. */
   color_columns?: boolean
   /** gallery / board: fit the cover image instead of cropping it. */
@@ -123,12 +279,24 @@ export interface ViewConfig {
   show_table?: boolean
   /** calendar */
   date_prop?: string
+  /** calendar: wrap event titles instead of cutting them. */
+  wrap_titles?: boolean
+  /** table / board / gallery / list: show the row pages' icons (`Row.icon`) before their titles (default true). */
+  show_page_icon?: boolean
+  /** The view tab's icon (an emoji or an image URL); missing: the layout's icon. */
+  icon?: string
+  /** The view tab shows its icon and name (`name`, default) or only the icon (`icon`; the name is the tooltip). */
+  tab_display?: 'name' | 'icon'
+  /** Show the database title above this view (default true; Notion's "Show data source title"). */
+  show_title?: boolean
+  /** calendar: "Show calendar as" one week instead of the month grid. */
+  calendar_as?: 'week'
   /** timeline */
   start_prop?: string
   end_prop?: string
-  scale?: 'day' | 'week' | 'month'
-  /** gallery (and board's `card.cover`) */
-  cover?: string
+  scale?: 'day' | 'week' | 'month' | 'quarter' | 'year'
+  /** gallery card preview (board: `card.cover`). */
+  cover?: CardPreview
   size?: 's' | 'm' | 'l'
   /** chart */
   chart?: ChartKind
@@ -136,6 +304,8 @@ export interface ViewConfig {
   y?: Array<{ prop?: string, fn: ValueFn }>
   series?: string
   stacked?: boolean
+  /** dashboard: the widgets, in grid order. */
+  widgets?: DashboardWidget[]
   /** pivot */
   rows?: string[]
   cols?: string[]
@@ -143,6 +313,13 @@ export interface ViewConfig {
   totals?: boolean
   [key: string]: unknown
 }
+
+/**
+ * Card preview of board / gallery cards (Notion's Layout → Card preview): a `files` property id (its first image),
+ * the row page's cover (`page_cover`) or the start of its content (`page_content`), both read with
+ * `source.rowPreview`. Missing / empty: none.
+ */
+export type CardPreview = 'page_cover' | 'page_content' | (string & {})
 
 export interface View {
   id: string
@@ -160,6 +337,18 @@ export interface Row {
   values: Record<string, unknown>
   /** formula / rollup / created_* / unique_id results. */
   computed?: Record<string, unknown>
+  /** The row page's icon (an emoji, or an image URL), shown before the title when the view's `show_page_icon` is on. */
+  icon?: string | null
+}
+
+/** What `source.rowPreview` tells about a row page (card previews). Every field is optional. */
+export interface RowPreview {
+  /** URL of the page's cover image (Card preview → Page cover). */
+  cover?: string | null
+  /** First image of the page content (Card preview → Page content; wins over `text`). */
+  image?: string | null
+  /** Start of the page content as plain text (Card preview → Page content). */
+  text?: string | null
 }
 
 export interface RowWindow { offset: number, limit: number }
@@ -178,13 +367,23 @@ export interface Person { id: string, name: string, avatar?: string }
  * Transient query options this block adds (not part of a view's saved config): the toolbar search box.
  * Optional third argument of `rows` / `groups` / `rowsInGroup` / `aggregate`; sources may ignore it.
  */
-export interface RowQuery { search?: string }
+export interface RowQuery {
+  search?: string
+  /**
+   * The viewer's unsaved filter / sorts (Notion's "Reset / Save for everyone"): when present they replace the
+   * view's saved `filter` / `sorts` for this query (`null` filter = no filter). Sources that ignore them show
+   * the saved ones until the viewer saves.
+   */
+  filter?: FilterGroup | null
+  sorts?: Sort[]
+}
 
 /** Result of the optional `validateFormula`. */
 export type FormulaCheck = { ok: true, type?: 'number' | 'string' | 'boolean' | 'date' } | { ok: false, error: string, position?: number, code?: string }
 
 export interface DatabaseSource {
-  meta: Ref<{ title: string, icon?: string | null } | undefined>
+  /** `locked`: Lock database — properties, views and layout can't change (data still can). */
+  meta: Ref<{ title: string, icon?: string | null, locked?: boolean } | undefined>
   props: Ref<Prop[]>
   views: Ref<View[]>
   version: Ref<number>
@@ -195,7 +394,8 @@ export interface DatabaseSource {
   groups: (viewId: string, query?: RowQuery) => Promise<Group[]>
   rowsInGroup: (viewId: string, key: string | null, window: RowWindow, query?: RowQuery) => Promise<RowPage>
   aggregate: (viewId: string, propId: string, fn: string, query?: RowQuery) => Promise<number | string | null>
-  chart: (viewId: string) => Promise<ChartResult>
+  /** `query` (dashboard widgets): another chart config / filter than the view's own; older sources ignore it. */
+  chart: (viewId: string, query?: ChartQuery) => Promise<ChartResult>
   pivot: (viewId: string) => Promise<PivotResult>
   sql?: (query: string) => Promise<{ columns: string[], rows: unknown[][] } | { error: string }>
 
@@ -207,7 +407,7 @@ export interface DatabaseSource {
   deleteProp: (id: string) => void
   upsertView: (view: View) => void
   deleteView: (id: string) => void
-  setMeta: (meta: { title?: string, icon?: string | null }) => void
+  setMeta: (meta: { title?: string, icon?: string | null, locked?: boolean }) => void
   /**
    * Opens a row. `mode` is the view's "Open pages in" setting (`config.open_in`, default `side_peek`), passed since
    * 0.2; older sources simply ignore it. `DatabaseBlockOptions.openRow` (when set) is called instead.
@@ -218,6 +418,18 @@ export interface DatabaseSource {
   upload?: (file: File) => Promise<FileValue>
 
   // ── Additions of this block (optional) ──
+  /** Id of the signed-in person (buttons / automations "Me"); without it "Me" is not offered. */
+  currentUserId?: () => string | null | undefined
+  /** Brings deleted rows back (same ids, values and body); undo uses it when present. */
+  restoreRows?: (ids: string[]) => void
+  /** Databases a relation can point to (Relation → "Related to" picker); without it the id is typed. */
+  searchDatabases?: (query: string) => Promise<Array<{ id: string, title: string, icon?: string | null, path?: string }>>
+  /** Properties of another database (rollup target, two-way names); without it the target id is typed. */
+  propsOf?: (databaseId: string) => Promise<Prop[]>
+  /** Share form: turns the public link of a form view on or off; resolves to its URL (absent: no sharing). */
+  formLink?: (viewId: string, enabled: boolean) => Promise<{ url: string, enabled: boolean }>
+  /** Template page content: copy row `from`'s page into the new (empty) row `to`. */
+  copyRowBody?: (from: string, to: string) => Promise<void>
   /** Checks a formula while it is typed in the property editor. */
   validateFormula?: (expression: string) => Promise<FormulaCheck> | FormulaCheck
   /**
@@ -225,9 +437,27 @@ export interface DatabaseSource {
    * timeline. Without it those views read the first `rangeLimit` rows of the view and filter them here.
    */
   rowsInRange?: (viewId: string, propId: string, start: string, end: string, query?: RowQuery) => Promise<Row[]>
+  /**
+   * Page cover / content previews of rows (feed posts, board and gallery "Card preview: Page cover / Page content"),
+   * asked in batches for the rows on screen. Rows missing from the result have no preview. Without it those previews
+   * stay empty.
+   */
+  rowPreview?: (rowIds: string[]) => Promise<Record<string, RowPreview>>
 }
 
 // ── Block options ─────────────────────────────────────────────────────────────
+
+/** A viewer's unsaved filter / sorts of a view (`filter: null` = the saved filter turned off). */
+export interface ViewDraft { filter?: FilterGroup | null, sorts?: Sort[] }
+
+/**
+ * Where viewers' drafts live between sessions (`DatabaseBlockOptions.draftStore`). `get` is read when a view opens,
+ * `set` on every change (`null` after Save / Reset). `databaseId` is passed too, for stores shared by databases.
+ */
+export interface DraftStore {
+  get: (viewId: string, databaseId?: string) => ViewDraft | null
+  set: (viewId: string, draft: ViewDraft | null, databaseId?: string) => void
+}
 
 export type DatabaseKind = 'inline' | 'full_page'
 
@@ -243,6 +473,17 @@ export interface DatabaseBlockOptions {
    * it instead of `source.openRow`. `event`: the click, e.g. to open a new tab on Cmd / Ctrl-click.
    */
   openRow?: ((databaseId: string, rowId: string, mode: OpenMode, event?: MouseEvent | KeyboardEvent) => void) | null
+  /** Link to a view of the database ("Copy link to view" in the tab menu). */
+  viewUrl?: ((databaseId: string, viewId: string) => string) | null
+  /** Link to a row (Copy link in the row menu). Without it the menu has no Copy link. */
+  rowUrl?: ((databaseId: string, rowId: string) => string) | null
+  /**
+   * Keeps each viewer's unsaved filter / sorts across sessions. Default: `localStorage`, per `userId`, database and
+   * view (`localDraftStore`). `false`: drafts last for the session only.
+   */
+  draftStore?: DraftStore | false | null
+  /** The signed-in user, to keep drafts of different users on one browser apart. */
+  userId?: string | null
   /** Called when `createDatabase` or a source call fails. Default: `console.error`. */
   onError?: ((error: unknown) => void) | null
   /** Override any string, per locale. */

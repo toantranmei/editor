@@ -6,9 +6,10 @@
 import { ref } from 'vue'
 import type {
   ChartResult, DatabaseSource, DateValue, FilterCondition, FilterGroup, FilterNode, FormulaCheck, Group, Person,
-  OpenMode, PivotResult, Prop, Row, RowQuery, View, ViewConfig,
+  OpenMode, PivotResult, Prop, Row, RowPreview, RowQuery, View, ViewConfig,
 } from './types'
 import { byPosition, fold, isEmptyValue, uuidv7 } from './util'
+import { dateMs, DAY, dayMs, matchNode, startOfDay } from './match'
 
 export interface MemoryRow extends Row {
   created_time?: number
@@ -16,11 +17,13 @@ export interface MemoryRow extends Row {
   last_edited_time?: number
   last_edited_by?: string
   unique_id?: number
+  /** Page cover / start of the page content, served by `rowPreview` (feed posts, card previews). */
+  preview?: RowPreview
 }
 
 export interface MemorySourceInit {
   databaseId?: string
-  meta?: { title: string, icon?: string | null }
+  meta?: { title: string, icon?: string | null, locked?: boolean }
   props: Prop[]
   views: View[]
   rows?: MemoryRow[]
@@ -253,130 +256,6 @@ function valueOf(row: MemoryRow, prop: Prop, props: Prop[]): unknown {
   }
 }
 
-// ── Filters ──────────────────────────────────────────────────────────────────
-
-const DAY = 86400000
-const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()
-function dateMs(v: unknown): number | null {
-  if (v === null || v === undefined || v === '') return null
-  if (typeof v === 'number') return v
-  const s = typeof v === 'string' ? v : (v as DateValue).start
-  if (!s) return null
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s)
-  const t = m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])).getTime() : new Date(s).getTime()
-  return Number.isNaN(t) ? null : t
-}
-function dayMs(v: unknown): number | null {
-  const t = dateMs(v)
-  return t === null ? null : startOfDay(new Date(t))
-}
-function relativeRange(rel: string, now = new Date()): [number, number] {
-  const today = startOfDay(now)
-  const dow = (now.getDay() + 6) % 7
-  const weekStart = today - dow * DAY
-  const month = (offset: number) => [new Date(now.getFullYear(), now.getMonth() + offset, 1).getTime(), new Date(now.getFullYear(), now.getMonth() + offset + 1, 1).getTime() - 1] as [number, number]
-  switch (rel) {
-    case 'today': return [today, today + DAY - 1]
-    case 'tomorrow': return [today + DAY, today + 2 * DAY - 1]
-    case 'yesterday': return [today - DAY, today - 1]
-    case 'this_week': return [weekStart, weekStart + 7 * DAY - 1]
-    case 'past_week': return [today - 7 * DAY, today - 1]
-    case 'next_week': return [today + DAY, today + 8 * DAY - 1]
-    case 'this_month': return month(0)
-    case 'past_month': return [today - 30 * DAY, today - 1]
-    case 'next_month': return [today + DAY, today + 31 * DAY - 1]
-    case 'past_year': return [today - 365 * DAY, today - 1]
-    case 'next_year': return [today + DAY, today + 366 * DAY - 1]
-    default: return [today, today + DAY - 1]
-  }
-}
-
-function matchCondition(row: MemoryRow, c: FilterCondition, props: Map<string, Prop>, all: Prop[]): boolean {
-  const prop = props.get(c.prop)
-  if (!prop) return true
-  const v = valueOf(row, prop, all)
-  if (c.op === 'is_empty') return isEmptyValue(v)
-  if (c.op === 'is_not_empty') return !isEmptyValue(v)
-  const type = prop.type
-  if (type === 'checkbox') return !!v === !!c.value
-  if (type === 'number' || type === 'unique_id' || (type === 'formula' && typeof v === 'number') || type === 'rollup') {
-    const n = typeof v === 'number' ? v : null
-    const x = Number(c.value)
-    if (c.value === null || c.value === undefined || c.value === '') return true
-    if (n === null) return c.op === '!='
-    switch (c.op) {
-      case '=': return n === x
-      case '!=': return n !== x
-      case '>': return n > x
-      case '>=': return n >= x
-      case '<': return n < x
-      case '<=': return n <= x
-      default: return true
-    }
-  }
-  if (type === 'select' || type === 'status') {
-    const list = Array.isArray(c.value) ? c.value : [c.value]
-    switch (c.op) {
-      case 'is': return c.value === '' || c.value === undefined ? true : v === c.value
-      case 'is_not': return v !== c.value
-      case 'is_any_of': return !list.length || list.includes(v)
-      case 'is_none_of': return !list.includes(v)
-      default: return true
-    }
-  }
-  if (type === 'multi_select' || type === 'person' || type === 'relation' || type === 'created_by' || type === 'last_edited_by') {
-    const arr = (Array.isArray(v) ? v : v === undefined || v === null ? [] : [v]) as unknown[]
-    const list = Array.isArray(c.value) ? c.value : [c.value]
-    switch (c.op) {
-      case 'contains': return c.value === '' || c.value === undefined ? true : arr.includes(c.value)
-      case 'not_contains': return !arr.includes(c.value)
-      case 'contains_any': return !list.length || list.some(x => arr.includes(x))
-      case 'contains_all': return list.every(x => arr.includes(x))
-      default: return true
-    }
-  }
-  if (type === 'date' || type === 'created_time' || type === 'last_edited_time') {
-    const d = dayMs(v)
-    if (d === null) return false
-    if (c.op === 'is_relative') {
-      const [a, b] = relativeRange(String(c.value))
-      return d >= a && d <= b
-    }
-    if (c.op === 'between') {
-      const [a, b] = (Array.isArray(c.value) ? c.value : []).map(dayMs)
-      return (a == null || d >= a) && (b == null || d <= b)
-    }
-    const x = dayMs(c.value)
-    if (x === null) return true
-    switch (c.op) {
-      case 'is': return d === x
-      case 'before': return d < x
-      case 'after': return d > x
-      case 'on_or_before': return d <= x
-      case 'on_or_after': return d >= x
-      default: return true
-    }
-  }
-  // Text-like (title, text, url, email, phone, string formula), folded.
-  const s = fold(v === null || v === undefined ? '' : String(v))
-  const q = fold(String(c.value ?? ''))
-  switch (c.op) {
-    case 'equals': return s === q
-    case 'not_equals': return s !== q
-    case 'contains': return s.includes(q)
-    case 'not_contains': return !s.includes(q)
-    case 'starts_with': return s.startsWith(q)
-    case 'ends_with': return s.endsWith(q)
-    default: return true
-  }
-}
-
-function matchNode(row: MemoryRow, node: FilterNode, props: Map<string, Prop>, all: Prop[]): boolean {
-  if ('and' in node) return node.and.every(n => matchNode(row, n, props, all))
-  if ('or' in node) return !node.or.length || node.or.some(n => matchNode(row, n, props, all))
-  return matchCondition(row, node, props, all)
-}
-
 // ── Sorting / grouping helpers ───────────────────────────────────────────────
 
 function sortKey(row: MemoryRow, prop: Prop, all: Prop[]): string | number | null {
@@ -506,7 +385,9 @@ export function createMemorySource(init: MemorySourceInit): MemorySource {
   let cacheVersion = -1
   function query(viewId: string, q?: RowQuery, override?: Partial<ViewConfig>): MemoryRow[] {
     const view = viewOf(viewId)
-    const config = { ...view?.config, ...override }
+    const config: ViewConfig = { ...view?.config, ...override }
+    if (q && 'filter' in q) config.filter = q.filter ?? undefined
+    if (q?.sorts) config.sorts = q.sorts
     const key = JSON.stringify([viewId, config.filter, config.sorts, q?.search ?? '', props.value.length])
     if (cacheVersion !== version.value) {
       cache = new Map()
@@ -517,7 +398,7 @@ export function createMemorySource(init: MemorySourceInit): MemorySource {
     const all = props.value
     const map = new Map(all.map(p => [p.id, p]))
     let list = rows
-    if (config.filter) list = list.filter(r => matchNode(r, config.filter as FilterGroup, map, all))
+    if (config.filter) list = list.filter(r => matchNode(r, config.filter as FilterGroup, map, (row, p) => valueOf(row, p, all)))
     const search = fold(q?.search?.trim() ?? '')
     if (search) {
       const textProps = all.filter(p => ['title', 'text', 'url', 'email', 'phone'].includes(p.type))
@@ -570,8 +451,10 @@ export function createMemorySource(init: MemorySourceInit): MemorySource {
     return new Map([[null, nulls], ...out])
   }
 
+  /** A row as read by the block (without the memory-only fields). */
+  const out = ({ preview: _, ...r }: MemoryRow): Row => ({ ...r, computed: computedOf(r) })
   const page = (list: MemoryRow[], w: { offset: number, limit: number }) => ({
-    rows: list.slice(w.offset, w.offset + w.limit).map(r => ({ ...r, computed: computedOf(r) })),
+    rows: list.slice(w.offset, w.offset + w.limit).map(out),
     total: list.length,
   })
   function computedOf(r: MemoryRow): Record<string, unknown> | undefined {
@@ -616,10 +499,12 @@ export function createMemorySource(init: MemorySourceInit): MemorySource {
       if (!prop) return wait(null)
       return wait(aggregateValues(query(viewId, q).map(r => valueOf(r, prop, props.value)), fn, prop))
     },
-    async chart(viewId): Promise<ChartResult> {
-      record('chart', [viewId])
+    async chart(viewId, cq): Promise<ChartResult> {
+      record('chart', cq ? [viewId, cq] : [viewId])
       const view = viewOf(viewId)
-      const c = view?.config ?? {}
+      const { widget: _w, filter: wf, search: ws, ...spec } = cq ?? {}
+      const c: ViewConfig = { ...view?.config, ...spec }
+      const rq: RowQuery | undefined = cq ? { ...('filter' in cq ? { filter: wf ?? null } : {}), ...(ws ? { search: ws } : {}) } : undefined
       const all = props.value
       const xProp = all.find(p => p.id === c.x?.prop)
       if (!xProp) return wait({ x: [], series: [] })
@@ -636,7 +521,7 @@ export function createMemorySource(init: MemorySourceInit): MemorySource {
       }
       const cells = new Map<string, Map<string, MemoryRow[]>>()
       const seriesNames = new Set<string>()
-      for (const r of query(viewId)) {
+      for (const r of query(viewId, rq)) {
         const sKeys = seriesProp ? groupKeys(r, seriesProp, all).map(k => (k === null ? '' : groupLabel(seriesProp, k, people, titleById))) : ['']
         for (const x of xKey(r)) {
           let m = cells.get(x)
@@ -736,7 +621,7 @@ export function createMemorySource(init: MemorySourceInit): MemorySource {
         if (s === null) return false
         const e = dayMs(v?.end) ?? s
         return s <= b && e >= a
-      }).slice(0, 5000).map(r => ({ ...r, computed: computedOf(r) })))
+      }).slice(0, 5000).map(out))
     },
 
     setCell(rowId, propId, value) {
@@ -833,6 +718,33 @@ export function createMemorySource(init: MemorySourceInit): MemorySource {
       const list = dbId === databaseId ? rows.map(r => ({ id: r.id, title: titleOf(r) })) : init.related?.[dbId] ?? []
       return wait(list.filter(r => fold(r.title).includes(f)).slice(0, 20))
     },
+    async searchDatabases(q) {
+      record('searchDatabases', [q])
+      const f = fold(q)
+      const list = [{ id: databaseId, title: meta.value.title, icon: meta.value.icon ?? null }, ...Object.keys(init.related ?? {}).map(id => ({ id, title: id, icon: null }))]
+      return wait(list.filter(d => fold(d.title).includes(f)))
+    },
+    async rowPreview(ids) {
+      record('rowPreview', [ids])
+      const result: Record<string, RowPreview> = {}
+      for (const id of ids) {
+        const p = byId.get(id)?.preview
+        if (p) result[id] = p
+      }
+      return wait(result)
+    },
+    async propsOf(dbId) {
+      record('propsOf', [dbId])
+      return wait(dbId === databaseId ? props.value : [])
+    },
+    currentUserId: () => userId,
+    async copyRowBody(from, to) {
+      record('copyRowBody', [from, to])
+      const p = byId.get(from)?.preview
+      const r = byId.get(to)
+      if (p && r) r.preview = { ...p }
+      await wait(undefined)
+    },
     async people(q) {
       record('people', [q])
       const f = fold(q)
@@ -871,6 +783,18 @@ export function createMemorySource(init: MemorySourceInit): MemorySource {
 // ── Sample data (playground, benchmarks) ─────────────────────────────────────
 
 const WORDS = ['Kế hoạch', 'Thiết kế', 'Báo cáo', 'Roadmap', 'Sprint', 'Launch', 'Review', 'Audit', 'Migration', 'Onboarding', 'Research', 'Hiring', 'Budget', 'Landing page', 'Release', 'Bugfix', 'Workshop', 'Dashboard']
+/** Sample page icons (every third row has one). */
+const ICONS = ['📄', '🚀', '🎯', '🧪', '📊', '🛠️', '📝', '💡']
+/** Sample page previews: every other row has some text, every fourth a cover (an inline SVG gradient). */
+function samplePreview(i: number, name: string): RowPreview | undefined {
+  if (i % 2) return undefined
+  const hue = (i * 47) % 360
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="320" height="160"><defs><linearGradient id="g" x2="1" y2="1"><stop offset="0" stop-color="hsl(${hue},70%,72%)"/><stop offset="1" stop-color="hsl(${(hue + 60) % 360},70%,55%)"/></linearGradient></defs><rect width="320" height="160" fill="url(#g)"/></svg>`
+  return {
+    text: `${name}: goals, scope and open questions. Notes from the last sync, next steps and owners.`,
+    cover: i % 4 === 0 ? `data:image/svg+xml,${encodeURIComponent(svg)}` : undefined,
+  }
+}
 const AREAS = ['Q4', 'mobile', 'web', 'API', 'billing', 'search', 'notes', 'editor', 'sync', 'infra']
 
 /** A task database with `count` deterministic rows and one view of each type. */
@@ -951,6 +875,8 @@ export function sampleDatabase(count: number, options: { databaseId?: string, se
       last_edited_time: base,
       last_edited_by: pick(people).id,
       unique_id: i + 1,
+      preview: samplePreview(i, String(values.name)),
+      icon: i % 3 === 0 ? ICONS[(i / 3) % ICONS.length] : undefined,
     }
   })
 
@@ -963,6 +889,17 @@ export function sampleDatabase(count: number, options: { databaseId?: string, se
     { id: 'v-list', name: 'List', type: 'list', position: 'a5', config: { card: { props: ['status', 'due'] } } },
     { id: 'v-chart', name: 'Chart', type: 'chart', position: 'a6', config: { chart: 'bar', x: { prop: 'status' }, y: [{ fn: 'count' }], series: 'priority', stacked: true } },
     { id: 'v-pivot', name: 'Pivot', type: 'pivot', position: 'a7', config: { rows: ['status'], cols: ['priority'], values: [{ prop: 'estimate', fn: 'sum' }], totals: true } },
+    { id: 'v-feed', name: 'Feed', type: 'feed', position: 'a8', config: { card: { props: ['status', 'owner', 'tags'] } } },
+    {
+      id: 'v-dashboard', name: 'Dashboard', type: 'dashboard', position: 'a9', config: {
+        widgets: [
+          { id: 'w-count', kind: 'number', title: 'Tasks', fn: 'count' },
+          { id: 'w-open', kind: 'number', title: 'Open estimate', prop: 'estimate', fn: 'sum', filter: { and: [{ prop: 'done', op: 'is', value: false }] } },
+          { id: 'w-status', kind: 'chart', title: 'By status', span: 2, chart: 'bar', x: { prop: 'status' }, y: [{ fn: 'count' }], series: 'priority', stacked: true },
+          { id: 'w-priority', kind: 'chart', title: 'High priority by owner', chart: 'donut', x: { prop: 'owner' }, y: [{ fn: 'count' }], filter: { and: [{ prop: 'priority', op: 'is', value: 'p-high' }] } },
+        ],
+      },
+    },
   ]
   return { databaseId: options.databaseId, meta: { title: 'Tasks', icon: '✅' }, props, views, rows, people }
 }

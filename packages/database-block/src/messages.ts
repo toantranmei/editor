@@ -10,9 +10,15 @@ export interface DatabaseMessages {
   openFullPage: string
   openDatabase: string
   /** View types. */
-  viewTypes: Record<'table' | 'board' | 'calendar' | 'timeline' | 'gallery' | 'list' | 'chart' | 'pivot', string>
+  viewTypes: Record<'table' | 'board' | 'calendar' | 'timeline' | 'gallery' | 'list' | 'chart' | 'pivot' | 'form' | 'feed' | 'dashboard', string>
   addView: string
   renameView: string
+  /** View tab menu: icon and "Display as". */
+  viewIcon: string
+  viewIconPlaceholder: string
+  removeIcon: string
+  tabDisplayAs: string
+  tabDisplays: Record<'name' | 'icon', string>
   duplicateView: string
   deleteView: string
   copyOf: string
@@ -80,8 +86,12 @@ export interface DatabaseMessages {
   currency: string
   decimals: string
   dateFormat: string
-  dateFormats: Record<'dmy' | 'mdy' | 'ymd' | 'relative', string>
+  dateFormats: Record<'full' | 'short' | 'dmy' | 'mdy' | 'ymd' | 'relative', string>
   includeTime: string
+  remind: string
+  remindNone: string
+  remindsTime: Record<string, string>
+  remindsDay: Record<string, string>
   formula: string
   formulaPlaceholder: string
   formulaOk: string
@@ -123,7 +133,7 @@ export interface DatabaseMessages {
   startProperty: string
   endProperty: string
   scale: string
-  scales: Record<'day' | 'week' | 'month', string>
+  scales: Record<'day' | 'week' | 'month' | 'quarter' | 'year', string>
   noDateProperty: string
   cover: string
   coverNone: string
@@ -149,6 +159,34 @@ export interface DatabaseMessages {
   more: string
   loadMore: string
   /** Slash menu (also in block messages). */
+  /** Button property and automations. */
+  buttonLabel: string
+  actionsLabel: string
+  addAction: string
+  deleteAction: string
+  actionTypes: Record<'set_values' | 'add_row' | 'open_url' | 'show_confirm', string>
+  noActions: string
+  setProperty: string
+  openNewRow: string
+  urlFrom: string
+  typedUrl: string
+  confirmMessage: string
+  confirmDefault: string
+  emptyValue: string
+  dynamicNow: string
+  customDate: string
+  me: string
+  automations: string
+  automationsHint: string
+  addAutomation: string
+  deleteAutomation: string
+  automationName: string
+  automationEnabled: string
+  triggerWhen: string
+  triggers: Record<'row_added' | 'prop_changed', string>
+  anyProperty: string
+  onlyWhen: string
+  thenDo: string
   inline: string
   fullPage: string
   /** Layout / view settings (0.2). */
@@ -165,12 +203,135 @@ export interface DatabaseMessages {
   insertRight: string
   duplicateProperty: string
   clearSelection: string
+  propertyDescription: string
+  propertyDescriptionHint: string
+  wrapPageTitles: string
+  showTitle: string
+  showPageIcon: string
+  formDescription: string
+  formAnswer: string
+  formSubmit: string
+  shareForm: string
+  shareFormHint: string
+  copyFormLink: string
+  linkCopied: string
+  formSent: string
+  formAgain: string
+  formNoQuestions: string
+  required: string
+  formRequiredError: string
+  addWidget: string
+  widgetKinds: Record<'chart' | 'number', string>
+  widgetTitle: string
+  editWidget: string
+  removeWidget: string
+  moveEarlier: string
+  moveLater: string
+  widgetWidth: string
+  widthHalf: string
+  widthFull: string
+  widgetFilterHint: string
+  dashboardEmpty: string
+  dragWidget: string
+  feedPreview: string
+  feedEmpty: string
+  feedNewPost: string
+  feedPostsPerPage: string
+  subItems: string
+  addSubItem: string
+  parentItem: string
+  turnOnSubItems: string
+  /** Board card footer: "{n} sub-items" (`subItemCount` when n = 1). */
+  subItemsCount: string
+  subItemCount: string
+  subItemsDisplay: string
+  subItemsDisplays: Record<'nested' | 'flat', string>
+  off: string
+  searchFormula: string
+  formulaType: string
+  formulaTypes: Record<string, string>
+  formulaGroups: Record<string, string>
+  example: string
+  formulaHelp: string
+  templates: string
+  templatesHint: string
+  saveAsTemplate: string
+  deleteTemplate: string
+  repeatTemplate: string
+  repeatNever: string
+  repeats: Record<string, string>
+  onePerson: string
+  oneFile: string
+  searchDatabases: string
+  relationLimit: string
+  onePage: string
+  rules: string
+  reset: string
+  saveForEveryone: string
+  locked: string
+  lockedHint: string
+  lockDatabase: string
+  unlockDatabase: string
+  copyLinkToView: string
+  openAsFullPage: string
+  groups: string
+  conditionalColor: string
+  conditionalColorHint: string
+  addColorRule: string
+  deleteColorRule: string
+  background: string
+  applyTo: string
+  entireRow: string
+  thisProperty: string
+  property: string
+  operator: string
+  searchProperty: string
+  shownProps: string
+  hiddenProps: string
+  calendarAs: string
+  calendarModes: Record<'month' | 'week', string>
+  verticalLines: string
+  loadLimit: string
+  noLimit: string
+  showAs: string
+  showAsKinds: Record<'number' | 'bar' | 'ring', string>
+  divideBy: string
+  showNumber: string
+  timeFormat: string
+  hour12: string
+  hour24: string
+  showFullUrl: string
+  appliesToAllViews: string
+  optionSort: string
+  optionSorts: Record<'manual' | 'asc' | 'desc', string>
+  setAsDefault: string
+  defaultBadge: string
+  moveToGroup: string
+  optionColor: string
+  done: string
+  groupByThis: string
+  ungroup: string
+  sortLowHigh: string
+  sortHighLow: string
+  sortOldNew: string
+  sortNewOld: string
+  rowActions: string
+  openIn: string
+  duplicate: string
+  copyLink: string
+  editProperty: string
+  moreActions: string
   newRowOptions: string
   newAtTop: string
   newAtBottom: string
   colorColumns: string
   cardSize: string
   fitImage: string
+  /** Card preview options besides None and the files properties. */
+  coverPageCover: string
+  coverPageContent: string
+  cardLayout: string
+  cardLayouts: Record<'list' | 'compact', string>
   showWeekends: string
   showTable: string
   tableOptions: string
@@ -199,9 +360,14 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     error: 'Something went wrong',
     openFullPage: 'Open as full page',
     openDatabase: 'Open database {title}',
-    viewTypes: { table: 'Table', board: 'Board', calendar: 'Calendar', timeline: 'Timeline', gallery: 'Gallery', list: 'List', chart: 'Chart', pivot: 'Pivot' },
+    viewTypes: { table: 'Table', board: 'Board', calendar: 'Calendar', timeline: 'Timeline', gallery: 'Gallery', list: 'List', chart: 'Chart', pivot: 'Pivot', form: 'Form', feed: 'Feed', dashboard: 'Dashboard' },
     addView: 'Add view',
     renameView: 'Rename',
+    viewIcon: 'Icon',
+    viewIconPlaceholder: 'Type an emoji',
+    removeIcon: 'Remove icon',
+    tabDisplayAs: 'Display as',
+    tabDisplays: { name: 'Icon and name', icon: 'Icon only' },
     duplicateView: 'Duplicate',
     deleteView: 'Delete view',
     copyOf: '{name} (copy)',
@@ -251,7 +417,7 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
       title: 'Title', text: 'Text', number: 'Number', select: 'Select', multi_select: 'Multi-select', status: 'Status',
       date: 'Date', person: 'Person', files: 'Files & media', checkbox: 'Checkbox', url: 'URL', email: 'Email',
       phone: 'Phone', relation: 'Relation', rollup: 'Rollup', formula: 'Formula', created_time: 'Created time',
-      last_edited_time: 'Last edited time', created_by: 'Created by', last_edited_by: 'Last edited by', unique_id: 'ID',
+      last_edited_time: 'Last edited time', created_by: 'Created by', last_edited_by: 'Last edited by', unique_id: 'ID', button: 'Button',
     },
     rename: 'Rename',
     changeType: 'Change type',
@@ -277,8 +443,12 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     currency: 'Currency',
     decimals: 'Decimal places',
     dateFormat: 'Date format',
-    dateFormats: { dmy: 'Day/Month/Year', mdy: 'Month/Day/Year', ymd: 'Year/Month/Day', relative: 'Relative' },
+    dateFormats: { full: 'Full date', short: 'Short date', dmy: 'Day/Month/Year', mdy: 'Month/Day/Year', ymd: 'Year/Month/Day', relative: 'Relative' },
     includeTime: 'Include time',
+    remind: 'Remind',
+    remindNone: 'None',
+    remindsTime: { at_time: 'At time of event', '5m': '5 minutes before', '10m': '10 minutes before', '15m': '15 minutes before', '30m': '30 minutes before', '1h': '1 hour before', '2h': '2 hours before', '1d': '1 day before', '2d': '2 days before' },
+    remindsDay: { at_time: 'On day of event (9:00)', '1d': '1 day before (9:00)', '2d': '2 days before (9:00)', '1w': '1 week before (9:00)' },
     formula: 'Formula',
     formulaPlaceholder: 'prop("Price") * prop("Qty")',
     formulaOk: 'Formula is valid',
@@ -326,7 +496,7 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     startProperty: 'Start date',
     endProperty: 'End date',
     scale: 'Scale',
-    scales: { day: 'Day', week: 'Week', month: 'Month' },
+    scales: { day: 'Day', week: 'Week', month: 'Month', quarter: 'Quarter', year: 'Year' },
     noDateProperty: 'Add a date property to use this view',
     cover: 'Card preview',
     coverNone: 'None',
@@ -364,12 +534,133 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     insertRight: 'Insert right',
     duplicateProperty: 'Duplicate property',
     clearSelection: 'Clear selection',
+    propertyDescription: 'Description',
+    propertyDescriptionHint: 'Shown when hovering the column',
+    wrapPageTitles: 'Wrap page titles',
+    showTitle: 'Show database title',
+    showPageIcon: 'Show page icon',
+    formDescription: 'Description (optional)',
+    formAnswer: 'Your answer',
+    formSubmit: 'Submit',
+    shareForm: 'Share form',
+    shareFormHint: 'Anyone with the link can answer, without signing in. Each answer adds a row.',
+    copyFormLink: 'Copy link',
+    linkCopied: 'Link copied',
+    formSent: 'Thanks! Your answers were added.',
+    formAgain: 'Submit another response',
+    formNoQuestions: 'No questions: show properties in this view to ask them.',
+    required: 'Required',
+    formRequiredError: 'This question is required.',
+    addWidget: 'Add widget',
+    widgetKinds: { chart: 'Chart', number: 'Number' },
+    widgetTitle: 'Widget title',
+    editWidget: 'Edit widget',
+    removeWidget: 'Remove widget',
+    moveEarlier: 'Move earlier',
+    moveLater: 'Move later',
+    widgetWidth: 'Width',
+    widthHalf: 'Half',
+    widthFull: 'Full',
+    widgetFilterHint: 'Only rows matching this filter (and the view\'s filter) count.',
+    dashboardEmpty: 'No widgets yet: add a chart or a number.',
+    dragWidget: 'Drag to move',
+    feedPreview: 'Show page content',
+    feedEmpty: 'No posts yet',
+    feedNewPost: 'New post',
+    feedPostsPerPage: 'Posts per page',
+    subItems: 'Sub-items',
+    addSubItem: 'Add sub-item',
+    parentItem: 'Parent item',
+    turnOnSubItems: 'Turn on sub-items',
+    subItemsCount: '{n} sub-items',
+    subItemCount: '1 sub-item',
+    subItemsDisplay: 'Show sub-items as',
+    subItemsDisplays: { nested: 'Nested in toggle', flat: 'Flattened list' },
+    off: 'Off',
+    searchFormula: 'Search properties and functions…',
+    formulaType: 'Type',
+    formulaTypes: { number: 'Number', string: 'Text', boolean: 'Checkbox', date: 'Date' },
+    formulaGroups: { general: 'General', text: 'Text', number: 'Number', date: 'Date', logic: 'Logic' },
+    example: 'Example',
+    formulaHelp: 'Click a property or a function to insert it. Hover one to see how it is used. Functions chain: prop("Name").upper().length(); a one-word property can be typed as is: Price * 2.',
+    templates: 'Templates',
+    templatesHint: "No templates yet. Use a row's menu → Save as template.",
+    saveAsTemplate: 'Save as template',
+    deleteTemplate: 'Delete template',
+    repeatTemplate: 'Duplicate every…',
+    repeatNever: 'Do not repeat',
+    repeats: { day: 'Every day', week: 'Every week', month: 'Every month' },
+    onePerson: '1 person',
+    oneFile: '1 file',
+    searchDatabases: 'Search databases…',
+    relationLimit: 'Limit',
+    onePage: '1 page',
+    rules: 'rules',
+    reset: 'Reset',
+    saveForEveryone: 'Save for everyone',
+    locked: 'Locked',
+    lockedHint: 'Properties, views and layout are locked. Data can still be edited.',
+    lockDatabase: 'Lock database',
+    unlockDatabase: 'Unlock database',
+    copyLinkToView: 'Copy link to view',
+    openAsFullPage: 'Open as full page',
+    groups: 'Groups',
+    conditionalColor: 'Conditional color',
+    conditionalColorHint: 'Color rows or cells that match a condition, e.g. overdue tasks in red.',
+    addColorRule: 'New color rule',
+    deleteColorRule: 'Delete rule',
+    background: 'Background',
+    applyTo: 'Apply to',
+    entireRow: 'Entire row',
+    thisProperty: 'This property',
+    property: 'Property',
+    operator: 'Operator',
+    searchProperty: 'Search for a property…',
+    shownProps: 'Shown',
+    hiddenProps: 'Hidden',
+    calendarAs: 'Show calendar as',
+    calendarModes: { month: 'Month', week: 'Week' },
+    verticalLines: 'Show vertical lines',
+    loadLimit: 'Load limit',
+    noLimit: 'No limit',
+    showAs: 'Show as',
+    showAsKinds: { number: 'Number', bar: 'Bar', ring: 'Ring' },
+    divideBy: 'Divide by',
+    showNumber: 'Show number',
+    timeFormat: 'Time format',
+    hour12: '12 hour',
+    hour24: '24 hour',
+    showFullUrl: 'Show full URL',
+    appliesToAllViews: 'Changes apply to all views showing this property.',
+    optionSort: 'Sort',
+    optionSorts: { manual: 'Manual', asc: 'Alphabetical', desc: 'Reverse alphabetical' },
+    setAsDefault: 'Set as default',
+    defaultBadge: 'Default',
+    moveToGroup: 'Group',
+    optionColor: 'Color',
+    done: 'Done',
+    groupByThis: 'Group',
+    ungroup: 'Ungroup',
+    sortLowHigh: 'Sort low → high',
+    sortHighLow: 'Sort high → low',
+    sortOldNew: 'Sort old → new',
+    sortNewOld: 'Sort new → old',
+    rowActions: 'Row actions',
+    openIn: 'Open in',
+    duplicate: 'Duplicate',
+    copyLink: 'Copy link',
+    editProperty: 'Edit property',
+    moreActions: 'More actions',
     newRowOptions: 'More ways to add',
     newAtTop: 'Add to top',
     newAtBottom: 'Add to bottom',
     colorColumns: 'Color columns',
     cardSize: 'Card size',
     fitImage: 'Fit image',
+    coverPageCover: 'Page cover',
+    coverPageContent: 'Page content',
+    cardLayout: 'Card layout',
+    cardLayouts: { list: 'List', compact: 'Compact' },
     showWeekends: 'Show weekends',
     showTable: 'Show table',
     tableOptions: 'Table',
@@ -377,6 +668,33 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     addRowBelow: 'Click to add below',
     inline: 'Database – inline',
     fullPage: 'Database – full page',
+    buttonLabel: 'Button label',
+    actionsLabel: 'Actions',
+    addAction: 'Add action',
+    deleteAction: 'Delete action',
+    actionTypes: { set_values: 'Edit property', add_row: 'Add page', open_url: 'Open URL', show_confirm: 'Show confirmation' },
+    noActions: 'No actions yet',
+    setProperty: 'Set a property',
+    openNewRow: 'Open the new page',
+    urlFrom: 'Open',
+    typedUrl: 'A link',
+    confirmMessage: 'Message',
+    confirmDefault: 'Are you sure?',
+    emptyValue: 'Empty',
+    dynamicNow: 'Now',
+    customDate: 'A date',
+    me: 'Me',
+    automations: 'Automations',
+    automationsHint: 'Run actions when a page is added or a property is edited. They run in the browser that made the edit.',
+    addAutomation: 'New automation',
+    deleteAutomation: 'Delete automation',
+    automationName: 'Name',
+    automationEnabled: 'On',
+    triggerWhen: 'When',
+    triggers: { row_added: 'Page added', prop_changed: 'Property edited' },
+    anyProperty: 'Any property',
+    onlyWhen: 'Only when the value',
+    thenDo: 'Do',
   },
   vi: {
     untitled: 'Không có tiêu đề',
@@ -386,9 +704,14 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     error: 'Đã có lỗi xảy ra',
     openFullPage: 'Mở toàn trang',
     openDatabase: 'Mở cơ sở dữ liệu {title}',
-    viewTypes: { table: 'Bảng', board: 'Bảng Kanban', calendar: 'Lịch', timeline: 'Dòng thời gian', gallery: 'Thư viện', list: 'Danh sách', chart: 'Biểu đồ', pivot: 'Bảng tổng hợp' },
+    viewTypes: { table: 'Bảng', board: 'Bảng Kanban', calendar: 'Lịch', timeline: 'Dòng thời gian', gallery: 'Thư viện', list: 'Danh sách', chart: 'Biểu đồ', pivot: 'Bảng tổng hợp', form: 'Biểu mẫu', feed: 'Bảng tin', dashboard: 'Bảng điều khiển' },
     addView: 'Thêm chế độ xem',
     renameView: 'Đổi tên',
+    viewIcon: 'Biểu tượng',
+    viewIconPlaceholder: 'Nhập một emoji',
+    removeIcon: 'Bỏ biểu tượng',
+    tabDisplayAs: 'Hiển thị',
+    tabDisplays: { name: 'Biểu tượng và tên', icon: 'Chỉ biểu tượng' },
     duplicateView: 'Nhân bản',
     deleteView: 'Xoá chế độ xem',
     copyOf: '{name} (bản sao)',
@@ -446,7 +769,7 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
       title: 'Tiêu đề', text: 'Văn bản', number: 'Số', select: 'Chọn', multi_select: 'Chọn nhiều', status: 'Trạng thái',
       date: 'Ngày', person: 'Người', files: 'Tệp & phương tiện', checkbox: 'Hộp kiểm', url: 'URL', email: 'Email',
       phone: 'Điện thoại', relation: 'Liên kết', rollup: 'Tổng hợp', formula: 'Công thức', created_time: 'Thời gian tạo',
-      last_edited_time: 'Sửa lần cuối', created_by: 'Người tạo', last_edited_by: 'Người sửa cuối', unique_id: 'ID',
+      last_edited_time: 'Sửa lần cuối', created_by: 'Người tạo', last_edited_by: 'Người sửa cuối', unique_id: 'ID', button: 'Nút',
     },
     rename: 'Đổi tên',
     changeType: 'Đổi kiểu',
@@ -472,8 +795,12 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     currency: 'Tiền tệ',
     decimals: 'Số chữ số thập phân',
     dateFormat: 'Định dạng ngày',
-    dateFormats: { dmy: 'Ngày/Tháng/Năm', mdy: 'Tháng/Ngày/Năm', ymd: 'Năm/Tháng/Ngày', relative: 'Tương đối' },
+    dateFormats: { full: 'Ngày đầy đủ', short: 'Ngày rút gọn', dmy: 'Ngày/Tháng/Năm', mdy: 'Tháng/Ngày/Năm', ymd: 'Năm/Tháng/Ngày', relative: 'Tương đối' },
     includeTime: 'Kèm giờ',
+    remind: 'Nhắc',
+    remindNone: 'Không nhắc',
+    remindsTime: { at_time: 'Đúng giờ', '5m': 'Trước 5 phút', '10m': 'Trước 10 phút', '15m': 'Trước 15 phút', '30m': 'Trước 30 phút', '1h': 'Trước 1 giờ', '2h': 'Trước 2 giờ', '1d': 'Trước 1 ngày', '2d': 'Trước 2 ngày' },
+    remindsDay: { at_time: 'Đúng ngày (9:00)', '1d': 'Trước 1 ngày (9:00)', '2d': 'Trước 2 ngày (9:00)', '1w': 'Trước 1 tuần (9:00)' },
     formula: 'Công thức',
     formulaPlaceholder: 'prop("Giá") * prop("SL")',
     formulaOk: 'Công thức hợp lệ',
@@ -521,7 +848,7 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     startProperty: 'Ngày bắt đầu',
     endProperty: 'Ngày kết thúc',
     scale: 'Tỉ lệ',
-    scales: { day: 'Ngày', week: 'Tuần', month: 'Tháng' },
+    scales: { day: 'Ngày', week: 'Tuần', month: 'Tháng', quarter: 'Quý', year: 'Năm' },
     noDateProperty: 'Thêm một thuộc tính ngày để dùng chế độ xem này',
     cover: 'Ảnh thẻ',
     coverNone: 'Không',
@@ -559,12 +886,133 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     insertRight: 'Chèn bên phải',
     duplicateProperty: 'Nhân bản thuộc tính',
     clearSelection: 'Bỏ chọn',
+    propertyDescription: 'Mô tả',
+    propertyDescriptionHint: 'Hiện khi rê chuột lên cột',
+    wrapPageTitles: 'Xuống dòng tiêu đề',
+    showTitle: 'Hiện tiêu đề database',
+    showPageIcon: 'Hiện biểu tượng trang',
+    formDescription: 'Mô tả (không bắt buộc)',
+    formAnswer: 'Câu trả lời',
+    formSubmit: 'Gửi',
+    shareForm: 'Chia sẻ biểu mẫu',
+    shareFormHint: 'Ai có link đều trả lời được, không cần đăng nhập. Mỗi câu trả lời thêm một row.',
+    copyFormLink: 'Sao chép link',
+    linkCopied: 'Đã sao chép link',
+    formSent: 'Cảm ơn! Câu trả lời đã được thêm.',
+    formAgain: 'Gửi câu trả lời khác',
+    formNoQuestions: 'Chưa có câu hỏi: hiện thuộc tính trong view này để hỏi.',
+    required: 'Bắt buộc',
+    formRequiredError: 'Câu này bắt buộc.',
+    addWidget: 'Thêm tiện ích',
+    widgetKinds: { chart: 'Biểu đồ', number: 'Con số' },
+    widgetTitle: 'Tên tiện ích',
+    editWidget: 'Sửa tiện ích',
+    removeWidget: 'Xoá tiện ích',
+    moveEarlier: 'Chuyển lên trước',
+    moveLater: 'Chuyển ra sau',
+    widgetWidth: 'Độ rộng',
+    widthHalf: 'Một nửa',
+    widthFull: 'Toàn bộ',
+    widgetFilterHint: 'Chỉ tính các dòng khớp bộ lọc này (và bộ lọc của chế độ xem).',
+    dashboardEmpty: 'Chưa có tiện ích: thêm biểu đồ hoặc con số.',
+    dragWidget: 'Kéo để di chuyển',
+    feedPreview: 'Hiện nội dung trang',
+    feedEmpty: 'Chưa có bài nào',
+    feedNewPost: 'Bài mới',
+    feedPostsPerPage: 'Số bài mỗi lần tải',
+    subItems: 'Mục con',
+    addSubItem: 'Thêm mục con',
+    parentItem: 'Mục cha',
+    turnOnSubItems: 'Bật mục con',
+    subItemsCount: '{n} mục con',
+    subItemCount: '1 mục con',
+    subItemsDisplay: 'Hiện mục con dạng',
+    subItemsDisplays: { nested: 'Lồng trong nút mở', flat: 'Danh sách phẳng' },
+    off: 'Tắt',
+    searchFormula: 'Tìm thuộc tính và hàm…',
+    formulaType: 'Kiểu',
+    formulaTypes: { number: 'Số', string: 'Văn bản', boolean: 'Hộp kiểm', date: 'Ngày' },
+    formulaGroups: { general: 'Chung', text: 'Văn bản', number: 'Số', date: 'Ngày', logic: 'Logic' },
+    example: 'Ví dụ',
+    formulaHelp: 'Bấm vào thuộc tính hoặc hàm để chèn. Rê chuột để xem cách dùng. Gọi nối được: prop("Tên").upper().length(); thuộc tính một từ gõ thẳng tên: Giá * 2.',
+    templates: 'Mẫu (template)',
+    templatesHint: 'Chưa có mẫu. Dùng menu của một row → Lưu làm mẫu.',
+    saveAsTemplate: 'Lưu làm mẫu',
+    deleteTemplate: 'Xoá mẫu',
+    repeatTemplate: 'Tạo lặp lại',
+    repeatNever: 'Không lặp',
+    repeats: { day: 'Mỗi ngày', week: 'Mỗi tuần', month: 'Mỗi tháng' },
+    onePerson: '1 người',
+    oneFile: '1 tệp',
+    searchDatabases: 'Tìm database…',
+    relationLimit: 'Giới hạn',
+    onePage: '1 trang',
+    rules: 'quy tắc',
+    reset: 'Đặt lại',
+    saveForEveryone: 'Lưu cho mọi người',
+    locked: 'Đã khoá',
+    lockedHint: 'Thuộc tính, view và bố cục đã bị khoá. Dữ liệu vẫn sửa được.',
+    lockDatabase: 'Khoá database',
+    unlockDatabase: 'Mở khoá database',
+    copyLinkToView: 'Sao chép liên kết tới view',
+    openAsFullPage: 'Mở toàn trang',
+    groups: 'Các nhóm',
+    conditionalColor: 'Màu theo điều kiện',
+    conditionalColorHint: 'Tô màu row hoặc ô khớp điều kiện, ví dụ việc quá hạn tô đỏ.',
+    addColorRule: 'Thêm quy tắc màu',
+    deleteColorRule: 'Xoá quy tắc',
+    background: 'Màu nền',
+    applyTo: 'Áp dụng cho',
+    entireRow: 'Cả row',
+    thisProperty: 'Chỉ ô thuộc tính này',
+    property: 'Thuộc tính',
+    operator: 'Toán tử',
+    searchProperty: 'Tìm thuộc tính…',
+    shownProps: 'Đang hiện',
+    hiddenProps: 'Đang ẩn',
+    calendarAs: 'Hiển thị lịch dạng',
+    calendarModes: { month: 'Tháng', week: 'Tuần' },
+    verticalLines: 'Hiện đường kẻ dọc',
+    loadLimit: 'Giới hạn tải',
+    noLimit: 'Không giới hạn',
+    showAs: 'Hiển thị dạng',
+    showAsKinds: { number: 'Số', bar: 'Thanh', ring: 'Vòng' },
+    divideBy: 'Chia cho',
+    showNumber: 'Hiện số',
+    timeFormat: 'Định dạng giờ',
+    hour12: '12 giờ',
+    hour24: '24 giờ',
+    showFullUrl: 'Hiện URL đầy đủ',
+    appliesToAllViews: 'Thay đổi áp dụng cho mọi view hiện thuộc tính này.',
+    optionSort: 'Sắp xếp',
+    optionSorts: { manual: 'Thủ công', asc: 'Theo bảng chữ cái', desc: 'Ngược bảng chữ cái' },
+    setAsDefault: 'Đặt làm mặc định',
+    defaultBadge: 'Mặc định',
+    moveToGroup: 'Nhóm',
+    optionColor: 'Màu',
+    done: 'Xong',
+    groupByThis: 'Nhóm theo cột này',
+    ungroup: 'Bỏ nhóm',
+    sortLowHigh: 'Sắp xếp thấp → cao',
+    sortHighLow: 'Sắp xếp cao → thấp',
+    sortOldNew: 'Sắp xếp cũ → mới',
+    sortNewOld: 'Sắp xếp mới → cũ',
+    rowActions: 'Thao tác dòng',
+    openIn: 'Mở trong',
+    duplicate: 'Nhân bản',
+    copyLink: 'Sao chép liên kết',
+    editProperty: 'Sửa thuộc tính',
+    moreActions: 'Thao tác khác',
     newRowOptions: 'Thêm cách tạo khác',
     newAtTop: 'Thêm lên đầu',
     newAtBottom: 'Thêm xuống cuối',
     colorColumns: 'Tô màu cột',
     cardSize: 'Cỡ thẻ',
     fitImage: 'Vừa khung ảnh',
+    coverPageCover: 'Ảnh bìa trang',
+    coverPageContent: 'Nội dung trang',
+    cardLayout: 'Bố cục thẻ',
+    cardLayouts: { list: 'Danh sách', compact: 'Gọn' },
     showWeekends: 'Hiện cuối tuần',
     showTable: 'Hiện bảng',
     tableOptions: 'Bảng',
@@ -572,6 +1020,33 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     addRowBelow: 'Bấm để thêm bên dưới',
     inline: 'Cơ sở dữ liệu – trong trang',
     fullPage: 'Cơ sở dữ liệu – toàn trang',
+    buttonLabel: 'Nhãn nút',
+    actionsLabel: 'Hành động',
+    addAction: 'Thêm hành động',
+    deleteAction: 'Xóa hành động',
+    actionTypes: { set_values: 'Sửa thuộc tính', add_row: 'Thêm trang', open_url: 'Mở URL', show_confirm: 'Hiện xác nhận' },
+    noActions: 'Chưa có hành động',
+    setProperty: 'Đặt một thuộc tính',
+    openNewRow: 'Mở trang mới',
+    urlFrom: 'Mở',
+    typedUrl: 'Một liên kết',
+    confirmMessage: 'Lời nhắn',
+    confirmDefault: 'Bạn có chắc không?',
+    emptyValue: 'Để trống',
+    dynamicNow: 'Bây giờ',
+    customDate: 'Một ngày',
+    me: 'Tôi',
+    automations: 'Tự động hóa',
+    automationsHint: 'Chạy hành động khi có trang mới hoặc một thuộc tính được sửa. Chạy trên trình duyệt đã sửa.',
+    addAutomation: 'Tự động hóa mới',
+    deleteAutomation: 'Xóa tự động hóa',
+    automationName: 'Tên',
+    automationEnabled: 'Bật',
+    triggerWhen: 'Khi',
+    triggers: { row_added: 'Có trang mới', prop_changed: 'Thuộc tính được sửa' },
+    anyProperty: 'Bất kỳ thuộc tính nào',
+    onlyWhen: 'Chỉ khi giá trị',
+    thenDo: 'Thì',
   },
   zh: {
     untitled: '无标题',
@@ -581,9 +1056,14 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     error: '出错了',
     openFullPage: '以整页打开',
     openDatabase: '打开数据库 {title}',
-    viewTypes: { table: '表格', board: '看板', calendar: '日历', timeline: '时间线', gallery: '画廊', list: '列表', chart: '图表', pivot: '数据透视' },
+    viewTypes: { table: '表格', board: '看板', calendar: '日历', timeline: '时间线', gallery: '画廊', list: '列表', chart: '图表', pivot: '数据透视', form: '表单', feed: '动态', dashboard: '仪表板' },
     addView: '添加视图',
     renameView: '重命名',
+    viewIcon: '图标',
+    viewIconPlaceholder: '输入一个表情',
+    removeIcon: '移除图标',
+    tabDisplayAs: '显示为',
+    tabDisplays: { name: '图标和名称', icon: '仅图标' },
     duplicateView: '创建副本',
     deleteView: '删除视图',
     copyOf: '{name}（副本）',
@@ -641,7 +1121,7 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
       title: '标题', text: '文本', number: '数字', select: '单选', multi_select: '多选', status: '状态',
       date: '日期', person: '人员', files: '文件和媒体', checkbox: '复选框', url: '网址', email: '电子邮件',
       phone: '电话', relation: '关联', rollup: '汇总', formula: '公式', created_time: '创建时间',
-      last_edited_time: '最后编辑时间', created_by: '创建者', last_edited_by: '最后编辑者', unique_id: 'ID',
+      last_edited_time: '最后编辑时间', created_by: '创建者', last_edited_by: '最后编辑者', unique_id: 'ID', button: '按钮',
     },
     rename: '重命名',
     changeType: '更改类型',
@@ -667,8 +1147,12 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     currency: '货币',
     decimals: '小数位数',
     dateFormat: '日期格式',
-    dateFormats: { dmy: '日/月/年', mdy: '月/日/年', ymd: '年/月/日', relative: '相对时间' },
+    dateFormats: { full: '完整日期', short: '短日期', dmy: '日/月/年', mdy: '月/日/年', ymd: '年/月/日', relative: '相对时间' },
     includeTime: '包含时间',
+    remind: '提醒',
+    remindNone: '不提醒',
+    remindsTime: { at_time: '准时', '5m': '提前 5 分钟', '10m': '提前 10 分钟', '15m': '提前 15 分钟', '30m': '提前 30 分钟', '1h': '提前 1 小时', '2h': '提前 2 小时', '1d': '提前 1 天', '2d': '提前 2 天' },
+    remindsDay: { at_time: '当天（9:00）', '1d': '提前 1 天（9:00）', '2d': '提前 2 天（9:00）', '1w': '提前 1 周（9:00）' },
     formula: '公式',
     formulaPlaceholder: 'prop("价格") * prop("数量")',
     formulaOk: '公式有效',
@@ -716,7 +1200,7 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     startProperty: '开始日期',
     endProperty: '结束日期',
     scale: '刻度',
-    scales: { day: '天', week: '周', month: '月' },
+    scales: { day: '天', week: '周', month: '月', quarter: '季度', year: '年' },
     noDateProperty: '添加一个日期属性以使用此视图',
     cover: '卡片预览',
     coverNone: '无',
@@ -754,12 +1238,133 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     insertRight: '在右侧插入',
     duplicateProperty: '复制属性',
     clearSelection: '取消选择',
+    propertyDescription: '描述',
+    propertyDescriptionHint: '悬停列时显示',
+    wrapPageTitles: '标题换行',
+    showTitle: '显示数据库标题',
+    showPageIcon: '显示页面图标',
+    formDescription: '描述（可选）',
+    formAnswer: '你的回答',
+    formSubmit: '提交',
+    shareForm: '分享表单',
+    shareFormHint: '任何拿到链接的人都能填写，无需登录。每份回答新增一行。',
+    copyFormLink: '复制链接',
+    linkCopied: '已复制链接',
+    formSent: '谢谢！你的回答已添加。',
+    formAgain: '再提交一份',
+    formNoQuestions: '没有问题：在此视图中显示属性即可提问。',
+    required: '必填',
+    formRequiredError: '此问题为必填项。',
+    addWidget: '添加组件',
+    widgetKinds: { chart: '图表', number: '数字' },
+    widgetTitle: '组件标题',
+    editWidget: '编辑组件',
+    removeWidget: '删除组件',
+    moveEarlier: '前移',
+    moveLater: '后移',
+    widgetWidth: '宽度',
+    widthHalf: '半宽',
+    widthFull: '全宽',
+    widgetFilterHint: '只统计符合此筛选（及视图筛选）的行。',
+    dashboardEmpty: '还没有组件：添加图表或数字。',
+    dragWidget: '拖动以移动',
+    feedPreview: '显示页面内容',
+    feedEmpty: '还没有帖子',
+    feedNewPost: '新帖子',
+    feedPostsPerPage: '每页帖子数',
+    subItems: '子项',
+    addSubItem: '添加子项',
+    parentItem: '父项',
+    turnOnSubItems: '开启子项',
+    subItemsCount: '{n} 个子项',
+    subItemCount: '1 个子项',
+    subItemsDisplay: '子项显示方式',
+    subItemsDisplays: { nested: '嵌套在折叠中', flat: '平铺列表' },
+    off: '关闭',
+    searchFormula: '搜索属性和函数…',
+    formulaType: '类型',
+    formulaTypes: { number: '数字', string: '文本', boolean: '复选框', date: '日期' },
+    formulaGroups: { general: '通用', text: '文本', number: '数字', date: '日期', logic: '逻辑' },
+    example: '示例',
+    formulaHelp: '点击属性或函数即可插入，悬停查看用法。函数可链式调用：prop("名称").upper().length()；单个词的属性可直接输入名称：Price * 2。',
+    templates: '模板',
+    templatesHint: '还没有模板。使用行菜单 → 另存为模板。',
+    saveAsTemplate: '另存为模板',
+    deleteTemplate: '删除模板',
+    repeatTemplate: '定期复制',
+    repeatNever: '不重复',
+    repeats: { day: '每天', week: '每周', month: '每月' },
+    onePerson: '1 人',
+    oneFile: '1 个文件',
+    searchDatabases: '搜索数据库…',
+    relationLimit: '上限',
+    onePage: '1 个页面',
+    rules: '条规则',
+    reset: '重置',
+    saveForEveryone: '为所有人保存',
+    locked: '已锁定',
+    lockedHint: '属性、视图和布局已锁定，数据仍可编辑。',
+    lockDatabase: '锁定数据库',
+    unlockDatabase: '解锁数据库',
+    copyLinkToView: '复制视图链接',
+    openAsFullPage: '以整页打开',
+    groups: '分组',
+    conditionalColor: '条件颜色',
+    conditionalColorHint: '为符合条件的行或单元格着色，例如将逾期任务标为红色。',
+    addColorRule: '新建颜色规则',
+    deleteColorRule: '删除规则',
+    background: '背景',
+    applyTo: '应用于',
+    entireRow: '整行',
+    thisProperty: '仅此属性',
+    property: '属性',
+    operator: '运算符',
+    searchProperty: '搜索属性…',
+    shownProps: '已显示',
+    hiddenProps: '已隐藏',
+    calendarAs: '日历显示为',
+    calendarModes: { month: '月', week: '周' },
+    verticalLines: '显示竖线',
+    loadLimit: '加载上限',
+    noLimit: '无限制',
+    showAs: '显示为',
+    showAsKinds: { number: '数字', bar: '进度条', ring: '圆环' },
+    divideBy: '除以',
+    showNumber: '显示数字',
+    timeFormat: '时间格式',
+    hour12: '12 小时制',
+    hour24: '24 小时制',
+    showFullUrl: '显示完整网址',
+    appliesToAllViews: '更改将应用于显示此属性的所有视图。',
+    optionSort: '排序',
+    optionSorts: { manual: '手动', asc: '按字母顺序', desc: '按字母倒序' },
+    setAsDefault: '设为默认',
+    defaultBadge: '默认',
+    moveToGroup: '分组',
+    optionColor: '颜色',
+    done: '完成',
+    groupByThis: '分组',
+    ungroup: '取消分组',
+    sortLowHigh: '从低到高排序',
+    sortHighLow: '从高到低排序',
+    sortOldNew: '从旧到新排序',
+    sortNewOld: '从新到旧排序',
+    rowActions: '行操作',
+    openIn: '打开方式',
+    duplicate: '创建副本',
+    copyLink: '复制链接',
+    editProperty: '编辑属性',
+    moreActions: '更多操作',
     newRowOptions: '更多添加方式',
     newAtTop: '添加到顶部',
     newAtBottom: '添加到底部',
     colorColumns: '列着色',
     cardSize: '卡片大小',
     fitImage: '适应图片',
+    coverPageCover: '页面封面',
+    coverPageContent: '页面内容',
+    cardLayout: '卡片布局',
+    cardLayouts: { list: '列表', compact: '紧凑' },
     showWeekends: '显示周末',
     showTable: '显示表格',
     tableOptions: '表格',
@@ -767,6 +1372,33 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     addRowBelow: '点击在下方添加',
     inline: '数据库 – 内嵌',
     fullPage: '数据库 – 整页',
+    buttonLabel: '按钮文字',
+    actionsLabel: '操作',
+    addAction: '添加操作',
+    deleteAction: '删除操作',
+    actionTypes: { set_values: '编辑属性', add_row: '添加页面', open_url: '打开链接', show_confirm: '显示确认' },
+    noActions: '暂无操作',
+    setProperty: '设置属性',
+    openNewRow: '打开新页面',
+    urlFrom: '打开',
+    typedUrl: '一个链接',
+    confirmMessage: '提示信息',
+    confirmDefault: '确定吗？',
+    emptyValue: '空',
+    dynamicNow: '现在',
+    customDate: '指定日期',
+    me: '我',
+    automations: '自动化',
+    automationsHint: '在添加页面或编辑属性时运行操作。由进行编辑的浏览器运行。',
+    addAutomation: '新建自动化',
+    deleteAutomation: '删除自动化',
+    automationName: '名称',
+    automationEnabled: '启用',
+    triggerWhen: '当',
+    triggers: { row_added: '添加页面', prop_changed: '编辑属性' },
+    anyProperty: '任意属性',
+    onlyWhen: '仅当值',
+    thenDo: '执行',
   },
 }
 

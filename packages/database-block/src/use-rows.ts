@@ -12,7 +12,7 @@ export function useRowStore(db: DbContext, opts: { grouped?: () => boolean } = {
     const v = db.view.value
     if (!v) return ''
     const c = v.config
-    return JSON.stringify([v.id, c.filter, c.sorts, grouped.value ? c.group_by : null, db.query.value.search ?? ''])
+    return JSON.stringify([v.id, c.filter, c.sorts, grouped.value ? c.group_by : null, db.query.value])
   })
   const store = shallowRef<RowStore | null>(null)
 
@@ -28,7 +28,7 @@ export function useRowStore(db: DbContext, opts: { grouped?: () => boolean } = {
       source: db.source,
       viewId: v.id,
       query: db.query.value,
-      grouping: g ? { hideEmpty: g.hide_empty, order: g.order } : null,
+      grouping: g ? { hideEmpty: g.hide_empty, order: g.order, sort: g.sort, hidden: g.hidden } : null,
       pageSize: db.options.pageSize ?? 50,
       onError: db.report,
     })

@@ -12,6 +12,7 @@ afterEach(() => {
   for (const w of wrappers.splice(0)) w.unmount()
   for (const e of editors.splice(0)) e.destroy()
   document.body.innerHTML = ''
+  localStorage.clear()
 })
 const settle = async () => {
   for (let i = 0; i < 6; i++) {
@@ -93,7 +94,7 @@ describe('databaseView node', () => {
     expect(factory).toHaveBeenCalledWith('db1')
     expect(wrapper.find('.me-db-title').element).toBeInstanceOf(HTMLInputElement)
     expect((wrapper.find('.me-db-title').element as HTMLInputElement).value).toBe('Tasks')
-    expect(wrapper.findAll('.me-db-tab[role="tab"]')).toHaveLength(8)
+    expect(wrapper.findAll('.me-db-tab[role="tab"]')).toHaveLength(source.views.value.length)
     expect(wrapper.findAll('.me-db-tr').length).toBeGreaterThan(5)
 
     await wrapper.find('[data-view-id="v-board"]').trigger('click')

@@ -10,6 +10,7 @@ const wrappers: VueWrapper[] = []
 afterEach(() => {
   for (const w of wrappers.splice(0)) w.unmount()
   document.body.innerHTML = ''
+  localStorage.clear()
 })
 
 const settle = async () => {
@@ -174,5 +175,71 @@ describe('helpers', () => {
     expect(placeColumn(v, props, 'x', 'status', 'left')).toEqual(['x', 'status', 'priority'])
     expect(placeColumn(v, props, 'x', 'name', 'right')).toEqual(['x', 'status', 'priority'])
     expect(switchLayout({ ...v, config: { sorts: [{ prop: 'due', dir: 'asc' }] } }, 'calendar', props)).toEqual({ date_prop: 'due', sorts: [{ prop: 'due', dir: 'asc' }] })
+  })
+})
+
+describe('share form', () => {
+  it('turns the public link on through source.formLink, shows it and remembers the switch', async () => {
+    const source = createMemorySource(sampleDatabase(5, { databaseId: 'db1' }))
+    source.upsertView({ id: 'v-form', name: 'Sign up', type: 'form', position: 'z0', config: {} })
+    const formLink = vi.fn(async (viewId: string, enabled: boolean) => ({ url: `https://x.test/notes/f/${viewId}`, enabled }))
+    Object.assign(source, { formLink })
+    const wrapper = mount({ render: () => h(DatabaseView, { source, databaseId: 'db1', viewId: 'v-form', locale: 'en' }) }, { attachTo: document.body })
+    wrappers.push(wrapper)
+    await settle()
+    const toggle = wrapper.find<HTMLInputElement>('[data-form-shared]')
+    expect(toggle.element.checked).toBe(false)
+    toggle.element.checked = true
+    await toggle.trigger('change')
+    await settle()
+    expect(formLink).toHaveBeenCalledWith('v-form', true)
+    expect(wrapper.find<HTMLInputElement>('[data-form-url]').element.value).toBe('https://x.test/notes/f/v-form')
+    expect(view(source, 'v-form').config.form_shared).toBe(true)
+    const off = wrapper.find<HTMLInputElement>('[data-form-shared]')
+    off.element.checked = false
+    await off.trigger('change')
+    await settle()
+    expect(formLink).toHaveBeenLastCalledWith('v-form', false)
+    expect(view(source, 'v-form').config.form_shared).toBeUndefined()
+  })
+
+  it('has no share section when the source cannot share', async () => {
+    const source = createMemorySource(sampleDatabase(5, { databaseId: 'db1' }))
+    source.upsertView({ id: 'v-form', name: 'Sign up', type: 'form', position: 'z0', config: {} })
+    const wrapper = mount({ render: () => h(DatabaseView, { source, databaseId: 'db1', viewId: 'v-form', locale: 'en' }) }, { attachTo: document.body })
+    wrappers.push(wrapper)
+    await settle()
+    expect(wrapper.find('[data-form-share]').exists()).toBe(false)
+  })
+})
+
+describe('templates', () => {
+  it('copy the template page into a new row and repeat every week as the current user', async () => {
+    const source = createMemorySource(sampleDatabase(5, { databaseId: 'db1' }))
+    const title = source.props.value.find(p => p.type === 'title')!
+    const first = (await source.rows('v-table', { offset: 0, limit: 1 })).rows[0]!.id
+    source.upsertProp({ ...title, config: { ...title.config, templates: [{ id: 't1', name: 'Weekly', values: {}, default: true, body_from: first }] } })
+    const copyRowBody = vi.fn(async () => {})
+    Object.assign(source, { copyRowBody, currentUserId: () => 'u9' })
+    const wrapper = mount({ render: () => h(DatabaseView, { source, databaseId: 'db1', viewId: 'v-table', locale: 'en' }) }, { attachTo: document.body })
+    wrappers.push(wrapper)
+    await settle()
+    const db = (wrapper.findComponent(DatabaseView).vm as unknown as { db: { createRow: (i?: object, o?: object) => string } }).db
+    const id = db.createRow({})
+    await settle()
+    expect(copyRowBody).toHaveBeenCalledWith(first, id)
+    // without a template: nothing to copy
+    db.createRow({}, { template: false })
+    expect(copyRowBody).toHaveBeenCalledTimes(1)
+
+    await wrapper.find('[data-tool="new-more"]').trigger('click')
+    await settle()
+    const select = document.body.querySelector<HTMLSelectElement>('[data-template-repeat]')!
+    select.value = 'week'
+    select.dispatchEvent(new Event('change'))
+    await settle()
+    const saved = source.props.value.find(p => p.type === 'title')!.config!.templates![0]!
+    expect(saved.repeat).toMatchObject({ every: 'week', by: 'u9' })
+    expect(new Date(saved.repeat!.start).getHours()).toBe(9)
   })
 })

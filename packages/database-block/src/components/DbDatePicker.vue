@@ -6,10 +6,10 @@
 import { ChevronLeft, ChevronRight } from '@lucide/vue'
 import { computed, ref, watch } from 'vue'
 import { useDb } from '../context'
-import type { DateValue } from '../types'
-import { dayOf, formatDateString, hasTime, isoDay, parseDateText, parseIso } from '../values'
+import type { DateRemind, DateValue } from '../types'
+import { dayOf, formatDateString, hasTime, isoDay, parseDateText, parseIso, REMINDS_DAY, REMINDS_TIME, withRemind } from '../values'
 
-const props = withDefaults(defineProps<{ value: DateValue | null, includeTime?: boolean, allowRange?: boolean }>(), { includeTime: false, allowRange: true })
+const props = withDefaults(defineProps<{ value: DateValue | null, includeTime?: boolean, allowRange?: boolean, allowRemind?: boolean }>(), { includeTime: false, allowRange: true, allowRemind: false })
 const emit = defineEmits<{ change: [value: DateValue | null] }>()
 
 const db = useDb()
@@ -17,6 +17,10 @@ const m = computed(() => db.m.value)
 const locale = computed(() => db.locale.value)
 
 const range = ref(!!props.value?.end)
+// Remind (Notion's): kept with the value, its due time recomputed whenever the date changes.
+const remind = ref<DateRemind | ''>(props.value?.remind ?? '')
+const remindChoices = computed(() => (withTime.value ? REMINDS_TIME : REMINDS_DAY))
+const out = (v: DateValue) => emit('change', props.allowRemind ? withRemind(v, remind.value) : v)
 const withTime = ref(props.includeTime || hasTime(props.value?.start))
 const editing = ref<'start' | 'end'>('start')
 const startDay = computed(() => (props.value?.start ? dayOf(props.value.start) : null))
@@ -68,7 +72,7 @@ function emitValue(start: string | null, end: string | null) {
     value.start = bound(a, startTime.value)
     value.end = bound(b, endTime.value)
   }
-  emit('change', value)
+  out(value)
 }
 
 function pick(day: string) {
@@ -93,7 +97,7 @@ function commitTyped() {
   const v = parseDateText(typed.value, locale.value)
   if (v) {
     range.value = !!v.end
-    emit('change', v)
+    out(v)
     view.value = monthOf(dayOf(v.start))
   }
 }
@@ -103,6 +107,10 @@ watch(range, (on) => {
   emitValue(startDay.value, on ? endDay.value ?? startDay.value : null)
 })
 watch(withTime, () => startDay.value && emitValue(startDay.value, endDay.value))
+watch(remind, () => {
+  if (remind.value && !remindChoices.value.includes(remind.value)) remind.value = ''
+  if (startDay.value) emitValue(startDay.value, endDay.value)
+})
 </script>
 
 <template>
@@ -145,6 +153,13 @@ watch(withTime, () => startDay.value && emitValue(startDay.value, endDay.value))
       <input v-model="startTime" type="time" class="me-input" :aria-label="m.time" @change="startDay && emitValue(startDay, endDay)">
       <input v-if="range" v-model="endTime" type="time" class="me-input" :aria-label="m.endDate" @change="startDay && emitValue(startDay, endDay)">
     </div>
+    <label v-if="allowRemind" class="me-db-field">
+      <span class="me-menu-label">{{ m.remind }}</span>
+      <select v-model="remind" class="me-input me-db-select" data-remind :disabled="!startDay">
+        <option value="">{{ m.remindNone }}</option>
+        <option v-for="r in remindChoices" :key="r" :value="r">{{ (withTime ? m.remindsTime : m.remindsDay)[r] }}</option>
+      </select>
+    </label>
     <button type="button" class="me-menu-item" @click="emit('change', null)">{{ m.clear }}</button>
   </div>
 </template>

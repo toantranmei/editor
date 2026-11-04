@@ -1,15 +1,18 @@
 <script setup lang="ts">
 /** Gallery view: cards in a responsive grid (virtualized by card rows), cover from a files property. */
-import { Image as ImageIcon, Plus } from '@lucide/vue'
+import { Plus } from '@lucide/vue'
 import { useVirtualizer } from '@tanstack/vue-virtual'
 import { componentTokens } from '@toantranmei/editor'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import CardCover from '../components/CardCover.vue'
 import CellValue from '../components/CellValue.vue'
+import RowIcon from '../components/RowIcon.vue'
 import { useDb } from '../context'
+import { useCardPreview } from '../preview'
 import { rectWithFallback } from '../virtual'
 import type { Row } from '../types'
 import { useRowStore } from '../use-rows'
-import { cellValue, coverImage, cssPx, isEmptyValue } from '../util'
+import { cellValue, cssPx, isEmptyValue, pageIcon } from '../util'
 
 defineProps<{ full?: boolean }>()
 const db = useDb()
@@ -43,11 +46,14 @@ onMounted(() => {
 onBeforeUnmount(() => ro?.disconnect())
 watch(size, measure)
 
-const coverProp = computed(() => db.props.value.find(p => p.id === db.view.value?.config.cover && p.type === 'files'))
+const preview = useCardPreview(db, () => db.view.value?.config.cover)
+const compact = computed(() => db.view.value?.config.card?.layout === 'compact')
 const title = computed(() => db.props.value.find(p => p.type === 'title'))
 const shown = computed(() => (db.view.value?.config.card?.props ?? []).map(id => db.props.value.find(p => p.id === id)).filter(p => !!p))
 const lanes = computed(() => Math.max(1, Math.floor((width.value + gap) / (cardW.value + gap))))
-const cardH = computed(() => (coverProp.value ? coverH.value : 0) + 40 + shown.value.length * 26)
+/** Property lines: one per property, or about three per line when compact. */
+const propLines = computed(() => (compact.value ? Math.ceil(shown.value.length / 3) : shown.value.length))
+const cardH = computed(() => (preview.mode.value ? coverH.value : 0) + 40 + propLines.value * 26)
 const total = computed(() => {
   void store.value?.tick.value
   return store.value?.segments.value[0]?.count ?? 0
@@ -76,10 +82,9 @@ const rowsOf = (line: number) => {
   for (let i = line * lanes.value; i < Math.min(slotsTotal.value, (line + 1) * lanes.value); i++) out.push(i === total.value ? 'add' : store.value?.rowAt(0, i) ?? null)
   return out
 }
-const coverUrl = (row: Row) => (coverProp.value ? coverImage(cellValue(row, coverProp.value)) : null)
 const fit = computed(() => !!db.view.value?.config.fit_image)
 function newCard(e: MouseEvent) {
-  const id = db.source.createRow({})
+  const id = db.createRow({})
   db.openRow(id, e)
 }
 </script>
@@ -97,15 +102,14 @@ function newCard(e: MouseEvent) {
           <button v-if="row === 'add'" type="button" class="me-db-card is-new" :style="{ height: `${cardH}px` }" data-new-card @click="newCard($event)">
             <Plus />{{ m.newRow }}
           </button>
-          <button v-else-if="row" type="button" class="me-db-card" :data-row-id="row.id" :style="{ height: `${cardH}px` }" @click="db.openRow(row.id, $event)">
-            <span v-if="coverProp" class="me-db-cover">
-              <img v-if="coverUrl(row)" :src="coverUrl(row)!" alt="" loading="lazy" decoding="async" class="me-db-cover-img">
-              <ImageIcon v-else class="me-db-cover-empty" />
+          <button v-else-if="row" type="button" class="me-db-card" :data-row-id="row.id" :data-cc="db.colors(row).row" :style="{ height: `${cardH}px` }" @click="db.openRow(row.id, $event)">
+            <CardCover v-if="preview.mode.value" :cover="preview.coverOf(row)!" />
+            <span class="me-db-card-title"><RowIcon v-if="pageIcon(db.view.value, row)" :icon="pageIcon(db.view.value, row)!" />{{ title ? String(cellValue(row, title) ?? '') || m.untitled : m.untitled }}</span>
+            <span v-if="shown.length" class="me-db-card-props" :class="{ 'is-compact': compact }">
+              <template v-for="p in shown" :key="p!.id">
+                <CellValue v-if="p!.type === 'button' || !isEmptyValue(cellValue(row, p!))" :prop="p!" :value="cellValue(row, p!)" :row="row" compact />
+              </template>
             </span>
-            <span class="me-db-card-title">{{ title ? String(cellValue(row, title) ?? '') || m.untitled : m.untitled }}</span>
-            <template v-for="p in shown" :key="p!.id">
-              <CellValue v-if="!isEmptyValue(cellValue(row, p!))" :prop="p!" :value="cellValue(row, p!)" compact />
-            </template>
           </button>
           <span v-else class="me-db-card is-placeholder" :style="{ height: `${cardH}px` }"><span class="me-db-skeleton" /></span>
         </template>

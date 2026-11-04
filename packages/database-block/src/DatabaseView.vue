@@ -6,6 +6,7 @@
 import { Maximize2 } from '@lucide/vue'
 import { baseTokensCss, type LocaleName } from '@toantranmei/editor'
 import { computed, onBeforeUnmount, provide, ref, watch } from 'vue'
+import FilterBar from './components/FilterBar.vue'
 import Toolbar from './components/Toolbar.vue'
 import ViewTabs from './components/ViewTabs.vue'
 import { createContext, DB_KEY } from './context'
@@ -16,6 +17,9 @@ import CalendarView from './views/CalendarView.vue'
 import ChartView from './views/ChartView.vue'
 import GalleryView from './views/GalleryView.vue'
 import ListView from './views/ListView.vue'
+import DashboardView from './views/DashboardView.vue'
+import FeedView from './views/FeedView.vue'
+import FormView from './views/FormView.vue'
 import PivotView from './views/PivotView.vue'
 import TableView from './views/TableView.vue'
 import TimelineView from './views/TimelineView.vue'
@@ -79,11 +83,11 @@ function select(id: string) {
   emit('update:viewId', id)
 }
 const type = computed(() => db.view.value?.type ?? 'table')
-const VIEWS = { table: TableView, board: BoardView, calendar: CalendarView, timeline: TimelineView, gallery: GalleryView, list: ListView, chart: ChartView, pivot: PivotView }
+const VIEWS = { table: TableView, board: BoardView, calendar: CalendarView, timeline: TimelineView, gallery: GalleryView, list: ListView, chart: ChartView, pivot: PivotView, form: FormView, feed: FeedView, dashboard: DashboardView }
 const viewRef = ref<{ newRow?: (seg?: number, top?: boolean) => void } | null>(null)
 
 // ── Title: `source.meta.title`, saved while typing (debounced) and on blur / Enter ──
-const titleShown = computed(() => props.showTitle ?? !props.full)
+const titleShown = computed(() => (props.showTitle ?? !props.full) && db.view.value?.config.show_title !== false)
 const metaTitle = computed(() => props.source.meta.value?.title ?? '')
 const title = ref(metaTitle.value)
 const titleFocused = ref(false)
@@ -108,19 +112,39 @@ function onTitleBlur() {
 }
 onBeforeUnmount(saveTitle)
 
+function newFromTemplate(templateId: string) {
+  if (!db.canEditContent.value) return
+  db.openRow(db.createRow({}, { template: templateId }))
+}
 function newRow(where: 'top' | 'bottom' = 'bottom') {
   if (!db.canEditContent.value) return
   const view = viewRef.value
   if (type.value === 'table' && view?.newRow) return view.newRow(undefined, where === 'top')
-  const id = props.source.createRow(where === 'top' ? { after: null } : {})
+  const id = db.createRow(where === 'top' ? { after: null } : {})
   db.openRow(id)
+}
+
+/** ⌘Z / Ctrl+Z undoes the last data change made in this block, ⌘⇧Z / Ctrl+Y redoes it (not while typing in a field). */
+function onUndoKey(e: KeyboardEvent) {
+  if (!(e.metaKey || e.ctrlKey) || e.altKey) return
+  const k = e.key.toLowerCase()
+  const redo = (k === 'z' && e.shiftKey) || k === 'y'
+  if (k !== 'z' && k !== 'y') return
+  // A field inside the database keeps its own undo (the editor around the block is contenteditable too: ignore it).
+  const field = (e.target as HTMLElement | null)?.closest('input, textarea, select, [contenteditable="true"]')
+  if (field && (e.currentTarget as HTMLElement).contains(field)) return
+  if (redo ? !db.canRedo.value : !db.canUndo.value) return
+  e.preventDefault()
+  e.stopPropagation()
+  if (redo) db.redo()
+  else db.undo()
 }
 
 defineExpose({ db, view: viewRef })
 </script>
 
 <template>
-  <div class="me-db" :class="{ 'is-full': full, 'is-readonly': !db.canEditContent.value, 'has-title': titleShown }" :data-view-type="type">
+  <div class="me-db" :class="{ 'is-full': full, 'is-readonly': !db.canEditContent.value, 'has-title': titleShown }" :data-view-type="type" @keydown="onUndoKey">
     <div v-if="titleShown" class="me-db-header">
       <span v-if="source.meta.value?.icon" class="me-db-icon" aria-hidden="true">{{ source.meta.value.icon }}</span>
       <input
@@ -142,8 +166,9 @@ defineExpose({ db, view: viewRef })
     </div>
     <div class="me-db-topbar">
       <ViewTabs @select="select" />
-      <Toolbar @new-row="newRow" />
+      <Toolbar @new-row="newRow" @new-from-template="newFromTemplate" />
     </div>
+    <FilterBar />
     <component :is="VIEWS[type]" v-if="db.view.value" ref="viewRef" :key="db.view.value.id" :full="full" />
     <div v-else class="me-db-empty is-loading">{{ m.loading }}</div>
   </div>

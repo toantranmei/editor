@@ -4,7 +4,7 @@
  * Only the rows in view (+ overscan) are requested from the source, in chunk-aligned windows (`RowStore`).
  * Rows have a fixed height and move with `transform`, so scrolling never triggers layout of off-screen rows.
  */
-import { ChevronDown, ChevronRight, GripVertical, Plus, Trash2, X } from '@lucide/vue'
+import { ChevronDown, ChevronRight, Copy, CornerDownRight, Ellipsis, GripVertical, Info, Plus, Trash2, X } from '@lucide/vue'
 import { type ColumnDef, type ColumnSizingState, getCoreRowModel, useVueTable } from '@tanstack/vue-table'
 import { useVirtualizer } from '@tanstack/vue-virtual'
 import { componentTokens } from '@toantranmei/editor'
@@ -12,11 +12,13 @@ import { computed, nextTick, onBeforeUnmount, ref, shallowRef, watch } from 'vue
 import { aggregatesFor, formatAggregate } from '../aggregates'
 import CellEditor from '../components/CellEditor.vue'
 import CellValue from '../components/CellValue.vue'
+import RowIcon from '../components/RowIcon.vue'
 import DbPopover from '../components/DbPopover.vue'
 import OpenModeIcon from '../components/OpenModeIcon.vue'
 import PropertyEditor from '../components/PropertyEditor.vue'
 import PropertyMenu from '../components/PropertyMenu.vue'
 import PropIcon from '../components/PropIcon.vue'
+import RowMenu from '../components/RowMenu.vue'
 import { useDb } from '../context'
 import { rectWithFallback } from '../virtual'
 import { type GridSelection, inSelection, navigate, selectionRect } from '../grid-nav'
@@ -25,7 +27,7 @@ import type { Item } from '../row-store'
 import { toTsv, parseTsv } from '../tsv'
 import type { Prop, Row, SelectOption } from '../types'
 import { useRowStore } from '../use-rows'
-import { cellValue, cssPx, isReadOnly } from '../util'
+import { cellValue, cssPx, duplicateRows, isReadOnly, pageIcon } from '../util'
 import { displayText, optionById, parseText } from '../values'
 
 const props = withDefaults(defineProps<{ full?: boolean }>(), { full: false })
@@ -129,13 +131,85 @@ watch(resizing, (now, before) => {
 // ── Virtualizers ──
 // happy-dom / hidden containers report a 0 rect: fall back to a viewport-sized one so a window still renders.
 const observeRect = rectWithFallback(1200, 520)
-const itemCount = computed(() => {
+const baseCount = computed(() => {
   void store.value?.tick.value
   void store.value?.segments.value
   void store.value?.collapsed.value
   return store.value?.itemCount() ?? 0
 })
-const itemAt = (i: number): Item | undefined => store.value?.itemAt(i)
+
+// ── Sub-items (`config.sub_items` = a relation to this database pointing at the parent row) ──
+// The store lists the parents (the query keeps rows without a parent); an expanded parent's sub-items are
+// inserted right under it (one level), read with a `contains` filter on the parent property.
+type TItem = Item | { kind: 'child', row: Row, parent: string }
+const subProp = computed(() => db.props.value.find(p => p.id === db.view.value?.config.sub_items && p.type === 'relation'))
+/** "Show sub-items as" flattened list: every row listed, sub-items name their parent (no ▸). */
+const subFlat = computed(() => !!subProp.value && db.view.value?.config.sub_items_display === 'flat')
+function parentTitle(row: Row): string | null {
+  const p = subProp.value
+  const v = p && subFlat.value ? row.values[p.id] : undefined
+  if (!Array.isArray(v) || !v.length) return null
+  void db.valueCtx.value
+  return db.names.rows.get(String(v[0])) ?? null
+}
+const expanded = shallowRef<Array<{ id: string, at: number, rows: Row[] }>>([])
+const itemCount = computed(() => baseCount.value + expanded.value.reduce((n, e) => n + e.rows.length, 0))
+function itemAt(i: number): TItem | undefined {
+  let offset = 0
+  for (const e of expanded.value) {
+    if (i <= e.at + offset) break
+    if (i <= e.at + offset + e.rows.length) return { kind: 'child', row: e.rows[i - offset - e.at - 1]!, parent: e.id }
+    offset += e.rows.length
+  }
+  return store.value?.itemAt(i - offset)
+}
+/** Store index of a displayed index (children before it skipped). */
+function baseIndex(i: number): number {
+  let offset = 0
+  for (const e of expanded.value) {
+    if (i <= e.at + offset) break
+    offset += e.rows.length
+  }
+  return i - offset
+}
+async function loadChildren(id: string): Promise<Row[]> {
+  const p = subProp.value
+  const v = db.view.value
+  if (!p || !v) return []
+  const page = await db.source.rows(v.id, { offset: 0, limit: 200 }, { filter: { and: [{ prop: p.id, op: 'contains', value: id }] }, sorts: v.config.sorts ?? [] })
+  return page.rows
+}
+const isExpanded = (id: string) => expanded.value.some(e => e.id === id)
+async function toggleSub(row: Row, displayIndex: number) {
+  if (isExpanded(row.id)) {
+    expanded.value = expanded.value.filter(e => e.id !== row.id)
+    return
+  }
+  try {
+    const rows = await loadChildren(row.id)
+    const at = baseIndex(displayIndex)
+    expanded.value = [...expanded.value, { id: row.id, at, rows }].sort((a, b) => a.at - b.at)
+  }
+  catch (error) {
+    db.report(error)
+  }
+}
+/** A new sub-item under `parent` (row menu → Add sub-item), shown at once. */
+async function addSubItem(parent: Row) {
+  const p = subProp.value
+  if (!p) return
+  db.createRow({ values: { [p.id]: [parent.id] }, after: parent.id })
+  if (!isExpanded(parent.id)) {
+    const i = rendered.value.find(r => r.row?.id === parent.id)?.v.index
+    if (i !== undefined) await toggleSub(parent, i)
+  }
+}
+// Writes re-read the open sub-item lists; another view / filter / grouping closes them.
+watch(() => db.source.version.value, async () => {
+  if (!expanded.value.length) return
+  expanded.value = await Promise.all(expanded.value.map(async e => ({ ...e, rows: await loadChildren(e.id).catch(() => e.rows) })))
+})
+watch(() => [db.view.value?.id, subProp.value?.id, JSON.stringify(db.view.value?.config.filter), JSON.stringify(db.view.value?.config.sorts), db.view.value?.config.group_by?.prop], () => (expanded.value = []))
 const rowVirtualizer = useVirtualizer(computed(() => ({
   count: itemCount.value,
   getScrollElement: () => scroller.value,
@@ -163,10 +237,21 @@ function measureRow(el: unknown) {
 }
 watch(() => store.value?.collapsed.value, () => rowVirtualizer.value.measure())
 watch(() => store.value?.segments.value, () => rowVirtualizer.value.measure())
+watch(expanded, () => rowVirtualizer.value.measure())
 
 const vRows = computed(() => rowVirtualizer.value.getVirtualItems())
 /** Height of everything in the scroller; the token `max-height` caps it, so short tables don't leave a gap. */
 const contentHeight = computed(() => sizes.value.header * 2 + rowVirtualizer.value.getTotalSize() + (!store.value?.grouped && db.canEditContent.value ? sizes.value.row : 0) + 2)
+/**
+ * Load limit (inline tables, Notion's "Load limit"): the block grows with its rows up to `load_limit` lines
+ * (default 50; 0 = no limit, the old fixed-height scroller) and "Load more" shows the next batch.
+ */
+const loadLimit = computed(() => (props.full ? 0 : (db.view.value?.config.load_limit ?? 50)))
+const shownLines = ref(0)
+watch(() => [db.view.value?.id, loadLimit.value], () => (shownLines.value = loadLimit.value), { immediate: true })
+const limited = computed(() => loadLimit.value > 0 && itemCount.value > shownLines.value)
+const limitedHeight = computed(() => (limited.value ? sizes.value.header * 2 + shownLines.value * sizes.value.row + 2 : contentHeight.value))
+const remaining = computed(() => Math.max(0, itemCount.value - shownLines.value))
 const vCols = computed(() => colVirtualizer.value.getVirtualItems().map(v => ({ ...v, col: v.index + frozen.value })))
 const padLeft = computed(() => (vCols.value.length ? restStarts.value[vCols.value[0]!.index]! : 0))
 const padRight = computed(() => (vCols.value.length ? restWidth.value - restStarts.value[vCols.value[vCols.value.length - 1]!.index + 1]! : restWidth.value))
@@ -202,9 +287,9 @@ const rendered = computed(() => {
   void store.value?.tick.value
   const s = store.value
   return vRows.value.map((v) => {
-    const item = s?.itemAt(v.index)
-    const row = item?.kind === 'row' ? s!.rowAt(item.seg, item.index) : undefined
-    return { v, item, row, top: v.start - sizes.value.header }
+    const item = itemAt(v.index)
+    const row = item?.kind === 'row' ? s!.rowAt(item.seg, item.index) : item?.kind === 'child' ? item.row : undefined
+    return { v, item, row, top: v.start - sizes.value.header, cc: row ? db.colors(row) : undefined }
   })
 })
 watch(rendered, (list) => {
@@ -257,10 +342,31 @@ const sel = ref<GridSelection | null>(null)
 const checked = ref(new Set<string>())
 const editing = shallowRef<{ row: Row, col: number, anchor: HTMLElement | null, text: string | null } | null>(null)
 const pendingEdit = ref<string | null>(null)
-const bounds = computed(() => ({ rows: itemCount.value, cols: cols.value.length, isRow: (i: number) => itemAt(i)?.kind === 'row' }))
+const bounds = computed(() => ({ rows: itemCount.value, cols: cols.value.length, isRow: (i: number) => itemAt(i)?.kind === 'row' || itemAt(i)?.kind === 'child' }))
 const rowOfItem = (index: number) => {
   const item = itemAt(index)
-  return item?.kind === 'row' ? store.value?.rowAt(item.seg, item.index) : undefined
+  return item?.kind === 'row' ? store.value?.rowAt(item.seg, item.index) : item?.kind === 'child' ? item.row : undefined
+}
+
+/** Row menu (⋮⋮ click, right-click, bulk bar ⋯): applies to the checked rows when the row is one of them. */
+const rowMenu = shallowRef<{ rows: Row[], anchor: HTMLElement | DOMRect } | null>(null)
+const loadedRows = computed(() => rendered.value.map(r => r.row).filter((r): r is Row => !!r))
+function checkedRows(): Row[] {
+  const byId = new Map(loadedRows.value.map(r => [r.id, r]))
+  return [...checked.value].map(id => byId.get(id)).filter((r): r is Row => !!r)
+}
+function openRowMenu(row: Row, anchor: HTMLElement | DOMRect) {
+  rowMenu.value = { rows: checked.value.has(row.id) && checked.value.size > 1 ? checkedRows() : [row], anchor }
+}
+function onRowContext(e: MouseEvent, row: Row | undefined) {
+  if (!row) return
+  e.preventDefault()
+  openRowMenu(row, new DOMRect(e.clientX, e.clientY, 0, 0))
+}
+function duplicateSelected() {
+  if (!db.canEditContent.value) return
+  const rows = checked.value.size ? checkedRows() : [rowOfItem(sel.value?.focus.row ?? -1)].filter((r): r is Row => !!r)
+  if (rows.length) duplicateRows(db, rows)
 }
 
 function focusGrid() {
@@ -330,6 +436,11 @@ function clearSelectedCells() {
 function onKey(e: KeyboardEvent) {
   if (editing.value || e.isComposing) return
   if (e.target !== scroller.value) return
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'd') {
+    e.preventDefault()
+    duplicateSelected()
+    return
+  }
   if ((e.key === 'Delete' || e.key === 'Backspace') && checked.value.size) {
     e.preventDefault()
     deleteChecked()
@@ -458,7 +569,7 @@ async function pasteMatrix(matrix: string[][], seg: number, index: number, col: 
     const values = { ...extra.get(li) }
     const gv = groupValue(key)
     if (gv !== undefined && groupProp.value) values[groupProp.value.id] = gv
-    last = db.source.createRow({ values, after: last })
+    last = db.createRow({ values, after: last }, { template: false })
   }
 }
 
@@ -474,7 +585,7 @@ function newRow(seg?: number, top = false) {
   const gv = groupValue(key)
   const values = gv !== undefined && groupProp.value ? { [groupProp.value.id]: gv } : {}
   const last = !top && !store.value?.grouped && !db.view.value?.config.sorts?.length && itemCount.value ? rowOfItem(itemCount.value - 1)?.id : undefined
-  const id = db.source.createRow(top ? { values, after: null } : last ? { values, after: last } : { values })
+  const id = db.createRow(top ? { values, after: null } : last ? { values, after: last } : { values })
   pendingEdit.value = id
   startTypeAhead()
   clearTimeout(pendingTimer)
@@ -675,12 +786,12 @@ defineExpose({ sel, checked, startEdit, pasteMatrix, store, rowVirtualizer, colV
 </script>
 
 <template>
-  <div class="me-db-table-wrap">
+  <div class="me-db-table-wrap" :class="{ 'is-no-vlines': db.view.value?.config.vertical_lines === false }">
     <div
       ref="scroller"
       class="me-db-table"
-      :class="{ 'is-full': props.full, 'is-resizing': !!resizing, 'is-wrap': anyWrap }"
-      :style="{ height: `${contentHeight}px` }"
+      :class="{ 'is-full': props.full, 'is-resizing': !!resizing, 'is-wrap': anyWrap, 'is-grow': loadLimit > 0, 'is-limited': limited }"
+      :style="{ height: `${limitedHeight}px` }"
       tabindex="0"
       role="grid"
       :aria-rowcount="itemCount"
@@ -719,7 +830,8 @@ defineExpose({ sel, checked, startEdit, pasteMatrix, store, rowVirtualizer, colV
               @dragend="colDrag = null"
             >
               <PropIcon :type="cols[sl.col]!.type" />
-              <span class="me-db-th-name">{{ cols[sl.col]!.name }}</span>
+              <span class="me-db-th-name" :title="cols[sl.col]!.config?.description || undefined">{{ cols[sl.col]!.name }}</span>
+              <Info v-if="cols[sl.col]!.config?.description" class="me-db-th-info" :aria-label="cols[sl.col]!.config!.description" />
               <span class="me-db-resize" :class="{ 'is-active': resizing === cols[sl.col]!.id }" draggable="false" @mousedown.stop.prevent="startResize($event, sl.col)" @touchstart.stop="startResize($event, sl.col)" @click.stop @dragstart.prevent />
             </div>
           </template>
@@ -745,6 +857,7 @@ defineExpose({ sel, checked, startEdit, pasteMatrix, store, rowVirtualizer, colV
             class="me-db-tr"
             :class="{
               'is-group': r.item?.kind === 'group',
+              'is-child': r.item?.kind === 'child',
               'is-add': r.item?.kind === 'add',
               'is-checked': !!r.row && checked.has(r.row.id),
               'is-drop-before': drag?.over === r.v.index && !drag?.after,
@@ -752,12 +865,14 @@ defineExpose({ sel, checked, startEdit, pasteMatrix, store, rowVirtualizer, colV
               'is-dragging': !!r.row && drag?.id === r.row.id,
             }"
             role="row"
+            :data-cc="r.cc?.row"
             :data-row="r.v.index"
             :data-index="r.v.index"
             :aria-rowindex="r.v.index + 1"
             :style="{ transform: `translateY(${r.top}px)`, [anyWrap && r.item?.kind === 'row' ? 'minHeight' : 'height']: `${anyWrap && r.item?.kind === 'row' ? sizes.row : r.v.size}px`, width: `${totalWidth}px` }"
             @dragover="onRowDragOver($event, r.v.index)"
             @drop="onRowDrop"
+            @contextmenu="onRowContext($event, r.row)"
           >
             <!-- Group header -->
             <template v-if="r.item?.kind === 'group'">
@@ -781,10 +896,14 @@ defineExpose({ sel, checked, startEdit, pasteMatrix, store, rowVirtualizer, colV
             <template v-else>
               <div class="me-db-td me-db-gutter" :style="{ width: `${gutter}px` }">
                 <span
-                  v-if="r.row && canMove"
+                  v-if="r.row"
                   class="me-db-row-handle"
-                  draggable="true"
-                  :title="m.dragToMove"
+                  role="button"
+                  tabindex="-1"
+                  :draggable="canMove"
+                  :title="canMove ? `${m.dragToMove} · ${m.rowActions}` : m.rowActions"
+                  :aria-label="m.rowActions"
+                  @click="openRowMenu(r.row, $event.currentTarget as HTMLElement)"
                   @dragstart="onRowDragStart($event, r.row)"
                   @dragend="drag = null"
                 ><GripVertical /></span>
@@ -798,6 +917,7 @@ defineExpose({ sel, checked, startEdit, pasteMatrix, store, rowVirtualizer, colV
                     class="me-db-td"
                     role="gridcell"
                     :data-col="sl.col"
+                    :data-cc="cols[sl.col] ? r.cc?.cells[cols[sl.col]!.id] : undefined"
                     :class="{
                       'is-first': sl.col === 0,
                       'is-frozen': sl.left !== undefined,
@@ -811,7 +931,22 @@ defineExpose({ sel, checked, startEdit, pasteMatrix, store, rowVirtualizer, colV
                     @dblclick="startEdit(null)"
                     @click="sl.col > 0 && cols[sl.col]?.type === 'checkbox' && sel?.focus.col === sl.col && !$event.shiftKey && startEdit(null)"
                   >
-                    <CellValue v-if="cols[sl.col]" :prop="cols[sl.col]!" :value="valueAt(r.row, sl.col)" />
+                    <button
+                      v-if="sl.col === 0 && subProp && !subFlat && r.item?.kind === 'row'"
+                      type="button"
+                      class="me-db-icon-button me-db-subtoggle"
+                      :aria-expanded="isExpanded(r.row.id)"
+                      :aria-label="m.subItems"
+                      :title="m.subItems"
+                      data-subtoggle
+                      @mousedown.stop
+                      @click.stop="toggleSub(r.row, r.v.index)"
+                    >
+                      <ChevronDown v-if="isExpanded(r.row.id)" /><ChevronRight v-else />
+                    </button>
+                    <RowIcon v-if="sl.col === 0 && cols[0]?.type === 'title' && pageIcon(db.view.value, r.row)" :icon="pageIcon(db.view.value, r.row)!" />
+                    <CellValue v-if="cols[sl.col]" :prop="cols[sl.col]!" :value="valueAt(r.row, sl.col)" :row="r.row" />
+                    <span v-if="sl.col === 0 && parentTitle(r.row)" class="me-db-parent-label is-cell" :title="m.parentItem"><CornerDownRight />{{ parentTitle(r.row) }}</span>
                     <button
                       v-if="sl.col === 0"
                       type="button"
@@ -843,6 +978,7 @@ defineExpose({ sel, checked, startEdit, pasteMatrix, store, rowVirtualizer, colV
           <div class="me-db-tf me-db-gutter" :style="{ width: `${gutter}px` }" />
           <template v-for="sl in slots" :key="sl.key">
             <div v-if="sl.kind === 'pad'" class="me-db-spacer" :style="slotStyle(sl)" />
+            <div v-else-if="cols[sl.col] && !aggregatesFor(cols[sl.col]!).length" class="me-db-tf" :class="{ 'is-first': sl.col === 0, 'is-frozen': sl.left !== undefined, 'is-frozen-last': sl.last }" :style="slotStyle(sl)" />
             <button
               v-else-if="cols[sl.col]"
               type="button"
@@ -860,9 +996,14 @@ defineExpose({ sel, checked, startEdit, pasteMatrix, store, rowVirtualizer, colV
       </div>
     </div>
 
+    <button v-if="limited" type="button" class="me-db-text-button me-db-load-more" data-load-more @click="shownLines += loadLimit">
+      {{ m.loadMore }} <span class="me-db-hint">({{ remaining }})</span>
+    </button>
     <div v-if="checked.size" class="me-db-selection-bar" role="toolbar" :aria-label="fmt(m.selected, { count: checked.size })">
       <span class="me-db-selection-count">{{ fmt(m.selected, { count: checked.size }) }}</span>
+      <button v-if="db.canEditContent.value" type="button" class="me-db-text-button" data-bulk="duplicate" @click="duplicateSelected"><Copy />{{ m.duplicate }}</button>
       <button v-if="db.canEditContent.value" type="button" class="me-db-text-button me-db-danger" data-bulk="delete" @click="deleteChecked"><Trash2 />{{ m.deleteRows }}</button>
+      <button type="button" class="me-db-icon-button" data-bulk="more" :aria-label="m.moreActions" :title="m.moreActions" @click="rowMenu = { rows: checkedRows(), anchor: $event.currentTarget as HTMLElement }"><Ellipsis /></button>
       <button type="button" class="me-db-text-button" data-bulk="clear" @click="checked = new Set()"><X />{{ m.clearSelection }}</button>
     </div>
 
@@ -875,6 +1016,7 @@ defineExpose({ sel, checked, startEdit, pasteMatrix, store, rowVirtualizer, colV
       :initial-text="editing.text"
       @close="endEdit"
     />
+    <RowMenu v-if="rowMenu" :rows="rowMenu.rows" :anchor="rowMenu.anchor" :sub-items="!!subProp" @add-sub="addSubItem" @done="checked = new Set()" @close="rowMenu = null" />
     <PropertyMenu v-if="headerMenu" :prop="headerMenu.prop" :anchor="headerMenu.anchor" :column="headerMenu.col" @close="headerMenu = null" />
     <PropertyEditor v-if="addProp" :anchor="addProp" @close="addProp = null" />
     <DbPopover v-if="aggMenu" :anchor="aggMenu.anchor" :scope="db.scope.value" @close="aggMenu = null">

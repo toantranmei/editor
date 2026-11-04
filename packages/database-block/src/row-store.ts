@@ -27,7 +27,7 @@ export interface RowStoreOptions {
   viewId: string
   query?: RowQuery
   /** Group the rows (`groups()` + `rowsInGroup()`), with these display options. */
-  grouping?: { hideEmpty?: boolean, order?: string[] } | null
+  grouping?: { hideEmpty?: boolean, order?: string[], sort?: 'asc' | 'desc', hidden?: string[] } | null
   pageSize?: number
   /** Min ms between two request batches while scrolling. */
   throttle?: number
@@ -112,9 +112,14 @@ export class RowStore {
   }
 
   private orderGroups(groups: Group[]): Segment[] {
-    const { hideEmpty, order } = this.opts.grouping ?? {}
+    const { hideEmpty, order, sort, hidden } = this.opts.grouping ?? {}
     let list = groups.map(g => ({ key: g.key, label: g.label, count: g.count }))
     if (hideEmpty) list = list.filter(g => g.count > 0)
+    if (hidden?.length) list = list.filter(g => !hidden.includes(g.key ?? ''))
+    if (sort) {
+      const collator = new Intl.Collator(undefined, { sensitivity: 'base', numeric: true })
+      list = [...list].sort((a, b) => (sort === 'desc' ? -1 : 1) * collator.compare(a.label, b.label))
+    }
     if (order?.length) {
       const rank = (k: string | null) => {
         const i = order.indexOf(k ?? '')
@@ -122,6 +127,8 @@ export class RowStore {
       }
       list = list.map((g, i) => ({ g, i })).sort((a, b) => rank(a.g.key) - rank(b.g.key) || a.i - b.i).map(x => x.g)
     }
+    // "No <property>" goes last (like Notion) unless the manual order places it.
+    if (!order?.includes('')) list = [...list.filter(g => g.key !== null), ...list.filter(g => g.key === null)]
     return list
   }
 

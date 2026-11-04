@@ -18,6 +18,8 @@ import SearchPicker from './SearchPicker.vue'
 const props = defineProps<{
   prop: Prop
   row: Row
+  /** Bulk edit: every write goes to these rows (the row menu on checked rows). */
+  rowIds?: string[]
   anchor: HTMLElement | DOMRect | null
   /** Text typed to start editing (replaces the value, like a spreadsheet). */
   initialText?: string | null
@@ -55,7 +57,7 @@ const local = ref<unknown>(current.value)
 function write(value: unknown) {
   if (!db.canEditContent.value || isReadOnly(type.value)) return
   local.value = isEmptyValue(value) ? null : value
-  db.source.setCell(props.row.id, props.prop.id, isEmptyValue(value) ? null : value)
+  for (const id of props.rowIds ?? [props.row.id]) db.source.setCell(id, props.prop.id, isEmptyValue(value) ? null : value)
 }
 
 /** Commits the text draft; returns false when it can't be parsed (number). */
@@ -139,6 +141,7 @@ const preview = computed(() => (type.value === 'number' && !error.value && draft
         v-else-if="type === 'date'"
         :value="(local as DateValue | null) ?? null"
         :include-time="!!prop.config?.time"
+        allow-remind
         @change="v => write(v)"
       />
       <SearchPicker
@@ -146,10 +149,11 @@ const preview = computed(() => (type.value === 'number' && !error.value && draft
         :kind="type === 'person' ? 'person' : 'relation'"
         :value="ids"
         :database-id="prop.config?.database_id"
+        :single="prop.config?.limit === 1"
         :initial-query="initialText ?? ''"
         @change="v => write(v)"
       />
-      <FilesEditor v-else-if="type === 'files'" :value="(local as FileValue[] | null) ?? []" @change="v => write(v)" />
+      <FilesEditor v-else-if="type === 'files'" :value="(local as FileValue[] | null) ?? []" @change="v => write(prop.config?.limit === 1 ? v.slice(-1) : v)" />
       <div v-else class="me-db-cell-hint">{{ m.readOnly }}</div>
     </div>
   </DbPopover>

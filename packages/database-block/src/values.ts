@@ -2,7 +2,7 @@
  * Cell values: display text (cells, copy as TSV) and parsing typed text back into contract-typed JSON
  * (paste, typed number / date input).
  */
-import type { DateDisplay, DateValue, FileValue, NumberFormat, OptionColor, Prop, SelectOption } from './types'
+import type { DateDisplay, DateRemind, DateValue, FileValue, NumberFormat, OptionColor, Prop, SelectOption } from './types'
 import { fold, isEmptyValue, uuidv7 } from './util'
 
 export interface ValueContext {
@@ -76,10 +76,12 @@ export const hasTime = (s: string | undefined) => !!s && s.includes('T')
 /** Day part (`YYYY-MM-DD`, local) of a date value bound. */
 export const dayOf = (s: string) => (hasTime(s) ? isoDay(parseIso(s)!) : s.slice(0, 10))
 
-export function formatDateString(s: string, display: DateDisplay | undefined, locale: string, now = new Date()): string {
+/** `hour12`: 12-hour clock ("3:05 PM"), else 24-hour ("15:05"). */
+export function formatDateString(s: string, display: DateDisplay | undefined, locale: string, now = new Date(), hour12 = false): string {
   const d = parseIso(s)
   if (!d) return s
-  const time = hasTime(s) ? ` ${pad(d.getHours())}:${pad(d.getMinutes())}` : ''
+  const h = d.getHours()
+  const time = !hasTime(s) ? '' : hour12 ? ` ${h % 12 || 12}:${pad(d.getMinutes())} ${h < 12 ? 'AM' : 'PM'}` : ` ${pad(h)}:${pad(d.getMinutes())}`
   const dd = pad(d.getDate())
   const mm = pad(d.getMonth() + 1)
   const yyyy = d.getFullYear()
@@ -96,6 +98,9 @@ export function formatDateString(s: string, display: DateDisplay | undefined, lo
       }
     }
     case 'dmy': return `${dd}/${mm}/${yyyy}${time}`
+    // Full: "November 4, 2026" / "4 tháng 11, 2026"; short: the locale's numeric date.
+    case 'full': return new Intl.DateTimeFormat(intlLocale(locale), { day: 'numeric', month: 'long', year: 'numeric' }).format(d) + time
+    case 'short': return new Intl.DateTimeFormat(intlLocale(locale), { day: '2-digit', month: '2-digit', year: 'numeric' }).format(d) + time
     default: {
       // Locale default: en → Oct 30, 2026; vi → 30/10/2026; zh → 2026/10/30.
       if (locale === 'en') return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(d) + time
@@ -107,8 +112,9 @@ export function formatDateString(s: string, display: DateDisplay | undefined, lo
 
 export function formatDateValue(v: DateValue, prop: Prop, locale: string, now?: Date): string {
   const display = prop.config?.format as DateDisplay | undefined
-  const start = formatDateString(v.start, display, locale, now)
-  return v.end ? `${start} → ${formatDateString(v.end, display, locale, now)}` : start
+  const h12 = !!prop.config?.hour12
+  const start = formatDateString(v.start, display, locale, now, h12)
+  return v.end ? `${start} → ${formatDateString(v.end, display, locale, now, h12)}` : start
 }
 
 /** Parses typed / pasted dates: ISO, `30/10/2026`, `10/30/2026` (en), `2026/10/30`, optional `HH:mm`, ranges with `→`. */
@@ -170,8 +176,8 @@ export function displayText(prop: Prop, value: unknown, ctx: ValueContext): stri
     case 'date':
     case 'created_time':
     case 'last_edited_time': {
-      if (typeof value === 'number') return formatDateString(new Date(value).toISOString(), prop.config?.format as DateDisplay, ctx.locale, ctx.now)
-      if (typeof value === 'string') return formatDateString(value, prop.config?.format as DateDisplay, ctx.locale, ctx.now)
+      if (typeof value === 'number') return formatDateString(new Date(value).toISOString(), prop.config?.format as DateDisplay, ctx.locale, ctx.now, !!prop.config?.hour12)
+      if (typeof value === 'string') return formatDateString(value, prop.config?.format as DateDisplay, ctx.locale, ctx.now, !!prop.config?.hour12)
       return formatDateValue(value as DateValue, prop, ctx.locale, ctx.now)
     }
     case 'person':
@@ -268,4 +274,30 @@ export function isLossyChange(from: Prop['type'], to: Prop['type']): boolean {
   if (from === 'select' && to === 'status') return false
   if (from === 'status' && to === 'select') return false
   return true
+}
+
+/** Reminders offered: for a date with a time, from the time; for a day, at 9:00 (Notion's choices). */
+export const REMINDS_TIME: DateRemind[] = ['at_time', '5m', '10m', '15m', '30m', '1h', '2h', '1d', '2d']
+export const REMINDS_DAY: DateRemind[] = ['at_time', '1d', '2d', '1w']
+const REMIND_MS: Record<DateRemind, number> = { at_time: 0, '5m': 300e3, '10m': 600e3, '15m': 900e3, '30m': 1800e3, '1h': 3600e3, '2h': 7200e3, '1d': 864e5, '2d': 1728e5, '1w': 6048e5 }
+
+/** When `remind` of a date starting at `start` is due, as RFC 3339 (local 9:00 for a day without time). */
+export function remindAt(start: string, remind: DateRemind): string | null {
+  const d = parseIso(start)
+  if (!d) return null
+  if (!hasTime(start)) {
+    // whole days: 9:00 local on the day, minus whole days (not 24 h: daylight saving)
+    const days = Math.round(REMIND_MS[remind] / 864e5)
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate() - days, 9, 0, 0, 0).toISOString()
+  }
+  return new Date(d.getTime() - REMIND_MS[remind]).toISOString()
+}
+
+/** `value` with its reminder (none: removed), `remind_at` recomputed from its start. */
+export function withRemind(value: DateValue, remind: DateRemind | '' | undefined): DateValue {
+  const rest: DateValue = { start: value.start }
+  if (value.end) rest.end = value.end
+  if (!remind) return rest
+  const at = remindAt(value.start, remind)
+  return at ? { ...rest, remind, remind_at: at } : rest
 }

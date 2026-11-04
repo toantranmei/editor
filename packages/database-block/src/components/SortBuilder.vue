@@ -9,7 +9,7 @@ const db = useDb()
 const m = computed(() => db.m.value)
 const sorts = computed(() => db.view.value?.config.sorts ?? [])
 const editable = computed(() => db.canEditStructure.value)
-const sortable = computed(() => db.props.value.filter(p => p.type !== 'files'))
+const sortable = computed(() => db.props.value.filter(p => p.type !== 'files' && p.type !== 'button'))
 
 const save = (next: Sort[]) => db.updateView({ sorts: next.length ? next : undefined })
 const set = (i: number, patch: Partial<Sort>) => save(sorts.value.map((s, j) => (j === i ? { ...s, ...patch } : s)))

@@ -2,6 +2,7 @@
 /**
  * Filter builder: conditions joined by And / Or, plus one level of nested groups (like Notion's "filter group").
  * Writes contract JSON to `view.config.filter` on every change: `{ and: [{ prop, op, value? }, { or: [...] }] }`.
+ * With `standalone` it edits `value` instead and emits `change` (a dashboard widget's own filter).
  */
 import { Plus, Trash2 } from '@lucide/vue'
 import { computed } from 'vue'
@@ -10,15 +11,18 @@ import { defaultCondition, filterableProps, groupItems, groupMode, isGroup, make
 import type { FilterCondition, FilterGroup, FilterNode, FilterOp } from '../types'
 import FilterValue from './FilterValue.vue'
 
+const input = defineProps<{ standalone?: boolean, value?: FilterGroup | null }>()
+const emit = defineEmits<{ change: [filter: FilterGroup] }>()
 const db = useDb()
 const m = computed(() => db.m.value)
-const root = computed<FilterGroup>(() => db.view.value?.config.filter ?? { and: [] })
+const root = computed<FilterGroup>(() => (input.standalone ? input.value : db.view.value?.config.filter) ?? { and: [] })
 const props = computed(() => filterableProps(db.props.value))
 const propOf = (id: string) => db.props.value.find(p => p.id === id)
 const editable = computed(() => db.canEditStructure.value)
 
 function save(group: FilterGroup) {
-  db.updateView({ filter: group })
+  if (input.standalone) emit('change', group)
+  else db.updateView({ filter: group })
 }
 
 /** Replaces the node at `path` (indices into nested groups); `null` removes it. */

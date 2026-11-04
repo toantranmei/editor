@@ -1,11 +1,16 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   defaultCondition, displayText, isLossyChange, navigate, normalizeFilter, opsFor, parseDateText, parseNumber,
   parseText, parseTsv, toTsv, valueInput, withOp, type Prop,
 } from '../src'
 import { createMemorySource, sampleDatabase } from '../src/memory-source'
 import { RowStore } from '../src/row-store'
-import { positionAfter, uuidv7 } from '../src/util'
+import { duplicateRows, positionAfter, uuidv7 } from '../src/util'
+import { colorsOf } from '../src/colors'
+import { withHistory } from '../src/history'
+import { resolveValue, resolveValues, runActions, safeUrl, triggered, type TriggerEvent } from '../src/actions'
+import type { Automation, DbAction } from '../src/types'
+import { draftKey, localDraftStore, parseDraft } from '../src/drafts'
 
 const p = (type: Prop['type'], config?: Prop['config'], id = type): Prop => ({ id, name: id, type, position: 'a0', config })
 const flush = () => new Promise(r => setTimeout(r, 0))
@@ -15,10 +20,11 @@ describe('filter operators (contract 1.3)', () => {
     expect(opsFor(p('text'))).toEqual(['equals', 'not_equals', 'contains', 'not_contains', 'starts_with', 'ends_with', 'is_empty', 'is_not_empty'])
     expect(opsFor(p('title'))).toContain('starts_with')
     expect(opsFor(p('number'))).toEqual(['=', '!=', '>', '>=', '<', '<=', 'is_empty', 'is_not_empty'])
-    expect(opsFor(p('select'))).toEqual(['is', 'is_not', 'is_any_of', 'is_none_of'])
-    expect(opsFor(p('status'))).toEqual(['is', 'is_not', 'is_any_of', 'is_none_of'])
-    for (const t of ['multi_select', 'person', 'relation'] as const) expect(opsFor(p(t))).toEqual(['contains', 'not_contains', 'contains_any', 'contains_all'])
-    expect(opsFor(p('date'))).toEqual(['is', 'before', 'after', 'on_or_before', 'on_or_after', 'between', 'is_relative'])
+    expect(opsFor(p('select'))).toEqual(['is', 'is_not', 'is_any_of', 'is_none_of', 'is_empty', 'is_not_empty'])
+    expect(opsFor(p('status'))).toEqual(['is', 'is_not', 'is_any_of', 'is_none_of', 'is_empty', 'is_not_empty'])
+    for (const t of ['multi_select', 'person', 'relation'] as const) expect(opsFor(p(t))).toEqual(['contains', 'not_contains', 'contains_any', 'contains_all', 'is_empty', 'is_not_empty'])
+    expect(opsFor(p('date'))).toEqual(['is_relative', 'is', 'before', 'after', 'on_or_before', 'on_or_after', 'between', 'is_empty', 'is_not_empty'])
+    expect(opsFor(p('files'))).toEqual(['is_not_empty', 'is_empty'])
     expect(opsFor(p('checkbox'))).toEqual(['is'])
     // Formula / rollup follow their result type.
     expect(opsFor(p('formula', { result_type: 'number' }))).toContain('>=')
@@ -35,6 +41,29 @@ describe('filter operators (contract 1.3)', () => {
     expect(withOp({ prop: 'text', op: 'contains', value: 'x' }, 'is_empty', p('text'))).toEqual({ prop: 'text', op: 'is_empty' })
     expect(valueInput(p('date'), 'is_relative')).toBe('relative')
     expect(valueInput(p('date'), 'between')).toBe('date_range')
+  })
+
+  it('duplicates rows with their writable values only, right after each original', () => {
+    const calls: Array<{ values?: Record<string, unknown>, after?: string | null }> = []
+    const props = [p('title'), p('number'), p('formula'), p('created_time')]
+    const source = { createRow: (init: { values?: Record<string, unknown>, after?: string | null }) => { calls.push(init); return 'new' } }
+    duplicateRows({ props: { value: props }, source } as never, [
+      { id: 'r1', position: 'a', values: { title: 'A', number: 2, formula: 9, created_time: 'x' } },
+      { id: 'r2', position: 'b', values: { title: 'B', number: null } },
+    ])
+    expect(calls).toEqual([{ values: { title: 'B' }, after: 'r2' }, { values: { title: 'A', number: 2 }, after: 'r1' }])
+  })
+
+  it('colors rows and cells by the first matching rule', () => {
+    const props = [p('number'), p('select', { options: [{ id: 'hi', name: 'High', color: 'red' }] })]
+    const rules = [
+      { id: 'a', condition: { prop: 'select', op: 'is' as const, value: 'hi' }, color: 'red' as const },
+      { id: 'b', condition: { prop: 'number', op: '>' as const, value: 5 }, color: 'green' as const },
+      { id: 'c', condition: { prop: 'number', op: '>' as const, value: 1 }, color: 'blue' as const, scope: 'prop' as const },
+    ]
+    expect(colorsOf(rules, props, { id: 'r', position: 'a', values: { select: 'hi', number: 9 } })).toEqual({ row: 'red', cells: { number: 'blue' } })
+    expect(colorsOf(rules, props, { id: 'r', position: 'a', values: { number: 9 } })).toEqual({ row: 'green', cells: { number: 'blue' } })
+    expect(colorsOf(rules, props, { id: 'r', position: 'a', values: { number: 0 } })).toEqual({ cells: {} })
   })
 
   it('normalizes away empty groups', () => {
@@ -164,12 +193,56 @@ describe('memory source queries', () => {
     expect(pivot.cells.length).toBe(pivot.rows.length)
   })
 
+  it('charts a dashboard widget (its own config and filter) and previews rows', async () => {
+    const s = src()
+    const all = await s.chart('v-dashboard', { widget: 'w', chart: 'bar', x: { prop: 'priority' }, y: [{ fn: 'count' }] })
+    expect(all.x).toEqual(['Low', 'Medium', 'High'])
+    expect(all.series[0]!.data.reduce((n, v) => n + v, 0)).toBe(2000)
+    const high = await s.chart('v-dashboard', { x: { prop: 'priority' }, y: [{ fn: 'sum', prop: 'estimate' }], filter: { and: [{ prop: 'priority', op: 'is', value: 'p-high' }] } })
+    expect(high.x).toEqual(['High'])
+    expect(high.series[0]!.data[0]).toBe(s.all().filter(r => r.values.priority === 'p-high').reduce((n, r) => n + (r.values.estimate as number), 0))
+    // The number widget's calculation: aggregate with the widget filter as the query filter.
+    const open = await s.aggregate('v-dashboard', 'estimate', 'sum', { filter: { and: [{ prop: 'done', op: 'is', value: false }] } })
+    expect(open).toBe(s.all().filter(r => !r.values.done).reduce((n, r) => n + (r.values.estimate as number), 0))
+    const previews = await s.rowPreview!(['r1', 'r2', 'r4', 'nope'])
+    const keys = Object.keys(previews)
+    expect(keys.length).toBeGreaterThan(0)
+    expect(keys.every(k => ['r1', 'r2', 'r4'].includes(k))).toBe(true)
+    expect(Object.values(previews).every(p => !!p.text)).toBe(true)
+  })
+
   it('checks formulas', () => {
     const s = src()
     expect(s.validateFormula!('prop("Budget") / prop("Estimate")')).toEqual({ ok: true, type: 'number' })
     const bad = s.validateFormula!('prop("Nope") +') as { ok: false, error: string, position: number }
     expect(bad.ok).toBe(false)
     expect(bad.error).toMatch(/Unknown property|Unexpected/)
+  })
+})
+
+describe('undo / redo', () => {
+  it('undoes and redoes cell writes, one step per task, and brings deleted rows back', async () => {
+    const inner = createMemorySource(sampleDatabase(5))
+    const h = withHistory(inner)
+    const view = inner.views.value[0]!
+    const { rows } = await h.source.rows(view.id, { offset: 0, limit: 5 })
+    const title = inner.props.value.find(x => x.type === 'title')!
+    const r0 = rows[0]!
+    const before = r0.values[title.id]
+    h.source.setCell(r0.id, title.id, 'A')
+    h.source.setCell(r0.id, title.id, 'B')
+    await flush()
+    h.undo()
+    expect((await inner.rows(view.id, { offset: 0, limit: 5 })).rows.find(r => r.id === r0.id)!.values[title.id]).toBe(before)
+    h.redo()
+    expect((await inner.rows(view.id, { offset: 0, limit: 5 })).rows.find(r => r.id === r0.id)!.values[title.id]).toBe('B')
+    await flush()
+    h.source.deleteRows([rows[1]!.id])
+    await flush()
+    expect((await inner.rows(view.id, { offset: 0, limit: 10 })).total).toBe(4)
+    h.undo()
+    expect((await inner.rows(view.id, { offset: 0, limit: 10 })).total).toBe(5)
+    expect(h.canRedo.value).toBe(true)
   })
 })
 
@@ -202,5 +275,183 @@ describe('RowStore', () => {
     expect(windows()).toEqual([{ offset: 5000, limit: 100 }])
     expect(store.rowAt(0, 5045)?.values.name).toBe('Changed')
     store.destroy()
+  })
+})
+
+describe('button actions', () => {
+  const p = (type: Prop['type'], config: Prop['config'], id: string): Prop => ({ id, name: id, type, position: 'a0', config })
+  const props = [p('title', undefined, 'name'), p('date', undefined, 'due'), p('person', undefined, 'owner'), p('status', { options: [{ id: 'done', name: 'Done', color: 'green' }] }, 'status'), p('url', undefined, 'link'), p('formula', undefined, 'f')]
+  const now = new Date(2026, 10, 4, 9, 30)
+
+  it('resolves dynamic values (today, now, me) and literals', () => {
+    expect(resolveValue({ prop: 'due', dynamic: 'today' }, props[1]!, { now })).toEqual({ start: '2026-11-04' })
+    expect(resolveValue({ prop: 'due', dynamic: 'now' }, props[1]!, { now })).toEqual({ start: now.toISOString() })
+    expect(resolveValue({ prop: 'owner', dynamic: 'me' }, props[2]!, { currentUserId: 'u1' })).toEqual(['u1'])
+    expect(resolveValue({ prop: 'owner', dynamic: 'me' }, props[2]!, {})).toBeUndefined()
+    expect(resolveValue({ prop: 'status', value: 'done' }, props[3]!, {})).toBe('done')
+    expect(resolveValue({ prop: 'status', value: '' }, props[3]!, {})).toBeNull()
+    // Computed properties are never written.
+    expect(resolveValues([{ prop: 'f', value: 1 }, { prop: 'gone', value: 1 }, { prop: 'status', value: 'done' }], { props })).toEqual({ status: 'done' })
+  })
+
+  it('runs steps in order and stops when the confirmation is declined', async () => {
+    const writes: unknown[][] = []
+    const opened: string[] = []
+    const env = {
+      props,
+      now,
+      setCell: (...a: unknown[]) => void writes.push(['set', ...a]),
+      createRow: (values: Record<string, unknown>) => (writes.push(['create', values]), 'new-row'),
+      openUrl: (u: string) => void opened.push(u),
+      openRow: (id: string) => void opened.push(`row:${id}`),
+    }
+    const row = { id: 'r1', position: 'a0', values: { link: 'example.com/a' } }
+    const actions: DbAction[] = [
+      { id: '1', type: 'set_values', values: [{ prop: 'status', value: 'done' }, { prop: 'due', dynamic: 'today' }] },
+      { id: '2', type: 'add_row', values: [{ prop: 'name', value: 'Follow-up' }], open: true },
+      { id: '3', type: 'open_url', prop: 'link' },
+      { id: '4', type: 'show_confirm', message: 'Really?' },
+      { id: '5', type: 'open_url', url: 'javascript:alert(1)' },
+      { id: '6', type: 'set_values', values: [{ prop: 'name', value: 'After' }] },
+    ]
+    const asked: string[] = []
+    await runActions(actions, row, { ...env, confirm: (msg) => { asked.push(msg); return false } })
+    expect(writes).toEqual([['set', 'r1', 'status', 'done'], ['set', 'r1', 'due', { start: '2026-11-04' }], ['create', { name: 'Follow-up' }]])
+    expect(opened).toEqual(['row:new-row', 'https://example.com/a'])
+    expect(asked).toEqual(['Really?'])
+    writes.length = 0
+    opened.length = 0
+    await runActions(actions, row, { ...env, confirm: () => true })
+    // Unsafe URLs are not opened.
+    expect(opened).toEqual(['row:new-row', 'https://example.com/a'])
+    expect(writes.at(-1)).toEqual(['set', 'r1', 'name', 'After'])
+    expect(safeUrl('mailto:a@b.c')).toBe('mailto:a@b.c')
+    expect(safeUrl('data:text/html,x')).toBeNull()
+  })
+
+  it('groups writes made across an await into one undo step', async () => {
+    const inner = createMemorySource(sampleDatabase(3))
+    const h = withHistory(inner)
+    const view = inner.views.value[0]!
+    const { rows } = await h.source.rows(view.id, { offset: 0, limit: 3 })
+    const r0 = rows[0]!
+    const before = r0.values.name
+    await h.group(async () => {
+      h.source.setCell(r0.id, 'name', 'A')
+      await flush()
+      h.source.setCell(r0.id, 'notes', 'B')
+    })
+    h.source.setCell(r0.id, 'estimate', 9)
+    await flush()
+    h.undo()
+    h.undo()
+    const after = (await inner.rows(view.id, { offset: 0, limit: 3 })).rows.find(r => r.id === r0.id)!
+    expect(after.values.name).toBe(before)
+    expect(h.canUndo.value).toBe(false)
+  })
+})
+
+describe('automation triggers', () => {
+  const status: Prop = { id: 'status', name: 'Status', type: 'status', position: 'a1', config: { options: [{ id: 'done', name: 'Done', color: 'green' }, { id: 'todo', name: 'To do', color: 'gray' }] } }
+  const list: Automation[] = [
+    { id: 'added', enabled: true, trigger: { type: 'row_added' }, actions: [] },
+    { id: 'any', enabled: true, trigger: { type: 'prop_changed' }, actions: [] },
+    { id: 'status', enabled: true, trigger: { type: 'prop_changed', prop: 'status' }, actions: [] },
+    { id: 'to-done', enabled: true, trigger: { type: 'prop_changed', prop: 'status', condition: { prop: 'status', op: 'is', value: 'done' } }, actions: [] },
+    { id: 'off', enabled: false, trigger: { type: 'row_added' }, actions: [] },
+  ]
+  const ids = (e: TriggerEvent) => triggered(list, e, [status]).map(a => a.id)
+  it('matches the event, the property and the "to value" condition; skips disabled ones', () => {
+    expect(ids({ type: 'row_added', rowId: 'r' })).toEqual(['added'])
+    expect(ids({ type: 'prop_changed', rowId: 'r', propId: 'notes', value: 'x' })).toEqual(['any'])
+    expect(ids({ type: 'prop_changed', rowId: 'r', propId: 'status', value: 'todo' })).toEqual(['any', 'status'])
+    expect(ids({ type: 'prop_changed', rowId: 'r', propId: 'status', value: 'done' })).toEqual(['any', 'status', 'to-done'])
+  })
+})
+
+describe('draft store', () => {
+  it('keeps drafts in localStorage per user, database and view; ignores junk and storage errors', () => {
+    localStorage.clear()
+    const a = localDraftStore('u1')
+    const b = localDraftStore('u2')
+    const d = { filter: { and: [{ prop: 'estimate', op: '>' as const, value: 3 }] }, sorts: [{ prop: 'due', dir: 'desc' as const }] }
+    a.set('v1', d, 'db1')
+    expect(JSON.parse(localStorage.getItem(draftKey('db1', 'v1', 'u1'))!)).toEqual(d)
+    expect(a.get('v1', 'db1')).toEqual(d)
+    expect(b.get('v1', 'db1')).toBeNull()
+    expect(a.get('v1', 'db2')).toBeNull()
+    a.set('v2', { filter: null }, 'db1')
+    expect(a.get('v2', 'db1')).toEqual({ filter: null })
+    a.set('v1', null, 'db1')
+    expect(localStorage.getItem(draftKey('db1', 'v1', 'u1'))).toBeNull()
+    localStorage.setItem(draftKey('db1', 'v3', 'u1'), '{not json')
+    expect(a.get('v3', 'db1')).toBeNull()
+    expect(parseDraft({ sorts: 'x' })).toBeNull()
+    expect(parseDraft({ filter: { nope: 1 }, sorts: [{ prop: 'a', dir: 'up' }, { prop: 'b', dir: 'asc' }] })).toEqual({ sorts: [{ prop: 'b', dir: 'asc' }] })
+    const spy = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('quota') })
+    expect(() => a.set('v4', d, 'db1')).not.toThrow()
+    spy.mockRestore()
+    localStorage.clear()
+  })
+})
+
+describe('date reminders', () => {
+  it('computes when a reminder is due: before the time, or 9:00 local on whole days', async () => {
+    const { remindAt, withRemind } = await import('../src/values')
+    const at = new Date(2026, 10, 10, 14, 30).toISOString()
+    expect(remindAt(at, '15m')).toBe(new Date(2026, 10, 10, 14, 15).toISOString())
+    expect(remindAt(at, 'at_time')).toBe(at)
+    expect(remindAt('2026-11-10', 'at_time')).toBe(new Date(2026, 10, 10, 9, 0).toISOString())
+    expect(remindAt('2026-11-10', '1w')).toBe(new Date(2026, 10, 3, 9, 0).toISOString())
+    expect(remindAt('nope', '1d')).toBeNull()
+    expect(withRemind({ start: '2026-11-10', end: '2026-11-12' }, '1d')).toEqual({ start: '2026-11-10', end: '2026-11-12', remind: '1d', remind_at: new Date(2026, 10, 9, 9, 0).toISOString() })
+    expect(withRemind({ start: '2026-11-10', remind: '1d', remind_at: 'x' }, '')).toEqual({ start: '2026-11-10' })
+  })
+})
+
+describe('history across re-created rows', () => {
+  const flush = () => new Promise(r => setTimeout(r, 0))
+  it('redo of a created row keeps the writes made to it afterwards', async () => {
+    const { withHistory } = await import('../src/history')
+    const inner = createMemorySource(sampleDatabase(2))
+    const h = withHistory(inner)
+    const view = inner.views.value[0]!
+    const title = inner.props.value.find(x => x.type === 'title')!
+    const id = h.source.createRow({ values: {} })
+    await flush()
+    h.source.setCell(id, title.id, 'Typed')
+    await flush()
+    h.undo()
+    h.undo()
+    h.redo()
+    h.redo()
+    await flush()
+    const { rows } = await inner.rows(view.id, { offset: 0, limit: 10 })
+    expect(rows.map(r => r.values[title.id])).toContain('Typed')
+    expect(rows).toHaveLength(3)
+    // and undoing again removes the re-created row (its new id)
+    h.undo()
+    h.undo()
+    expect((await inner.rows(view.id, { offset: 0, limit: 10 })).rows).toHaveLength(2)
+  })
+
+  it('undo of moves puts rows back in their order', async () => {
+    const { withHistory } = await import('../src/history')
+    const inner = createMemorySource(sampleDatabase(4))
+    const h = withHistory(inner)
+    const view = inner.views.value[0]!
+    let { rows } = await h.source.rows(view.id, { offset: 0, limit: 10 })
+    const before = rows.map(r => r.id)
+    h.source.moveRow(rows[0]!.id, rows[3]!.id, null)
+    await flush()
+    rows = (await h.source.rows(view.id, { offset: 0, limit: 10 })).rows
+    h.source.moveRow(rows[1]!.id, rows[3]!.id, null)
+    await flush()
+    h.undo()
+    await flush()
+    await h.source.rows(view.id, { offset: 0, limit: 10 })
+    h.undo()
+    await flush()
+    expect((await inner.rows(view.id, { offset: 0, limit: 10 })).rows.map(r => r.id)).toEqual(before)
   })
 })
