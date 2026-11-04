@@ -1,7 +1,7 @@
 import { computed, type ComputedRef, inject, type InjectionKey, reactive, type Ref, ref, shallowReactive, watch } from 'vue'
 import type { DatabaseMessages } from './messages'
-import type { DatabaseBlockOptions, DatabaseSource, FilterGroup, OpenMode, Prop, Row, RowQuery, RowTemplate, Sort, View, ViewConfig } from './types'
-import { type ActionEnv, runActions } from './actions'
+import type { Automation, DatabaseBlockOptions, DatabaseSource, FilterGroup, OpenMode, Prop, Row, RowQuery, RowTemplate, Sort, View, ViewConfig } from './types'
+import { type ActionEnv, runActions, runActionsNow, triggered, type TriggerEvent } from './actions'
 import { colorsOf, type RowColors } from './colors'
 import { withHistory } from './history'
 import { normalizeFilter } from './filters'
@@ -53,6 +53,9 @@ export interface DbContext {
   /** Row templates (title property's `config.templates`). */
   templates: ComputedRef<RowTemplate[]>
   saveTemplates: (list: RowTemplate[]) => void
+  /** Database automations (title property's `config.automations`), run after this client's own writes. */
+  automations: ComputedRef<Automation[]>
+  saveAutomations: (list: Automation[]) => void
   /**
    * Runs a button property's actions on `row` as one undo step. `confirm` shows the "Show confirmation" steps
    * (without it they pass). Does nothing without edit content rights.
@@ -98,7 +101,11 @@ export function createContext(input: {
 }): DbContext {
   // Every write through the block can be undone (⌘Z) / redone (⌘⇧Z).
   const history = withHistory(input.source)
+  // Automations run right after the write that triggers them, in the same undo step. Their own writes go to the
+  // history source directly, so they never trigger automations again; undo / redo replay bypasses both layers.
   const recorded = history.source
+  const titleOf = () => recorded.props.value.find(p => p.type === 'title')
+  const automationList = computed<Automation[]>(() => titleOf()?.config?.automations ?? [])
   /** Values a new row starts with: given ones, then the template's, then property defaults. */
   function initValues(values: Record<string, unknown> | undefined, template: string | false | undefined) {
     const all = recorded.props.value
@@ -117,7 +124,33 @@ export function createContext(input: {
     createRow: values => write.createRow({ values: initValues(values, undefined) }),
     currentUserId: recorded.currentUserId?.() ?? null,
   })
-  const source = recorded
+  function fire(event: TriggerEvent) {
+    const list = automationList.value
+    if (!list.length) return
+    const due = triggered(list, event, recorded.props.value)
+    if (!due.length) return
+    const row: Row = { id: event.rowId, position: '', values: {} }
+    for (const a of due) {
+      try {
+        runActionsNow(a.actions, row, actionEnv(recorded))
+      }
+      catch (error) {
+        report(error)
+      }
+    }
+  }
+  const source: DatabaseSource = {
+    ...recorded,
+    setCell(rowId, propId, value) {
+      recorded.setCell(rowId, propId, value)
+      fire({ type: 'prop_changed', rowId, propId, value })
+    },
+    createRow(init) {
+      const id = recorded.createRow(init)
+      fire({ type: 'row_added', rowId: id })
+      return id
+    },
+  }
   const names = { people: new Map<string, string>(), avatars: new Map<string, string>(), rows: new Map<string, string>() }
   const namesVersion = shallowReactive({ n: 0 })
   const views = computed(() => [...source.views.value].sort(byPosition))
@@ -285,6 +318,15 @@ export function createContext(input: {
       const config = { ...title.config }
       if (list.length) config.templates = list
       else delete config.templates
+      source.upsertProp({ ...title, config })
+    },
+    automations: automationList,
+    saveAutomations(list) {
+      const title = props.value.find(p => p.type === 'title')
+      if (!title || !(input.editable() && source.canEditStructure.value)) return
+      const config = { ...title.config }
+      if (list.length) config.automations = list
+      else delete config.automations
       source.upsertProp({ ...title, config })
     },
     async runButton(prop, row, ui = {}) {

@@ -166,6 +166,17 @@ export interface DatabaseMessages {
   dynamicNow: string
   customDate: string
   me: string
+  automations: string
+  automationsHint: string
+  addAutomation: string
+  deleteAutomation: string
+  automationName: string
+  automationEnabled: string
+  triggerWhen: string
+  triggers: Record<'row_added' | 'prop_changed', string>
+  anyProperty: string
+  onlyWhen: string
+  thenDo: string
   inline: string
   fullPage: string
   /** Layout / view settings (0.2). */
@@ -586,6 +597,17 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     dynamicNow: 'Now',
     customDate: 'A date',
     me: 'Me',
+    automations: 'Automations',
+    automationsHint: 'Run actions when a page is added or a property is edited. They run in the browser that made the edit.',
+    addAutomation: 'New automation',
+    deleteAutomation: 'Delete automation',
+    automationName: 'Name',
+    automationEnabled: 'On',
+    triggerWhen: 'When',
+    triggers: { row_added: 'Page added', prop_changed: 'Property edited' },
+    anyProperty: 'Any property',
+    onlyWhen: 'Only when the value',
+    thenDo: 'Do',
   },
   vi: {
     untitled: 'Không có tiêu đề',
@@ -885,6 +907,17 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     dynamicNow: 'Bây giờ',
     customDate: 'Một ngày',
     me: 'Tôi',
+    automations: 'Tự động hóa',
+    automationsHint: 'Chạy hành động khi có trang mới hoặc một thuộc tính được sửa. Chạy trên trình duyệt đã sửa.',
+    addAutomation: 'Tự động hóa mới',
+    deleteAutomation: 'Xóa tự động hóa',
+    automationName: 'Tên',
+    automationEnabled: 'Bật',
+    triggerWhen: 'Khi',
+    triggers: { row_added: 'Có trang mới', prop_changed: 'Thuộc tính được sửa' },
+    anyProperty: 'Bất kỳ thuộc tính nào',
+    onlyWhen: 'Chỉ khi giá trị',
+    thenDo: 'Thì',
   },
   zh: {
     untitled: '无标题',
@@ -1184,6 +1217,17 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     dynamicNow: '现在',
     customDate: '指定日期',
     me: '我',
+    automations: '自动化',
+    automationsHint: '在添加页面或编辑属性时运行操作。由进行编辑的浏览器运行。',
+    addAutomation: '新建自动化',
+    deleteAutomation: '删除自动化',
+    automationName: '名称',
+    automationEnabled: '启用',
+    triggerWhen: '当',
+    triggers: { row_added: '添加页面', prop_changed: '编辑属性' },
+    anyProperty: '任意属性',
+    onlyWhen: '仅当值',
+    thenDo: '执行',
   },
 }
 

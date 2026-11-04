@@ -47,6 +47,8 @@ export interface PropConfig {
   expression?: string
   /** title: row templates of the database. */
   templates?: RowTemplate[]
+  /** title: the database's automations (trigger → actions), run by the client that made the triggering write. */
+  automations?: Automation[]
   /** button: text on the button (default: the property name). */
   label?: string
   /** button: what a click does, in order. */
@@ -134,6 +136,17 @@ export type DbActionType = DbAction['type']
 
 /** Config of a `button` property. */
 export interface ButtonConfig { label?: string, actions: DbAction[] }
+
+/**
+ * What starts an automation: a new row, or a property change (`prop` absent = any property; `condition`: only
+ * when the new value matches, a filter condition on `prop`).
+ */
+export type AutomationTrigger =
+  | { type: 'row_added' }
+  | { type: 'prop_changed', prop?: string, condition?: FilterCondition }
+
+/** A database automation (title property's `config.automations`). */
+export interface Automation { id: string, name?: string, enabled: boolean, trigger: AutomationTrigger, actions: DbAction[] }
 
 /** A conditional color rule (`config.colors`): rows (or one cell) matching `condition` get `color`. */
 export interface ColorRule { id: string, condition: FilterCondition, color: OptionColor, scope?: 'row' | 'prop' }

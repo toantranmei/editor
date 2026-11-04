@@ -2,13 +2,14 @@
 /**
  * Toolbar panels that edit the current view's config: grouping, property visibility and "View options" (layout
  * switcher, per-layout settings such as wrap / freeze, card cover and size, dates, chart and pivot setup, and
- * "Open pages in").
+ * "Open pages in", conditional colors, automations).
  */
-import { Check, Eye, EyeOff, GripVertical, Lock, LockOpen } from '@lucide/vue'
+import { Check, Eye, EyeOff, GripVertical, Lock, LockOpen, Zap } from '@lucide/vue'
 import { computed, ref } from 'vue'
 import { useDb } from '../context'
 import type { ChartKind, OpenMode, Prop, ValueFn, ViewConfig, ViewType } from '../types'
 import { groupableTypes, positionAfter, switchLayout, uuidv7, visibleIds } from '../util'
+import AutomationsPanel from './AutomationsPanel.vue'
 import ColorRules from './ColorRules.vue'
 import OpenModeIcon from './OpenModeIcon.vue'
 import PropIcon from './PropIcon.vue'
@@ -409,6 +410,10 @@ const value = (e: Event) => (e.target as HTMLSelectElement).value
       <details v-if="['table', 'board', 'gallery', 'list', 'calendar'].includes(view?.type ?? '')" class="me-db-details" data-setting="colors" :open="!!c.colors?.length">
         <summary class="me-menu-label">{{ m.conditionalColor }}<span v-if="c.colors?.length" class="me-db-menu-value">{{ c.colors.length }}</span></summary>
         <ColorRules />
+      </details>
+      <details v-if="editable" class="me-db-details" data-setting="automations" :open="!!db.automations.value.length">
+        <summary class="me-menu-label"><Zap class="me-db-menu-icon" />{{ m.automations }}<span v-if="db.automations.value.length" class="me-db-menu-value">{{ db.automations.value.filter(a => a.enabled).length }}</span></summary>
+        <AutomationsPanel />
       </details>
       <template v-if="opensRows">
         <div class="me-db-separator" role="separator" />

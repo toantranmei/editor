@@ -8,8 +8,8 @@ import { RowStore } from '../src/row-store'
 import { duplicateRows, positionAfter, uuidv7 } from '../src/util'
 import { colorsOf } from '../src/colors'
 import { withHistory } from '../src/history'
-import { resolveValue, resolveValues, runActions, safeUrl } from '../src/actions'
-import type { DbAction } from '../src/types'
+import { resolveValue, resolveValues, runActions, safeUrl, triggered, type TriggerEvent } from '../src/actions'
+import type { Automation, DbAction } from '../src/types'
 
 const p = (type: Prop['type'], config?: Prop['config'], id = type): Prop => ({ id, name: id, type, position: 'a0', config })
 const flush = () => new Promise(r => setTimeout(r, 0))
@@ -329,5 +329,23 @@ describe('button actions', () => {
     const after = (await inner.rows(view.id, { offset: 0, limit: 3 })).rows.find(r => r.id === r0.id)!
     expect(after.values.name).toBe(before)
     expect(h.canUndo.value).toBe(false)
+  })
+})
+
+describe('automation triggers', () => {
+  const status: Prop = { id: 'status', name: 'Status', type: 'status', position: 'a1', config: { options: [{ id: 'done', name: 'Done', color: 'green' }, { id: 'todo', name: 'To do', color: 'gray' }] } }
+  const list: Automation[] = [
+    { id: 'added', enabled: true, trigger: { type: 'row_added' }, actions: [] },
+    { id: 'any', enabled: true, trigger: { type: 'prop_changed' }, actions: [] },
+    { id: 'status', enabled: true, trigger: { type: 'prop_changed', prop: 'status' }, actions: [] },
+    { id: 'to-done', enabled: true, trigger: { type: 'prop_changed', prop: 'status', condition: { prop: 'status', op: 'is', value: 'done' } }, actions: [] },
+    { id: 'off', enabled: false, trigger: { type: 'row_added' }, actions: [] },
+  ]
+  const ids = (e: TriggerEvent) => triggered(list, e, [status]).map(a => a.id)
+  it('matches the event, the property and the "to value" condition; skips disabled ones', () => {
+    expect(ids({ type: 'row_added', rowId: 'r' })).toEqual(['added'])
+    expect(ids({ type: 'prop_changed', rowId: 'r', propId: 'notes', value: 'x' })).toEqual(['any'])
+    expect(ids({ type: 'prop_changed', rowId: 'r', propId: 'status', value: 'todo' })).toEqual(['any', 'status'])
+    expect(ids({ type: 'prop_changed', rowId: 'r', propId: 'status', value: 'done' })).toEqual(['any', 'status', 'to-done'])
   })
 })

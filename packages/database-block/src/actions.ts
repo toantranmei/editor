@@ -2,7 +2,8 @@
  * Buttons and automations (Notion's button property and database automations): resolving action values, running a
  * list of actions on a row, and matching automation triggers. UI-free; `context.ts` wires it to the write path.
  */
-import type { ActionValue, DbAction, DbActionType, Prop, PropType, Row } from './types'
+import { matchCondition } from './match'
+import type { ActionValue, Automation, DbAction, DbActionType, Prop, PropType, Row } from './types'
 import { isReadOnly, uuidv7 } from './util'
 
 /** Where actions write and what they may ask of the UI. */
@@ -103,4 +104,28 @@ export async function runActions(actions: DbAction[], row: Row | null, env: Acti
       }
     }
   }
+}
+
+/** Synchronous run for automations (no confirm, no URL, no opening): every write lands in the triggering step. */
+export function runActionsNow(actions: DbAction[], row: Row | null, env: ActionEnv): void {
+  void runActions(actions.filter(a => AUTOMATION_ACTIONS.includes(a.type)).map(a => (a.type === 'add_row' ? { ...a, open: false } : a)), row, { ...env, confirm: undefined, openUrl: undefined, openRow: undefined })
+}
+
+export type TriggerEvent =
+  | { type: 'row_added', rowId: string }
+  | { type: 'prop_changed', rowId: string, propId: string, value: unknown }
+
+/** Enabled automations that `event` starts. */
+export function triggered(list: Automation[], event: TriggerEvent, props: Prop[]): Automation[] {
+  return list.filter((a) => {
+    if (!a.enabled || a.trigger.type !== event.type) return false
+    if (a.trigger.type === 'row_added' || event.type !== 'prop_changed') return true
+    const t = a.trigger
+    if (t.prop && t.prop !== event.propId) return false
+    if (!t.prop || !t.condition) return true
+    const prop = props.find(p => p.id === t.prop)
+    if (!prop) return false
+    const row: Row = { id: event.rowId, position: '', values: { [prop.id]: event.value } }
+    return matchCondition(row, { ...t.condition, prop: prop.id }, new Map([[prop.id, prop]]), (r, p) => r.values[p.id])
+  })
 }
