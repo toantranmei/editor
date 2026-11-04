@@ -12,6 +12,7 @@ import { computed, nextTick, onBeforeUnmount, ref, shallowRef, watch } from 'vue
 import { aggregatesFor, formatAggregate } from '../aggregates'
 import CellEditor from '../components/CellEditor.vue'
 import CellValue from '../components/CellValue.vue'
+import RowIcon from '../components/RowIcon.vue'
 import DbPopover from '../components/DbPopover.vue'
 import OpenModeIcon from '../components/OpenModeIcon.vue'
 import PropertyEditor from '../components/PropertyEditor.vue'
@@ -26,7 +27,7 @@ import type { Item } from '../row-store'
 import { toTsv, parseTsv } from '../tsv'
 import type { Prop, Row, SelectOption } from '../types'
 import { useRowStore } from '../use-rows'
-import { cellValue, cssPx, duplicateRows, isReadOnly } from '../util'
+import { cellValue, cssPx, duplicateRows, isReadOnly, pageIcon } from '../util'
 import { displayText, optionById, parseText } from '../values'
 
 const props = withDefaults(defineProps<{ full?: boolean }>(), { full: false })
@@ -934,6 +935,7 @@ defineExpose({ sel, checked, startEdit, pasteMatrix, store, rowVirtualizer, colV
                     >
                       <ChevronDown v-if="isExpanded(r.row.id)" /><ChevronRight v-else />
                     </button>
+                    <RowIcon v-if="sl.col === 0 && cols[0]?.type === 'title' && pageIcon(db.view.value, r.row)" :icon="pageIcon(db.view.value, r.row)!" />
                     <CellValue v-if="cols[sl.col]" :prop="cols[sl.col]!" :value="valueAt(r.row, sl.col)" />
                     <button
                       v-if="sl.col === 0"

@@ -399,3 +399,26 @@ describe('card previews and layout', () => {
     expect(source.views.value.find(v => v.id === 'v-board')!.config.card).toMatchObject({ cover: 'page_content', layout: 'compact' })
   })
 })
+
+describe('page icons', () => {
+  it('table, list, board and gallery show the row icon before the title; Show page icon off hides it', async () => {
+    const { source, wrapper } = await setup(30)
+    const first = wrapper.find('.me-db-tr[data-row="0"] .me-db-td.is-first')
+    expect(first.find('.me-db-row-icon').text()).toBe('📄')
+    expect(wrapper.find('.me-db-tr[data-row="1"] .me-db-td.is-first .me-db-row-icon').exists()).toBe(false)
+    for (const id of ['v-list', 'v-board', 'v-gallery']) {
+      const { wrapper: w } = await setup(30, id)
+      expect(w.find('[data-row-id="r1"] .me-db-row-icon').text()).toBe('📄')
+      expect(w.find('[data-row-id="r4"] .me-db-row-icon').text()).toBe('🚀')
+    }
+    await wrapper.find('[data-tool="settings"]').trigger('click')
+    await settle()
+    const toggle = popover().querySelector<HTMLInputElement>('[data-setting="show_page_icon"]')!
+    expect(toggle.checked).toBe(true)
+    toggle.checked = false
+    toggle.dispatchEvent(new Event('change'))
+    await settle()
+    expect(source.views.value.find(v => v.id === 'v-table')!.config.show_page_icon).toBe(false)
+    expect(wrapper.find('.me-db-row-icon').exists()).toBe(false)
+  })
+})

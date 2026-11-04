@@ -177,6 +177,8 @@ export interface ViewConfig {
   date_prop?: string
   /** calendar: wrap event titles instead of cutting them. */
   wrap_titles?: boolean
+  /** table / board / gallery / list: show the row pages' icons (`Row.icon`) before their titles (default true). */
+  show_page_icon?: boolean
   /** Show the database title above this view (default true; Notion's "Show data source title"). */
   show_title?: boolean
   /** calendar: "Show calendar as" one week instead of the month grid. */
@@ -225,6 +227,8 @@ export interface Row {
   values: Record<string, unknown>
   /** formula / rollup / created_* / unique_id results. */
   computed?: Record<string, unknown>
+  /** The row page's icon (an emoji, or an image URL), shown before the title when the view's `show_page_icon` is on. */
+  icon?: string | null
 }
 
 /** What `source.rowPreview` tells about a row page (card previews). Every field is optional. */

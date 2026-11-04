@@ -169,6 +169,7 @@ export interface DatabaseMessages {
   propertyDescriptionHint: string
   wrapPageTitles: string
   showTitle: string
+  showPageIcon: string
   formDescription: string
   formAnswer: string
   formSubmit: string
@@ -461,6 +462,7 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     propertyDescriptionHint: 'Shown when hovering the column',
     wrapPageTitles: 'Wrap page titles',
     showTitle: 'Show database title',
+    showPageIcon: 'Show page icon',
     formDescription: 'Description (optional)',
     formAnswer: 'Your answer',
     formSubmit: 'Submit',
@@ -748,6 +750,7 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     propertyDescriptionHint: 'Hiện khi rê chuột lên cột',
     wrapPageTitles: 'Xuống dòng tiêu đề',
     showTitle: 'Hiện tiêu đề database',
+    showPageIcon: 'Hiện biểu tượng trang',
     formDescription: 'Mô tả (không bắt buộc)',
     formAnswer: 'Câu trả lời',
     formSubmit: 'Gửi',
@@ -1035,6 +1038,7 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     propertyDescriptionHint: '悬停列时显示',
     wrapPageTitles: '标题换行',
     showTitle: '显示数据库标题',
+    showPageIcon: '显示页面图标',
     formDescription: '描述（可选）',
     formAnswer: '你的回答',
     formSubmit: '提交',

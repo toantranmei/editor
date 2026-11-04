@@ -410,6 +410,10 @@ const value = (e: Event) => (e.target as HTMLSelectElement).value
         </label>
       </template>
 
+      <label v-if="['table', 'board', 'gallery', 'list'].includes(view?.type ?? '')" class="me-db-toggle-row">
+        <span>{{ m.showPageIcon }}</span>
+        <input type="checkbox" class="me-db-switch" data-setting="show_page_icon" :checked="c.show_page_icon !== false" :disabled="!editable" @change="set({ show_page_icon: checked($event) ? undefined : false })">
+      </label>
       <label class="me-db-toggle-row">
         <span>{{ m.showTitle }}</span>
         <input type="checkbox" class="me-db-switch" data-setting="show_title" :checked="c.show_title !== false" :disabled="!editable" @change="set({ show_title: checked($event) ? undefined : false })">

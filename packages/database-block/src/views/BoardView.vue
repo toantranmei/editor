@@ -8,12 +8,13 @@ import { Plus } from '@lucide/vue'
 import { computed, ref, watch } from 'vue'
 import CardCover from '../components/CardCover.vue'
 import CellValue from '../components/CellValue.vue'
+import RowIcon from '../components/RowIcon.vue'
 import { useDb } from '../context'
 import { useCardPreview } from '../preview'
 import { fmt } from '../messages'
 import type { Row } from '../types'
 import { useRowStore } from '../use-rows'
-import { cellValue, isEmptyValue, isReadOnly } from '../util'
+import { cellValue, isEmptyValue, isReadOnly, pageIcon } from '../util'
 import { newOption, optionById } from '../values'
 
 defineProps<{ full?: boolean }>()
@@ -169,7 +170,7 @@ const loadMore = (key: string | null | undefined) => (limits.value = { ...limits
           @click="db.openRow(row.id, $event)"
         >
           <CardCover v-if="coverOf(row)" :cover="coverOf(row)!" />
-          <span class="me-db-card-title">{{ title ? String(cellValue(row, title) ?? '') || m.untitled : m.untitled }}</span>
+          <span class="me-db-card-title"><RowIcon v-if="pageIcon(db.view.value, row)" :icon="pageIcon(db.view.value, row)!" />{{ title ? String(cellValue(row, title) ?? '') || m.untitled : m.untitled }}</span>
           <span v-if="shown.length" class="me-db-card-props" :class="{ 'is-compact': compact }">
             <template v-for="p in shown" :key="p!.id">
               <CellValue v-if="!isEmptyValue(cellValue(row, p!))" :prop="p!" :value="cellValue(row, p!)" compact />

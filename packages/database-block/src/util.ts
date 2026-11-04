@@ -141,3 +141,11 @@ export function groupableTypes(viewType: ViewType | undefined): PropType[] {
     ? ['select', 'status', 'person', 'checkbox', 'multi_select']
     : ['select', 'status', 'multi_select', 'person', 'checkbox', 'text', 'url', 'email', 'phone', 'date', 'relation']
 }
+
+/** The row page's icon to show before its title in `view` (`show_page_icon`, default on), or null. */
+export function pageIcon(view: View | undefined, row: Row | undefined): string | null {
+  if (!row?.icon || view?.config.show_page_icon === false) return null
+  return row.icon
+}
+/** An icon given as an image (URL / data URI) rather than an emoji. */
+export const isImageIcon = (icon: string) => /^(https?:|data:|blob:|\/)/.test(icon)

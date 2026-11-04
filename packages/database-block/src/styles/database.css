@@ -446,6 +446,9 @@
   .me-db-formula-doc { display: flex; flex-direction: column; gap: var(--me-space-2); font-size: var(--me-font-size-xs); }
   .me-db-mono { font-family: var(--me-font-mono); font-size: var(--me-font-size-xs); white-space: pre-wrap; word-break: break-word; }
   /* Sub-items: toggle before the title, sub-item rows indented under their parent. */
+  .me-db-row-icon { display: inline-block; flex: none; width: var(--me-font-size-md); margin-right: var(--me-space-2); font-size: var(--me-font-size-md); line-height: 1; text-align: center; vertical-align: text-bottom; }
+  .me-db-row-icon.is-image { height: var(--me-font-size-md); border-radius: var(--me-database-radius); object-fit: cover; }
+  .me-db-list-open .me-db-row-icon { margin-right: 0; }
   .me-db-subtoggle { flex: none; margin-right: var(--me-space-1); }
   .me-db-tr.is-child .me-db-td.is-first { padding-left: calc(var(--me-space-8) + var(--me-space-2)); }
   .me-db-tr.is-child .me-db-td { background-color: var(--me-db-cc-bg, var(--me-database-calendar-outside-bg)); }

@@ -6,12 +6,13 @@ import { componentTokens } from '@toantranmei/editor'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import CardCover from '../components/CardCover.vue'
 import CellValue from '../components/CellValue.vue'
+import RowIcon from '../components/RowIcon.vue'
 import { useDb } from '../context'
 import { useCardPreview } from '../preview'
 import { rectWithFallback } from '../virtual'
 import type { Row } from '../types'
 import { useRowStore } from '../use-rows'
-import { cellValue, cssPx, isEmptyValue } from '../util'
+import { cellValue, cssPx, isEmptyValue, pageIcon } from '../util'
 
 defineProps<{ full?: boolean }>()
 const db = useDb()
@@ -103,7 +104,7 @@ function newCard(e: MouseEvent) {
           </button>
           <button v-else-if="row" type="button" class="me-db-card" :data-row-id="row.id" :data-cc="db.colors(row).row" :style="{ height: `${cardH}px` }" @click="db.openRow(row.id, $event)">
             <CardCover v-if="preview.mode.value" :cover="preview.coverOf(row)!" />
-            <span class="me-db-card-title">{{ title ? String(cellValue(row, title) ?? '') || m.untitled : m.untitled }}</span>
+            <span class="me-db-card-title"><RowIcon v-if="pageIcon(db.view.value, row)" :icon="pageIcon(db.view.value, row)!" />{{ title ? String(cellValue(row, title) ?? '') || m.untitled : m.untitled }}</span>
             <span v-if="shown.length" class="me-db-card-props" :class="{ 'is-compact': compact }">
               <template v-for="p in shown" :key="p!.id">
                 <CellValue v-if="!isEmptyValue(cellValue(row, p!))" :prop="p!" :value="cellValue(row, p!)" compact />

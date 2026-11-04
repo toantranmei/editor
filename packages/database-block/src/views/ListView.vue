@@ -5,11 +5,12 @@ import { useVirtualizer } from '@tanstack/vue-virtual'
 import { componentTokens } from '@toantranmei/editor'
 import { computed, ref, watch } from 'vue'
 import CellValue from '../components/CellValue.vue'
+import RowIcon from '../components/RowIcon.vue'
 import { useDb } from '../context'
 import { rectWithFallback } from '../virtual'
 import { fmt } from '../messages'
 import { useRowStore } from '../use-rows'
-import { cellValue, cssPx, isEmptyValue } from '../util'
+import { cellValue, cssPx, isEmptyValue, pageIcon } from '../util'
 
 defineProps<{ full?: boolean }>()
 const db = useDb()
@@ -76,7 +77,8 @@ function newRow(e: MouseEvent) {
         </template>
         <template v-else-if="it.row">
           <button type="button" class="me-db-list-open me-db-list-row" :data-row-id="it.row.id" :data-cc="db.colors(it.row).row" @click="db.openRow(it.row.id, $event)">
-            <FileText class="me-db-menu-icon" />
+            <RowIcon v-if="pageIcon(db.view.value, it.row)" :icon="pageIcon(db.view.value, it.row)!" />
+            <FileText v-else-if="db.view.value?.config.show_page_icon !== false" class="me-db-menu-icon" />
             <span class="me-db-list-title">{{ title ? String(cellValue(it.row, title) ?? '') || m.untitled : m.untitled }}</span>
           </button>
           <span class="me-db-list-props">

@@ -773,6 +773,8 @@ export function createMemorySource(init: MemorySourceInit): MemorySource {
 // ── Sample data (playground, benchmarks) ─────────────────────────────────────
 
 const WORDS = ['Kế hoạch', 'Thiết kế', 'Báo cáo', 'Roadmap', 'Sprint', 'Launch', 'Review', 'Audit', 'Migration', 'Onboarding', 'Research', 'Hiring', 'Budget', 'Landing page', 'Release', 'Bugfix', 'Workshop', 'Dashboard']
+/** Sample page icons (every third row has one). */
+const ICONS = ['📄', '🚀', '🎯', '🧪', '📊', '🛠️', '📝', '💡']
 /** Sample page previews: every other row has some text, every fourth a cover (an inline SVG gradient). */
 function samplePreview(i: number, name: string): RowPreview | undefined {
   if (i % 2) return undefined
@@ -864,6 +866,7 @@ export function sampleDatabase(count: number, options: { databaseId?: string, se
       last_edited_by: pick(people).id,
       unique_id: i + 1,
       preview: samplePreview(i, String(values.name)),
+      icon: i % 3 === 0 ? ICONS[(i / 3) % ICONS.length] : undefined,
     }
   })
 
