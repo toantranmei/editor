@@ -85,7 +85,13 @@ export interface Prop {
 }
 
 /** Cell values (JSON) per type. */
-export interface DateValue { start: string, end?: string }
+/**
+ * `remind`: a reminder (`DateRemind`) and `remind_at`, when it is due (RFC 3339, computed in the editor's time zone;
+ * the host notifies whoever set it).
+ */
+export interface DateValue { start: string, end?: string, remind?: DateRemind, remind_at?: string }
+/** Before the date: on the day / at the time, minutes, hours, days or a week before (9:00 for dates without time). */
+export type DateRemind = 'at_time' | '5m' | '10m' | '15m' | '30m' | '1h' | '2h' | '1d' | '2d' | '1w'
 export interface FileValue { id: string, name: string, url: string }
 
 // ── 1.3 View ──────────────────────────────────────────────────────────────────

@@ -88,6 +88,10 @@ export interface DatabaseMessages {
   dateFormat: string
   dateFormats: Record<'full' | 'short' | 'dmy' | 'mdy' | 'ymd' | 'relative', string>
   includeTime: string
+  remind: string
+  remindNone: string
+  remindsTime: Record<string, string>
+  remindsDay: Record<string, string>
   formula: string
   formulaPlaceholder: string
   formulaOk: string
@@ -438,6 +442,10 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     dateFormat: 'Date format',
     dateFormats: { full: 'Full date', short: 'Short date', dmy: 'Day/Month/Year', mdy: 'Month/Day/Year', ymd: 'Year/Month/Day', relative: 'Relative' },
     includeTime: 'Include time',
+    remind: 'Remind',
+    remindNone: 'None',
+    remindsTime: { at_time: 'At time of event', '5m': '5 minutes before', '10m': '10 minutes before', '15m': '15 minutes before', '30m': '30 minutes before', '1h': '1 hour before', '2h': '2 hours before', '1d': '1 day before', '2d': '2 days before' },
+    remindsDay: { at_time: 'On day of event (9:00)', '1d': '1 day before (9:00)', '2d': '2 days before (9:00)', '1w': '1 week before (9:00)' },
     formula: 'Formula',
     formulaPlaceholder: 'prop("Price") * prop("Qty")',
     formulaOk: 'Formula is valid',
@@ -783,6 +791,10 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     dateFormat: 'Định dạng ngày',
     dateFormats: { full: 'Ngày đầy đủ', short: 'Ngày rút gọn', dmy: 'Ngày/Tháng/Năm', mdy: 'Tháng/Ngày/Năm', ymd: 'Năm/Tháng/Ngày', relative: 'Tương đối' },
     includeTime: 'Kèm giờ',
+    remind: 'Nhắc',
+    remindNone: 'Không nhắc',
+    remindsTime: { at_time: 'Đúng giờ', '5m': 'Trước 5 phút', '10m': 'Trước 10 phút', '15m': 'Trước 15 phút', '30m': 'Trước 30 phút', '1h': 'Trước 1 giờ', '2h': 'Trước 2 giờ', '1d': 'Trước 1 ngày', '2d': 'Trước 2 ngày' },
+    remindsDay: { at_time: 'Đúng ngày (9:00)', '1d': 'Trước 1 ngày (9:00)', '2d': 'Trước 2 ngày (9:00)', '1w': 'Trước 1 tuần (9:00)' },
     formula: 'Công thức',
     formulaPlaceholder: 'prop("Giá") * prop("SL")',
     formulaOk: 'Công thức hợp lệ',
@@ -1128,6 +1140,10 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     dateFormat: '日期格式',
     dateFormats: { full: '完整日期', short: '短日期', dmy: '日/月/年', mdy: '月/日/年', ymd: '年/月/日', relative: '相对时间' },
     includeTime: '包含时间',
+    remind: '提醒',
+    remindNone: '不提醒',
+    remindsTime: { at_time: '准时', '5m': '提前 5 分钟', '10m': '提前 10 分钟', '15m': '提前 15 分钟', '30m': '提前 30 分钟', '1h': '提前 1 小时', '2h': '提前 2 小时', '1d': '提前 1 天', '2d': '提前 2 天' },
+    remindsDay: { at_time: '当天（9:00）', '1d': '提前 1 天（9:00）', '2d': '提前 2 天（9:00）', '1w': '提前 1 周（9:00）' },
     formula: '公式',
     formulaPlaceholder: 'prop("价格") * prop("数量")',
     formulaOk: '公式有效',

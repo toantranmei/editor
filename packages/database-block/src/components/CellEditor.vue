@@ -141,6 +141,7 @@ const preview = computed(() => (type.value === 'number' && !error.value && draft
         v-else-if="type === 'date'"
         :value="(local as DateValue | null) ?? null"
         :include-time="!!prop.config?.time"
+        allow-remind
         @change="v => write(v)"
       />
       <SearchPicker

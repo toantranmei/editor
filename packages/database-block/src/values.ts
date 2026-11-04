@@ -2,7 +2,7 @@
  * Cell values: display text (cells, copy as TSV) and parsing typed text back into contract-typed JSON
  * (paste, typed number / date input).
  */
-import type { DateDisplay, DateValue, FileValue, NumberFormat, OptionColor, Prop, SelectOption } from './types'
+import type { DateDisplay, DateRemind, DateValue, FileValue, NumberFormat, OptionColor, Prop, SelectOption } from './types'
 import { fold, isEmptyValue, uuidv7 } from './util'
 
 export interface ValueContext {
@@ -274,4 +274,30 @@ export function isLossyChange(from: Prop['type'], to: Prop['type']): boolean {
   if (from === 'select' && to === 'status') return false
   if (from === 'status' && to === 'select') return false
   return true
+}
+
+/** Reminders offered: for a date with a time, from the time; for a day, at 9:00 (Notion's choices). */
+export const REMINDS_TIME: DateRemind[] = ['at_time', '5m', '10m', '15m', '30m', '1h', '2h', '1d', '2d']
+export const REMINDS_DAY: DateRemind[] = ['at_time', '1d', '2d', '1w']
+const REMIND_MS: Record<DateRemind, number> = { at_time: 0, '5m': 300e3, '10m': 600e3, '15m': 900e3, '30m': 1800e3, '1h': 3600e3, '2h': 7200e3, '1d': 864e5, '2d': 1728e5, '1w': 6048e5 }
+
+/** When `remind` of a date starting at `start` is due, as RFC 3339 (local 9:00 for a day without time). */
+export function remindAt(start: string, remind: DateRemind): string | null {
+  const d = parseIso(start)
+  if (!d) return null
+  if (!hasTime(start)) {
+    // whole days: 9:00 local on the day, minus whole days (not 24 h: daylight saving)
+    const days = Math.round(REMIND_MS[remind] / 864e5)
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate() - days, 9, 0, 0, 0).toISOString()
+  }
+  return new Date(d.getTime() - REMIND_MS[remind]).toISOString()
+}
+
+/** `value` with its reminder (none: removed), `remind_at` recomputed from its start. */
+export function withRemind(value: DateValue, remind: DateRemind | '' | undefined): DateValue {
+  const rest: DateValue = { start: value.start }
+  if (value.end) rest.end = value.end
+  if (!remind) return rest
+  const at = remindAt(value.start, remind)
+  return at ? { ...rest, remind, remind_at: at } : rest
 }

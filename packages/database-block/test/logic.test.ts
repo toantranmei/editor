@@ -394,3 +394,17 @@ describe('draft store', () => {
     localStorage.clear()
   })
 })
+
+describe('date reminders', () => {
+  it('computes when a reminder is due: before the time, or 9:00 local on whole days', async () => {
+    const { remindAt, withRemind } = await import('../src/values')
+    const at = new Date(2026, 10, 10, 14, 30).toISOString()
+    expect(remindAt(at, '15m')).toBe(new Date(2026, 10, 10, 14, 15).toISOString())
+    expect(remindAt(at, 'at_time')).toBe(at)
+    expect(remindAt('2026-11-10', 'at_time')).toBe(new Date(2026, 10, 10, 9, 0).toISOString())
+    expect(remindAt('2026-11-10', '1w')).toBe(new Date(2026, 10, 3, 9, 0).toISOString())
+    expect(remindAt('nope', '1d')).toBeNull()
+    expect(withRemind({ start: '2026-11-10', end: '2026-11-12' }, '1d')).toEqual({ start: '2026-11-10', end: '2026-11-12', remind: '1d', remind_at: new Date(2026, 10, 9, 9, 0).toISOString() })
+    expect(withRemind({ start: '2026-11-10', remind: '1d', remind_at: 'x' }, '')).toEqual({ start: '2026-11-10' })
+  })
+})
