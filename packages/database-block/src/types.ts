@@ -189,8 +189,13 @@ export interface ViewConfig {
   freeze?: number
   /** Conditional colors, first match wins (row / card, or per cell with scope `prop`). */
   colors?: ColorRule[]
-  /** Table: sub-items — a relation to this database holding each row's parent; parents list, sub-items nest. */
+  /** Table / list / board: sub-items — a relation to this database holding each row's parent. */
   sub_items?: string
+  /**
+   * How sub-items show (Notion's "Show sub-items as"): `nested` (default; parents listed, sub-items under their
+   * parent: ▸ in table / list, "N sub-items" on board cards) or `flat` (every row, sub-items name their parent).
+   */
+  sub_items_display?: 'nested' | 'flat'
   /** Form: description under the title, required questions (property ids). */
   form_description?: string
   form_required?: string[]
@@ -203,8 +208,11 @@ export interface ViewConfig {
   /** How rows open from this view. Default `side_peek`. */
   open_in?: OpenMode
   aggregates?: Record<string, AggregateFn | string>
-  /** board / gallery / list / calendar / timeline: card cover (board), shown properties, card size (board). */
-  card?: { cover?: string, props?: string[], size?: 's' | 'm' | 'l' }
+  /**
+   * board / gallery / list / calendar / timeline: card preview (board; `CardPreview`), shown properties, card size
+   * (board), card layout (board / gallery: properties one per line, `list`, the default, or wrapped, `compact`).
+   */
+  card?: { cover?: CardPreview, props?: string[], size?: 's' | 'm' | 'l', layout?: 'list' | 'compact' }
   /** board: tint columns with their option color. */
   color_columns?: boolean
   /** gallery / board: fit the cover image instead of cropping it. */
@@ -217,6 +225,12 @@ export interface ViewConfig {
   date_prop?: string
   /** calendar: wrap event titles instead of cutting them. */
   wrap_titles?: boolean
+  /** table / board / gallery / list: show the row pages' icons (`Row.icon`) before their titles (default true). */
+  show_page_icon?: boolean
+  /** The view tab's icon (an emoji or an image URL); missing: the layout's icon. */
+  icon?: string
+  /** The view tab shows its icon and name (`name`, default) or only the icon (`icon`; the name is the tooltip). */
+  tab_display?: 'name' | 'icon'
   /** Show the database title above this view (default true; Notion's "Show data source title"). */
   show_title?: boolean
   /** calendar: "Show calendar as" one week instead of the month grid. */
@@ -225,8 +239,8 @@ export interface ViewConfig {
   start_prop?: string
   end_prop?: string
   scale?: 'day' | 'week' | 'month' | 'quarter' | 'year'
-  /** gallery (and board's `card.cover`) */
-  cover?: string
+  /** gallery card preview (board: `card.cover`). */
+  cover?: CardPreview
   size?: 's' | 'm' | 'l'
   /** chart */
   chart?: ChartKind
@@ -241,6 +255,13 @@ export interface ViewConfig {
   totals?: boolean
   [key: string]: unknown
 }
+
+/**
+ * Card preview of board / gallery cards (Notion's Layout → Card preview): a `files` property id (its first image),
+ * the row page's cover (`page_cover`) or the start of its content (`page_content`), both read with
+ * `source.rowPreview`. Missing / empty: none.
+ */
+export type CardPreview = 'page_cover' | 'page_content' | (string & {})
 
 export interface View {
   id: string
@@ -258,6 +279,18 @@ export interface Row {
   values: Record<string, unknown>
   /** formula / rollup / created_* / unique_id results. */
   computed?: Record<string, unknown>
+  /** The row page's icon (an emoji, or an image URL), shown before the title when the view's `show_page_icon` is on. */
+  icon?: string | null
+}
+
+/** What `source.rowPreview` tells about a row page (card previews). Every field is optional. */
+export interface RowPreview {
+  /** URL of the page's cover image (Card preview → Page cover). */
+  cover?: string | null
+  /** First image of the page content (Card preview → Page content; wins over `text`). */
+  image?: string | null
+  /** Start of the page content as plain text (Card preview → Page content). */
+  text?: string | null
 }
 
 export interface RowWindow { offset: number, limit: number }
@@ -343,6 +376,12 @@ export interface DatabaseSource {
    * timeline. Without it those views read the first `rangeLimit` rows of the view and filter them here.
    */
   rowsInRange?: (viewId: string, propId: string, start: string, end: string, query?: RowQuery) => Promise<Row[]>
+  /**
+   * Page cover / content previews of rows (board and gallery "Card preview: Page cover / Page content"), asked in
+   * batches for the cards on screen. Rows missing from the result have no preview. Without it those previews
+   * stay empty.
+   */
+  rowPreview?: (rowIds: string[]) => Promise<Record<string, RowPreview>>
 }
 
 // ── Block options ─────────────────────────────────────────────────────────────

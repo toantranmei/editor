@@ -4,7 +4,7 @@
  * Only the rows in view (+ overscan) are requested from the source, in chunk-aligned windows (`RowStore`).
  * Rows have a fixed height and move with `transform`, so scrolling never triggers layout of off-screen rows.
  */
-import { ChevronDown, ChevronRight, Copy, Ellipsis, GripVertical, Info, Plus, Trash2, X } from '@lucide/vue'
+import { ChevronDown, ChevronRight, Copy, CornerDownRight, Ellipsis, GripVertical, Info, Plus, Trash2, X } from '@lucide/vue'
 import { type ColumnDef, type ColumnSizingState, getCoreRowModel, useVueTable } from '@tanstack/vue-table'
 import { useVirtualizer } from '@tanstack/vue-virtual'
 import { componentTokens } from '@toantranmei/editor'
@@ -12,6 +12,7 @@ import { computed, nextTick, onBeforeUnmount, ref, shallowRef, watch } from 'vue
 import { aggregatesFor, formatAggregate } from '../aggregates'
 import CellEditor from '../components/CellEditor.vue'
 import CellValue from '../components/CellValue.vue'
+import RowIcon from '../components/RowIcon.vue'
 import DbPopover from '../components/DbPopover.vue'
 import OpenModeIcon from '../components/OpenModeIcon.vue'
 import PropertyEditor from '../components/PropertyEditor.vue'
@@ -26,7 +27,7 @@ import type { Item } from '../row-store'
 import { toTsv, parseTsv } from '../tsv'
 import type { Prop, Row, SelectOption } from '../types'
 import { useRowStore } from '../use-rows'
-import { cellValue, cssPx, duplicateRows, isReadOnly } from '../util'
+import { cellValue, cssPx, duplicateRows, isReadOnly, pageIcon } from '../util'
 import { displayText, optionById, parseText } from '../values'
 
 const props = withDefaults(defineProps<{ full?: boolean }>(), { full: false })
@@ -142,6 +143,15 @@ const baseCount = computed(() => {
 // inserted right under it (one level), read with a `contains` filter on the parent property.
 type TItem = Item | { kind: 'child', row: Row, parent: string }
 const subProp = computed(() => db.props.value.find(p => p.id === db.view.value?.config.sub_items && p.type === 'relation'))
+/** "Show sub-items as" flattened list: every row listed, sub-items name their parent (no ▸). */
+const subFlat = computed(() => !!subProp.value && db.view.value?.config.sub_items_display === 'flat')
+function parentTitle(row: Row): string | null {
+  const p = subProp.value
+  const v = p && subFlat.value ? row.values[p.id] : undefined
+  if (!Array.isArray(v) || !v.length) return null
+  void db.valueCtx.value
+  return db.names.rows.get(String(v[0])) ?? null
+}
 const expanded = shallowRef<Array<{ id: string, at: number, rows: Row[] }>>([])
 const itemCount = computed(() => baseCount.value + expanded.value.reduce((n, e) => n + e.rows.length, 0))
 function itemAt(i: number): TItem | undefined {
@@ -922,7 +932,7 @@ defineExpose({ sel, checked, startEdit, pasteMatrix, store, rowVirtualizer, colV
                     @click="sl.col > 0 && cols[sl.col]?.type === 'checkbox' && sel?.focus.col === sl.col && !$event.shiftKey && startEdit(null)"
                   >
                     <button
-                      v-if="sl.col === 0 && subProp && r.item?.kind === 'row'"
+                      v-if="sl.col === 0 && subProp && !subFlat && r.item?.kind === 'row'"
                       type="button"
                       class="me-db-icon-button me-db-subtoggle"
                       :aria-expanded="isExpanded(r.row.id)"
@@ -934,7 +944,9 @@ defineExpose({ sel, checked, startEdit, pasteMatrix, store, rowVirtualizer, colV
                     >
                       <ChevronDown v-if="isExpanded(r.row.id)" /><ChevronRight v-else />
                     </button>
+                    <RowIcon v-if="sl.col === 0 && cols[0]?.type === 'title' && pageIcon(db.view.value, r.row)" :icon="pageIcon(db.view.value, r.row)!" />
                     <CellValue v-if="cols[sl.col]" :prop="cols[sl.col]!" :value="valueAt(r.row, sl.col)" :row="r.row" />
+                    <span v-if="sl.col === 0 && parentTitle(r.row)" class="me-db-parent-label is-cell" :title="m.parentItem"><CornerDownRight />{{ parentTitle(r.row) }}</span>
                     <button
                       v-if="sl.col === 0"
                       type="button"

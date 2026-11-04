@@ -6,7 +6,7 @@
  */
 import { Check, Eye, EyeOff, GripVertical, Lock, LockOpen, Zap } from '@lucide/vue'
 import { computed, ref } from 'vue'
-import { useDb } from '../context'
+import { SUB_ITEM_VIEWS, useDb } from '../context'
 import type { ChartKind, OpenMode, Prop, ValueFn, ViewConfig, ViewType } from '../types'
 import { groupableTypes, positionAfter, switchLayout, uuidv7, visibleIds } from '../util'
 import AutomationsPanel from './AutomationsPanel.vue'
@@ -244,6 +244,12 @@ const value = (e: Event) => (e.target as HTMLSelectElement).value
             <option value="0">{{ m.noLimit }}</option>
           </select>
         </label>
+        <label class="me-db-toggle-row">
+          <span>{{ m.verticalLines }}</span>
+          <input type="checkbox" class="me-db-switch" data-setting="vertical_lines" :checked="c.vertical_lines !== false" :disabled="!editable" @change="set({ vertical_lines: checked($event) ? undefined : false })">
+        </label>
+      </template>
+      <template v-if="SUB_ITEM_VIEWS.includes(view?.type ?? '')">
         <label class="me-db-field">
           <span class="me-menu-label">{{ m.subItems }}</span>
           <select class="me-input me-db-select" data-setting="sub_items" :value="c.sub_items ?? ''" :disabled="!editable" @change="set({ sub_items: value($event) || undefined })">
@@ -252,9 +258,11 @@ const value = (e: Event) => (e.target as HTMLSelectElement).value
           </select>
         </label>
         <button v-if="!selfRelations.length && editable" type="button" class="me-db-text-button" data-turn-on-sub-items @click="turnOnSubItems">{{ m.turnOnSubItems }}</button>
-        <label class="me-db-toggle-row">
-          <span>{{ m.verticalLines }}</span>
-          <input type="checkbox" class="me-db-switch" data-setting="vertical_lines" :checked="c.vertical_lines !== false" :disabled="!editable" @change="set({ vertical_lines: checked($event) ? undefined : false })">
+        <label v-if="c.sub_items" class="me-db-field">
+          <span class="me-menu-label">{{ m.subItemsDisplay }}</span>
+          <select class="me-input me-db-select" data-setting="sub_items_display" :value="c.sub_items_display ?? 'nested'" :disabled="!editable" @change="set({ sub_items_display: value($event) === 'flat' ? 'flat' : undefined })">
+            <option v-for="d in (['nested', 'flat'] as const)" :key="d" :value="d">{{ m.subItemsDisplays[d] }}</option>
+          </select>
         </label>
       </template>
       <template v-if="view?.type === 'board' || view?.type === 'gallery'">
@@ -262,6 +270,8 @@ const value = (e: Event) => (e.target as HTMLSelectElement).value
           <span class="me-menu-label">{{ m.cover }}</span>
           <select class="me-input me-db-select" data-setting="cover" :value="(view.type === 'board' ? c.card?.cover : c.cover) ?? ''" :disabled="!editable" @change="view.type === 'board' ? set({ card: { ...c.card, cover: value($event) || undefined } }) : set({ cover: value($event) || undefined })">
             <option value="">{{ m.coverNone }}</option>
+            <option value="page_cover">{{ m.coverPageCover }}</option>
+            <option value="page_content">{{ m.coverPageContent }}</option>
             <option v-for="p in fileProps" :key="p.id" :value="p.id">{{ p.name }}</option>
           </select>
         </label>
@@ -269,6 +279,12 @@ const value = (e: Event) => (e.target as HTMLSelectElement).value
           <span class="me-menu-label">{{ m.cardSize }}</span>
           <select class="me-input me-db-select" data-setting="size" :value="(view.type === 'board' ? c.card?.size : c.size) ?? 'm'" :disabled="!editable" @change="view.type === 'board' ? set({ card: { ...c.card, size: value($event) as 's' | 'm' | 'l' } }) : set({ size: value($event) as 's' | 'm' | 'l' })">
             <option v-for="s in (['s', 'm', 'l'] as const)" :key="s" :value="s">{{ m.sizes[s] }}</option>
+          </select>
+        </label>
+        <label class="me-db-field">
+          <span class="me-menu-label">{{ m.cardLayout }}</span>
+          <select class="me-input me-db-select" data-setting="card_layout" :value="c.card?.layout ?? 'list'" :disabled="!editable" @change="set({ card: { ...c.card, layout: value($event) === 'compact' ? 'compact' : undefined } })">
+            <option v-for="l in (['list', 'compact'] as const)" :key="l" :value="l">{{ m.cardLayouts[l] }}</option>
           </select>
         </label>
         <label class="me-db-toggle-row">
@@ -403,6 +419,10 @@ const value = (e: Event) => (e.target as HTMLSelectElement).value
         </label>
       </template>
 
+      <label v-if="['table', 'board', 'gallery', 'list'].includes(view?.type ?? '')" class="me-db-toggle-row">
+        <span>{{ m.showPageIcon }}</span>
+        <input type="checkbox" class="me-db-switch" data-setting="show_page_icon" :checked="c.show_page_icon !== false" :disabled="!editable" @change="set({ show_page_icon: checked($event) ? undefined : false })">
+      </label>
       <label class="me-db-toggle-row">
         <span>{{ m.showTitle }}</span>
         <input type="checkbox" class="me-db-switch" data-setting="show_title" :checked="c.show_title !== false" :disabled="!editable" @change="set({ show_title: checked($event) ? undefined : false })">

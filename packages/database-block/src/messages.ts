@@ -13,6 +13,12 @@ export interface DatabaseMessages {
   viewTypes: Record<'table' | 'board' | 'calendar' | 'timeline' | 'gallery' | 'list' | 'chart' | 'pivot' | 'form', string>
   addView: string
   renameView: string
+  /** View tab menu: icon and "Display as". */
+  viewIcon: string
+  viewIconPlaceholder: string
+  removeIcon: string
+  tabDisplayAs: string
+  tabDisplays: Record<'name' | 'icon', string>
   duplicateView: string
   deleteView: string
   copyOf: string
@@ -197,6 +203,7 @@ export interface DatabaseMessages {
   propertyDescriptionHint: string
   wrapPageTitles: string
   showTitle: string
+  showPageIcon: string
   formDescription: string
   formAnswer: string
   formSubmit: string
@@ -213,6 +220,11 @@ export interface DatabaseMessages {
   addSubItem: string
   parentItem: string
   turnOnSubItems: string
+  /** Board card footer: "{n} sub-items" (`subItemCount` when n = 1). */
+  subItemsCount: string
+  subItemCount: string
+  subItemsDisplay: string
+  subItemsDisplays: Record<'nested' | 'flat', string>
   off: string
   searchFormula: string
   formulaType: string
@@ -291,6 +303,11 @@ export interface DatabaseMessages {
   colorColumns: string
   cardSize: string
   fitImage: string
+  /** Card preview options besides None and the files properties. */
+  coverPageCover: string
+  coverPageContent: string
+  cardLayout: string
+  cardLayouts: Record<'list' | 'compact', string>
   showWeekends: string
   showTable: string
   tableOptions: string
@@ -322,6 +339,11 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     viewTypes: { table: 'Table', board: 'Board', calendar: 'Calendar', timeline: 'Timeline', gallery: 'Gallery', list: 'List', chart: 'Chart', pivot: 'Pivot', form: 'Form' },
     addView: 'Add view',
     renameView: 'Rename',
+    viewIcon: 'Icon',
+    viewIconPlaceholder: 'Type an emoji',
+    removeIcon: 'Remove icon',
+    tabDisplayAs: 'Display as',
+    tabDisplays: { name: 'Icon and name', icon: 'Icon only' },
     duplicateView: 'Duplicate',
     deleteView: 'Delete view',
     copyOf: '{name} (copy)',
@@ -488,6 +510,7 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     propertyDescriptionHint: 'Shown when hovering the column',
     wrapPageTitles: 'Wrap page titles',
     showTitle: 'Show database title',
+    showPageIcon: 'Show page icon',
     formDescription: 'Description (optional)',
     formAnswer: 'Your answer',
     formSubmit: 'Submit',
@@ -504,6 +527,10 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     addSubItem: 'Add sub-item',
     parentItem: 'Parent item',
     turnOnSubItems: 'Turn on sub-items',
+    subItemsCount: '{n} sub-items',
+    subItemCount: '1 sub-item',
+    subItemsDisplay: 'Show sub-items as',
+    subItemsDisplays: { nested: 'Nested in toggle', flat: 'Flattened list' },
     off: 'Off',
     searchFormula: 'Search properties and functions…',
     formulaType: 'Type',
@@ -582,6 +609,10 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     colorColumns: 'Color columns',
     cardSize: 'Card size',
     fitImage: 'Fit image',
+    coverPageCover: 'Page cover',
+    coverPageContent: 'Page content',
+    cardLayout: 'Card layout',
+    cardLayouts: { list: 'List', compact: 'Compact' },
     showWeekends: 'Show weekends',
     showTable: 'Show table',
     tableOptions: 'Table',
@@ -628,6 +659,11 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     viewTypes: { table: 'Bảng', board: 'Bảng Kanban', calendar: 'Lịch', timeline: 'Dòng thời gian', gallery: 'Thư viện', list: 'Danh sách', chart: 'Biểu đồ', pivot: 'Bảng tổng hợp', form: 'Biểu mẫu' },
     addView: 'Thêm chế độ xem',
     renameView: 'Đổi tên',
+    viewIcon: 'Biểu tượng',
+    viewIconPlaceholder: 'Nhập một emoji',
+    removeIcon: 'Bỏ biểu tượng',
+    tabDisplayAs: 'Hiển thị',
+    tabDisplays: { name: 'Biểu tượng và tên', icon: 'Chỉ biểu tượng' },
     duplicateView: 'Nhân bản',
     deleteView: 'Xoá chế độ xem',
     copyOf: '{name} (bản sao)',
@@ -802,6 +838,7 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     propertyDescriptionHint: 'Hiện khi rê chuột lên cột',
     wrapPageTitles: 'Xuống dòng tiêu đề',
     showTitle: 'Hiện tiêu đề database',
+    showPageIcon: 'Hiện biểu tượng trang',
     formDescription: 'Mô tả (không bắt buộc)',
     formAnswer: 'Câu trả lời',
     formSubmit: 'Gửi',
@@ -818,6 +855,10 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     addSubItem: 'Thêm mục con',
     parentItem: 'Mục cha',
     turnOnSubItems: 'Bật mục con',
+    subItemsCount: '{n} mục con',
+    subItemCount: '1 mục con',
+    subItemsDisplay: 'Hiện mục con dạng',
+    subItemsDisplays: { nested: 'Lồng trong nút mở', flat: 'Danh sách phẳng' },
     off: 'Tắt',
     searchFormula: 'Tìm thuộc tính và hàm…',
     formulaType: 'Kiểu',
@@ -896,6 +937,10 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     colorColumns: 'Tô màu cột',
     cardSize: 'Cỡ thẻ',
     fitImage: 'Vừa khung ảnh',
+    coverPageCover: 'Ảnh bìa trang',
+    coverPageContent: 'Nội dung trang',
+    cardLayout: 'Bố cục thẻ',
+    cardLayouts: { list: 'Danh sách', compact: 'Gọn' },
     showWeekends: 'Hiện cuối tuần',
     showTable: 'Hiện bảng',
     tableOptions: 'Bảng',
@@ -942,6 +987,11 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     viewTypes: { table: '表格', board: '看板', calendar: '日历', timeline: '时间线', gallery: '画廊', list: '列表', chart: '图表', pivot: '数据透视', form: '表单' },
     addView: '添加视图',
     renameView: '重命名',
+    viewIcon: '图标',
+    viewIconPlaceholder: '输入一个表情',
+    removeIcon: '移除图标',
+    tabDisplayAs: '显示为',
+    tabDisplays: { name: '图标和名称', icon: '仅图标' },
     duplicateView: '创建副本',
     deleteView: '删除视图',
     copyOf: '{name}（副本）',
@@ -1116,6 +1166,7 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     propertyDescriptionHint: '悬停列时显示',
     wrapPageTitles: '标题换行',
     showTitle: '显示数据库标题',
+    showPageIcon: '显示页面图标',
     formDescription: '描述（可选）',
     formAnswer: '你的回答',
     formSubmit: '提交',
@@ -1132,6 +1183,10 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     addSubItem: '添加子项',
     parentItem: '父项',
     turnOnSubItems: '开启子项',
+    subItemsCount: '{n} 个子项',
+    subItemCount: '1 个子项',
+    subItemsDisplay: '子项显示方式',
+    subItemsDisplays: { nested: '嵌套在折叠中', flat: '平铺列表' },
     off: '关闭',
     searchFormula: '搜索属性和函数…',
     formulaType: '类型',
@@ -1210,6 +1265,10 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     colorColumns: '列着色',
     cardSize: '卡片大小',
     fitImage: '适应图片',
+    coverPageCover: '页面封面',
+    coverPageContent: '页面内容',
+    cardLayout: '卡片布局',
+    cardLayouts: { list: '列表', compact: '紧凑' },
     showWeekends: '显示周末',
     showTable: '显示表格',
     tableOptions: '表格',
