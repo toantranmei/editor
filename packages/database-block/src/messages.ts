@@ -13,6 +13,12 @@ export interface DatabaseMessages {
   viewTypes: Record<'table' | 'board' | 'calendar' | 'timeline' | 'gallery' | 'list' | 'chart' | 'pivot' | 'form', string>
   addView: string
   renameView: string
+  /** View tab menu: icon and "Display as". */
+  viewIcon: string
+  viewIconPlaceholder: string
+  removeIcon: string
+  tabDisplayAs: string
+  tabDisplays: Record<'name' | 'icon', string>
   duplicateView: string
   deleteView: string
   copyOf: string
@@ -296,6 +302,11 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     viewTypes: { table: 'Table', board: 'Board', calendar: 'Calendar', timeline: 'Timeline', gallery: 'Gallery', list: 'List', chart: 'Chart', pivot: 'Pivot', form: 'Form' },
     addView: 'Add view',
     renameView: 'Rename',
+    viewIcon: 'Icon',
+    viewIconPlaceholder: 'Type an emoji',
+    removeIcon: 'Remove icon',
+    tabDisplayAs: 'Display as',
+    tabDisplays: { name: 'Icon and name', icon: 'Icon only' },
     duplicateView: 'Duplicate',
     deleteView: 'Delete view',
     copyOf: '{name} (copy)',
@@ -576,6 +587,11 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     viewTypes: { table: 'Bảng', board: 'Bảng Kanban', calendar: 'Lịch', timeline: 'Dòng thời gian', gallery: 'Thư viện', list: 'Danh sách', chart: 'Biểu đồ', pivot: 'Bảng tổng hợp', form: 'Biểu mẫu' },
     addView: 'Thêm chế độ xem',
     renameView: 'Đổi tên',
+    viewIcon: 'Biểu tượng',
+    viewIconPlaceholder: 'Nhập một emoji',
+    removeIcon: 'Bỏ biểu tượng',
+    tabDisplayAs: 'Hiển thị',
+    tabDisplays: { name: 'Biểu tượng và tên', icon: 'Chỉ biểu tượng' },
     duplicateView: 'Nhân bản',
     deleteView: 'Xoá chế độ xem',
     copyOf: '{name} (bản sao)',
@@ -864,6 +880,11 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     viewTypes: { table: '表格', board: '看板', calendar: '日历', timeline: '时间线', gallery: '画廊', list: '列表', chart: '图表', pivot: '数据透视', form: '表单' },
     addView: '添加视图',
     renameView: '重命名',
+    viewIcon: '图标',
+    viewIconPlaceholder: '输入一个表情',
+    removeIcon: '移除图标',
+    tabDisplayAs: '显示为',
+    tabDisplays: { name: '图标和名称', icon: '仅图标' },
     duplicateView: '创建副本',
     deleteView: '删除视图',
     copyOf: '{name}（副本）',

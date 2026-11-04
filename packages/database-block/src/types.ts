@@ -179,6 +179,10 @@ export interface ViewConfig {
   wrap_titles?: boolean
   /** table / board / gallery / list: show the row pages' icons (`Row.icon`) before their titles (default true). */
   show_page_icon?: boolean
+  /** The view tab's icon (an emoji or an image URL); missing: the layout's icon. */
+  icon?: string
+  /** The view tab shows its icon and name (`name`, default) or only the icon (`icon`; the name is the tooltip). */
+  tab_display?: 'name' | 'icon'
   /** Show the database title above this view (default true; Notion's "Show data source title"). */
   show_title?: boolean
   /** calendar: "Show calendar as" one week instead of the month grid. */

@@ -422,3 +422,37 @@ describe('page icons', () => {
     expect(wrapper.find('.me-db-row-icon').exists()).toBe(false)
   })
 })
+
+describe('view tab icon and Display as', () => {
+  it('sets an icon from the tab menu, shows icon only, removes the icon', async () => {
+    const { source, wrapper } = await setup(10)
+    const openMenu = async () => {
+      await wrapper.find('.me-db-tab.is-active').trigger('click')
+      await settle()
+    }
+    await openMenu()
+    popover().querySelector<HTMLElement>('[data-pick-icon="🔥"]')!.click()
+    await settle()
+    expect(source.views.value.find(v => v.id === 'v-table')!.config.icon).toBe('🔥')
+    expect(wrapper.find('.me-db-tab.is-active .me-db-row-icon').text()).toBe('🔥')
+    popover().querySelector<HTMLElement>('[data-tab-display="icon"]')!.click()
+    await settle()
+    const tab = wrapper.find('.me-db-tab.is-active')
+    expect(tab.classes()).toContain('is-icon-only')
+    expect(tab.find('.me-db-tab-name').exists()).toBe(false)
+    expect(tab.attributes('title')).toBe('Table')
+    // Typed emoji.
+    const input = popover().querySelector<HTMLInputElement>('[data-view-icon]')!
+    input.value = '🧭'
+    input.dispatchEvent(new Event('input'))
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+    await settle()
+    expect(source.views.value.find(v => v.id === 'v-table')!.config.icon).toBe('🧭')
+    popover().querySelector<HTMLElement>('[data-remove-view-icon]')!.click()
+    popover().querySelector<HTMLElement>('[data-tab-display="name"]')!.click()
+    await settle()
+    const config = source.views.value.find(v => v.id === 'v-table')!.config
+    expect('icon' in config || 'tab_display' in config).toBe(false)
+    expect(wrapper.find('.me-db-tab.is-active .me-db-tab-name').text()).toBe('Table')
+  })
+})

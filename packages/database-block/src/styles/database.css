@@ -70,6 +70,12 @@
   .me-db-tab { border-radius: var(--me-database-radius); }
   .me-db-tab.is-active { color: var(--me-database-tab-active-color); background: var(--me-database-hover-bg); font-weight: var(--me-font-weight-medium); }
   .me-db-tab.is-add { border-bottom-color: transparent; }
+  .me-db-tab .me-db-row-icon { width: auto; margin-right: 0; font-size: var(--me-font-size-sm); }
+  .me-db-tab-icon-edit { align-items: center; gap: var(--me-space-2); padding: 0 var(--me-space-2); }
+  .me-db-tab-icon-input { flex: 1; min-width: 0; }
+  .me-db-tab-icons { display: grid; grid-template-columns: repeat(6, var(--me-toolbar-button-size)); gap: var(--me-space-1); padding: var(--me-space-2); }
+  .me-db-tab-icon-pick { font-size: var(--me-font-size-md); }
+  .me-db-tab-icon-pick.is-on { background: var(--me-database-hover-bg); }
   .me-db-tab-input { width: var(--me-database-search-width); height: var(--me-toolbar-button-size); }
   .me-db-tab svg, .me-db-tool svg, .me-db-icon-button svg, .me-db-text-button svg, .me-db-new-row svg, .me-db-open svg, .me-db-new svg {
     flex: none;
