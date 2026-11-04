@@ -17,6 +17,7 @@ import CalendarView from './views/CalendarView.vue'
 import ChartView from './views/ChartView.vue'
 import GalleryView from './views/GalleryView.vue'
 import ListView from './views/ListView.vue'
+import FeedView from './views/FeedView.vue'
 import FormView from './views/FormView.vue'
 import PivotView from './views/PivotView.vue'
 import TableView from './views/TableView.vue'
@@ -81,7 +82,7 @@ function select(id: string) {
   emit('update:viewId', id)
 }
 const type = computed(() => db.view.value?.type ?? 'table')
-const VIEWS = { table: TableView, board: BoardView, calendar: CalendarView, timeline: TimelineView, gallery: GalleryView, list: ListView, chart: ChartView, pivot: PivotView, form: FormView }
+const VIEWS = { table: TableView, board: BoardView, calendar: CalendarView, timeline: TimelineView, gallery: GalleryView, list: ListView, chart: ChartView, pivot: PivotView, form: FormView, feed: FeedView }
 const viewRef = ref<{ newRow?: (seg?: number, top?: boolean) => void } | null>(null)
 
 // ── Title: `source.meta.title`, saved while typing (debounced) and on blur / Enter ──

@@ -344,4 +344,39 @@ describe('other views', () => {
       expect(source.props.value.find(p => p.id === 'tags')!.type).toBe('select')
     }
   })
+
+  it('feed: posts with properties and the page preview, Load more pages through the rows, click opens the row', async () => {
+    const opened: string[] = []
+    const init = sampleDatabase(25, { databaseId: 'db1' })
+    const source = createMemorySource({ ...init, openRow: id => opened.push(id) })
+    const wrapper = mount({ render: () => h(DatabaseView, { source, databaseId: 'db1', viewId: 'v-feed', locale: 'en' }) }, { attachTo: document.body })
+    wrappers.push(wrapper)
+    await settle()
+    expect(wrapper.find('.me-db').attributes('data-view-type')).toBe('feed')
+    let posts = wrapper.findAll('.me-db-post')
+    expect(posts.length).toBe(10)
+    expect(rowsCalls(source)[0]).toEqual({ offset: 0, limit: 10 })
+    // Row 1 (index 0) has a preview in the sample; the request asked for the loaded ids only.
+    const first = wrapper.find('.me-db-post[data-row-id="r1"]')
+    expect(first.find('[data-preview-text]').text()).toContain('Tóm tắt')
+    expect(source.log.find(l => l.method === 'rowPreview')!.args[0]).toHaveLength(10)
+    expect(first.find('.me-db-post-props').exists()).toBe(true)
+    // Created time is the meta line.
+    expect(first.find('.me-db-post-meta').exists()).toBe(true)
+    await wrapper.find('[data-load-more]').trigger('click')
+    await settle()
+    posts = wrapper.findAll('.me-db-post')
+    expect(posts.length).toBe(20)
+    expect(rowsCalls(source).at(-1)).toEqual({ offset: 10, limit: 10 })
+    await wrapper.find('[data-load-more]').trigger('click')
+    await settle()
+    expect(wrapper.findAll('.me-db-post').length).toBe(25)
+    expect(wrapper.find('[data-load-more]').exists()).toBe(false)
+    await wrapper.find('.me-db-post[data-row-id="r2"] .me-db-post-title').trigger('click')
+    expect(opened).toEqual(['r2'])
+    // Turning the preview off hides it.
+    source.upsertView({ ...source.views.value.find(v => v.id === 'v-feed')!, config: { card: { props: [] }, feed_preview: false } })
+    await settle()
+    expect(wrapper.find('[data-preview-text]').exists()).toBe(false)
+  })
 })

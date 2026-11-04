@@ -84,7 +84,7 @@ export interface FileValue { id: string, name: string, url: string }
 
 // ── 1.3 View ──────────────────────────────────────────────────────────────────
 
-export type ViewType = 'table' | 'board' | 'calendar' | 'timeline' | 'gallery' | 'list' | 'chart' | 'pivot' | 'form'
+export type ViewType = 'table' | 'board' | 'calendar' | 'timeline' | 'gallery' | 'list' | 'chart' | 'pivot' | 'form' | 'feed'
 
 export type TextOp = 'equals' | 'not_equals' | 'contains' | 'not_contains' | 'starts_with' | 'ends_with' | 'is_empty' | 'is_not_empty'
 export type NumberOp = '=' | '!=' | '>' | '>=' | '<' | '<=' | 'is_empty' | 'is_not_empty'
@@ -155,12 +155,14 @@ export interface ViewConfig {
   form_required?: string[]
   /** Table: draw the lines between columns (default true). */
   vertical_lines?: boolean
-  /** Inline table: lines shown before "Load more" (default 50, 0 = no limit). */
+  /** Inline table: lines shown before "Load more" (default 50, 0 = no limit). Feed: posts per page (default 10). */
   load_limit?: number
+  /** Feed: show each row's page content preview (`source.rowPreview`, default true). */
+  feed_preview?: boolean
   /** How rows open from this view. Default `side_peek`. */
   open_in?: OpenMode
   aggregates?: Record<string, AggregateFn | string>
-  /** board / gallery / list / calendar / timeline: card cover (board), shown properties, card size (board). */
+  /** board / gallery / list / calendar / timeline / feed: card cover (board), shown properties, card size (board). */
   card?: { cover?: string, props?: string[], size?: 's' | 'm' | 'l' }
   /** board: tint columns with their option color. */
   color_columns?: boolean
@@ -296,7 +298,15 @@ export interface DatabaseSource {
    * timeline. Without it those views read the first `rangeLimit` rows of the view and filter them here.
    */
   rowsInRange?: (viewId: string, propId: string, start: string, end: string, query?: RowQuery) => Promise<Row[]>
+  /**
+   * A preview of each row's page content (feed posts, card previews): the first lines of text and / or the first
+   * image. Rows without content may be missing from the result. Without it the feed shows properties only.
+   */
+  rowPreview?: (rowIds: string[]) => Promise<Record<string, RowPreview>>
 }
+
+/** Result of `rowPreview` for one row. */
+export interface RowPreview { text?: string, image?: string }
 
 // ── Block options ─────────────────────────────────────────────────────────────
 

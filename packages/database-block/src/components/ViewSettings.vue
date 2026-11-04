@@ -30,7 +30,7 @@ const FNS: ValueFn[] = ['count', 'sum', 'avg', 'min', 'max']
 const set = (patch: Partial<ViewConfig>) => db.updateView(patch)
 
 // Visibility: table columns (`visible`), card properties elsewhere (`card.props`).
-const usesCards = computed(() => ['board', 'gallery', 'list', 'calendar', 'timeline'].includes(view.value?.type ?? ''))
+const usesCards = computed(() => ['board', 'gallery', 'list', 'calendar', 'timeline', 'feed'].includes(view.value?.type ?? ''))
 const shown = computed(() => {
   if (!view.value) return []
   return usesCards.value ? c.value.card?.props ?? [] : visibleIds(view.value, all.value)
@@ -112,7 +112,7 @@ const isDateX = computed(() => !!xProp.value && ['date', 'created_time', 'last_e
 const pivotValue = computed(() => c.value.values?.[0] ?? { fn: 'count' })
 
 // ── Layout ──
-const LAYOUTS: ViewType[] = ['table', 'board', 'calendar', 'timeline', 'gallery', 'list', 'chart', 'pivot']
+const LAYOUTS: ViewType[] = ['table', 'board', 'calendar', 'timeline', 'gallery', 'list', 'chart', 'pivot', 'feed']
 const MODES: OpenMode[] = ['side_peek', 'center_peek', 'full_page']
 const opensRows = computed(() => !['chart', 'pivot'].includes(view.value?.type ?? ''))
 function setLayout(type: ViewType) {
@@ -254,6 +254,19 @@ const value = (e: Event) => (e.target as HTMLSelectElement).value
         <label class="me-db-toggle-row">
           <span>{{ m.verticalLines }}</span>
           <input type="checkbox" class="me-db-switch" data-setting="vertical_lines" :checked="c.vertical_lines !== false" :disabled="!editable" @change="set({ vertical_lines: checked($event) ? undefined : false })">
+        </label>
+      </template>
+      <template v-if="view?.type === 'feed'">
+        <label class="me-db-toggle-row">
+          <span>{{ m.feedPreview }}</span>
+          <input type="checkbox" class="me-db-switch" data-setting="feed_preview" :checked="c.feed_preview !== false" :disabled="!editable" @change="set({ feed_preview: checked($event) ? undefined : false })">
+        </label>
+        <label class="me-db-field">
+          <span class="me-menu-label">{{ m.feedPostsPerPage }}</span>
+          <select class="me-input me-db-select" data-setting="load_limit" :value="String(c.load_limit ?? 10)" :disabled="!editable" @change="set({ load_limit: value($event) === '10' ? undefined : Number(value($event)) })">
+            <option v-for="n in [10, 25, 50, 100]" :key="n" :value="String(n)">{{ n }}</option>
+            <option value="0">{{ m.noLimit }}</option>
+          </select>
         </label>
       </template>
       <template v-if="view?.type === 'board' || view?.type === 'gallery'">
@@ -406,7 +419,7 @@ const value = (e: Event) => (e.target as HTMLSelectElement).value
         <span>{{ m.showTitle }}</span>
         <input type="checkbox" class="me-db-switch" data-setting="show_title" :checked="c.show_title !== false" :disabled="!editable" @change="set({ show_title: checked($event) ? undefined : false })">
       </label>
-      <details v-if="['table', 'board', 'gallery', 'list', 'calendar'].includes(view?.type ?? '')" class="me-db-details" data-setting="colors" :open="!!c.colors?.length">
+      <details v-if="['table', 'board', 'gallery', 'list', 'calendar', 'feed'].includes(view?.type ?? '')" class="me-db-details" data-setting="colors" :open="!!c.colors?.length">
         <summary class="me-menu-label">{{ m.conditionalColor }}<span v-if="c.colors?.length" class="me-db-menu-value">{{ c.colors.length }}</span></summary>
         <ColorRules />
       </details>

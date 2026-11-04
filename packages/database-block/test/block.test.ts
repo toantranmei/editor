@@ -93,7 +93,7 @@ describe('databaseView node', () => {
     expect(factory).toHaveBeenCalledWith('db1')
     expect(wrapper.find('.me-db-title').element).toBeInstanceOf(HTMLInputElement)
     expect((wrapper.find('.me-db-title').element as HTMLInputElement).value).toBe('Tasks')
-    expect(wrapper.findAll('.me-db-tab[role="tab"]')).toHaveLength(8)
+    expect(wrapper.findAll('.me-db-tab[role="tab"]')).toHaveLength(source.views.value.length)
     expect(wrapper.findAll('.me-db-tr').length).toBeGreaterThan(5)
 
     await wrapper.find('[data-view-id="v-board"]').trigger('click')

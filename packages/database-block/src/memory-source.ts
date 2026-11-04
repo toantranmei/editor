@@ -6,7 +6,7 @@
 import { ref } from 'vue'
 import type {
   ChartResult, DatabaseSource, DateValue, FilterCondition, FilterGroup, FilterNode, FormulaCheck, Group, Person,
-  OpenMode, PivotResult, Prop, Row, RowQuery, View, ViewConfig,
+  OpenMode, PivotResult, Prop, Row, RowPreview, RowQuery, View, ViewConfig,
 } from './types'
 import { byPosition, fold, isEmptyValue, uuidv7 } from './util'
 import { dateMs, DAY, dayMs, matchNode, startOfDay } from './match'
@@ -17,6 +17,8 @@ export interface MemoryRow extends Row {
   last_edited_time?: number
   last_edited_by?: string
   unique_id?: number
+  /** Page content preview served by `rowPreview` (feed posts, card previews). */
+  preview?: RowPreview
 }
 
 export interface MemorySourceInit {
@@ -603,6 +605,15 @@ export function createMemorySource(init: MemorySourceInit): MemorySource {
       }
       return wait(result)
     },
+    async rowPreview(ids) {
+      record('rowPreview', [ids])
+      const out: Record<string, RowPreview> = {}
+      for (const id of ids) {
+        const p = byId.get(id)?.preview
+        if (p && (p.text || p.image)) out[id] = { ...p }
+      }
+      return wait(out)
+    },
     async rowsInRange(viewId, propId, start, end, q) {
       record('rowsInRange', [viewId, propId, start, end, q])
       const prop = props.value.find(p => p.id === propId)
@@ -760,6 +771,12 @@ export function createMemorySource(init: MemorySourceInit): MemorySource {
 // ── Sample data (playground, benchmarks) ─────────────────────────────────────
 
 const WORDS = ['Kế hoạch', 'Thiết kế', 'Báo cáo', 'Roadmap', 'Sprint', 'Launch', 'Review', 'Audit', 'Migration', 'Onboarding', 'Research', 'Hiring', 'Budget', 'Landing page', 'Release', 'Bugfix', 'Workshop', 'Dashboard']
+const PREVIEWS = [
+  'Tóm tắt: chốt phạm vi, giao việc cho từng người và hẹn ngày review cho',
+  'Notes from the kickoff — goals, risks and the first milestone for',
+  'Checklist trước khi phát hành: kiểm thử, tài liệu, thông báo cho khách hàng của',
+  'Draft: what changed this week, what is blocked and who can help on',
+]
 const AREAS = ['Q4', 'mobile', 'web', 'API', 'billing', 'search', 'notes', 'editor', 'sync', 'infra']
 
 /** A task database with `count` deterministic rows and one view of each type. */
@@ -840,6 +857,7 @@ export function sampleDatabase(count: number, options: { databaseId?: string, se
       last_edited_time: base,
       last_edited_by: pick(people).id,
       unique_id: i + 1,
+      ...(i % 3 === 0 ? { preview: { text: `${PREVIEWS[i % PREVIEWS.length]} ${AREAS[i % AREAS.length]}.` } } : {}),
     }
   })
 
@@ -852,6 +870,7 @@ export function sampleDatabase(count: number, options: { databaseId?: string, se
     { id: 'v-list', name: 'List', type: 'list', position: 'a5', config: { card: { props: ['status', 'due'] } } },
     { id: 'v-chart', name: 'Chart', type: 'chart', position: 'a6', config: { chart: 'bar', x: { prop: 'status' }, y: [{ fn: 'count' }], series: 'priority', stacked: true } },
     { id: 'v-pivot', name: 'Pivot', type: 'pivot', position: 'a7', config: { rows: ['status'], cols: ['priority'], values: [{ prop: 'estimate', fn: 'sum' }], totals: true } },
+    { id: 'v-feed', name: 'Feed', type: 'feed', position: 'a8', config: { card: { props: ['status', 'owner', 'tags'] } } },
   ]
   return { databaseId: options.databaseId, meta: { title: 'Tasks', icon: '✅' }, props, views, rows, people }
 }

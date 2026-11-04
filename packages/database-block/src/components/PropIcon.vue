@@ -1,6 +1,6 @@
 <script lang="ts">
 import {
-  AlignLeft, ArrowUpRight, AtSign, Calendar, ChartColumn, ChartGantt, CircleChevronDown, CircleDot, CircleUser, ClipboardList, Clock, Fingerprint, Grid3x3, Hash, Kanban, LayoutGrid, Link, List, Paperclip, Phone, Search, Sigma, SquareCheck, Table, Type, User,
+  AlignLeft, ArrowUpRight, AtSign, Calendar, ChartColumn, ChartGantt, CircleChevronDown, CircleDot, CircleUser, ClipboardList, Clock, Fingerprint, Grid3x3, Hash, Kanban, LayoutGrid, Link, List, Paperclip, Phone, Rss, Search, Sigma, SquareCheck, Table, Type, User,
 } from '@lucide/vue'
 import type { Component } from 'vue'
 import type { PropType, ViewType } from '../types'
@@ -14,7 +14,7 @@ export const PROP_ICONS: Record<PropType, Component> = {
 
 export const VIEW_ICONS: Record<ViewType, Component> = {
   table: Table, board: Kanban, calendar: Calendar, timeline: ChartGantt, gallery: LayoutGrid, list: List,
-  chart: ChartColumn, pivot: Grid3x3, form: ClipboardList,
+  chart: ChartColumn, pivot: Grid3x3, form: ClipboardList, feed: Rss,
 }
 </script>
 

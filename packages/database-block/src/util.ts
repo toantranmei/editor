@@ -89,6 +89,7 @@ export function viewDefaults(type: ViewType, props: Prop[]): ViewConfig {
     case 'timeline': return { start_prop: first('date', 'created_time'), scale: 'day' }
     case 'gallery': return { cover: first('files'), size: 'm', card: { props: [] } }
     case 'list': return { card: { props: [] } }
+    case 'feed': return { card: { props: [] } }
     case 'chart': return { chart: 'bar', x: { prop: first('status', 'select', 'date') ?? props[0]?.id ?? '' }, y: [{ fn: 'count' }] }
     case 'pivot': return { rows: [first('status', 'select') ?? ''].filter(Boolean), cols: [], values: [{ fn: 'count' }], totals: true }
     default: return {}

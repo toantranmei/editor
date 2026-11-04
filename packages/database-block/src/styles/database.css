@@ -463,6 +463,19 @@
   .me-db-form-sent svg { width: var(--me-space-9); height: var(--me-space-9); color: var(--me-palette-green-text); }
   .me-db-calendar-grid.is-wrap-titles .me-db-event { white-space: normal; text-overflow: clip; }
   .me-db-th-info { flex: none; width: var(--me-font-size-xs); height: var(--me-font-size-xs); color: var(--me-database-faint-color); }
+  /* Feed view */
+  .me-db-feed { display: flex; flex-direction: column; gap: var(--me-space-4); max-width: calc(var(--me-database-cell-min-width) * 12); margin: var(--me-space-3) auto; }
+  .me-db-feed-new { align-self: flex-start; }
+  .me-db-post { display: flex; flex-direction: column; gap: var(--me-space-2); padding: var(--me-space-5); border: var(--me-border-width-thin) solid var(--me-database-border); border-radius: var(--me-radius-lg); cursor: pointer; }
+  .me-db-post:hover { background: var(--me-database-hover-bg); }
+  .me-db-post[data-cc] { background-color: var(--me-db-cc-bg); }
+  .me-db-post-meta { display: flex; flex-wrap: wrap; align-items: center; gap: var(--me-space-3); color: var(--me-database-muted-color); font-size: var(--me-font-size-xs); }
+  .me-db-post-title { display: flex; align-items: center; gap: var(--me-space-2); min-width: 0; font-size: var(--me-font-size-md); font-weight: var(--me-font-weight-semibold); text-align: left; }
+  .me-db-post-title > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .me-db-post-props { display: flex; flex-wrap: wrap; gap: var(--me-space-3); }
+  .me-db-post-text { display: -webkit-box; margin: 0; overflow: hidden; color: var(--me-database-muted-color); white-space: pre-wrap; -webkit-box-orient: vertical; -webkit-line-clamp: 4; line-clamp: 4; }
+  .me-db-post-image { display: block; max-width: 100%; max-height: calc(var(--me-database-cover-height) * 2); border-radius: var(--me-radius-md); object-fit: cover; }
+  .me-db-feed-end { height: var(--me-border-width-thin); }
   .me-db-kbd { color: var(--me-color-text-muted); font: inherit; font-size: var(--me-font-size-xs); }
   .me-db-open {
     position: absolute;
