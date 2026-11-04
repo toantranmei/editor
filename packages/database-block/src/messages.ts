@@ -172,6 +172,10 @@ export interface DatabaseMessages {
   formDescription: string
   formAnswer: string
   formSubmit: string
+  shareForm: string
+  shareFormHint: string
+  copyFormLink: string
+  linkCopied: string
   formSent: string
   formAgain: string
   formNoQuestions: string
@@ -459,6 +463,10 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     formDescription: 'Description (optional)',
     formAnswer: 'Your answer',
     formSubmit: 'Submit',
+    shareForm: 'Share form',
+    shareFormHint: 'Anyone with the link can answer, without signing in. Each answer adds a row.',
+    copyFormLink: 'Copy link',
+    linkCopied: 'Link copied',
     formSent: 'Thanks! Your answers were added.',
     formAgain: 'Submit another response',
     formNoQuestions: 'No questions: show properties in this view to ask them.',
@@ -742,6 +750,10 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     formDescription: 'Mô tả (không bắt buộc)',
     formAnswer: 'Câu trả lời',
     formSubmit: 'Gửi',
+    shareForm: 'Chia sẻ biểu mẫu',
+    shareFormHint: 'Ai có link đều trả lời được, không cần đăng nhập. Mỗi câu trả lời thêm một row.',
+    copyFormLink: 'Sao chép link',
+    linkCopied: 'Đã sao chép link',
     formSent: 'Cảm ơn! Câu trả lời đã được thêm.',
     formAgain: 'Gửi câu trả lời khác',
     formNoQuestions: 'Chưa có câu hỏi: hiện thuộc tính trong view này để hỏi.',
@@ -1025,6 +1037,10 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     formDescription: '描述（可选）',
     formAnswer: '你的回答',
     formSubmit: '提交',
+    shareForm: '分享表单',
+    shareFormHint: '任何拿到链接的人都能填写，无需登录。每份回答新增一行。',
+    copyFormLink: '复制链接',
+    linkCopied: '已复制链接',
     formSent: '谢谢！你的回答已添加。',
     formAgain: '再提交一份',
     formNoQuestions: '没有问题：在此视图中显示属性即可提问。',

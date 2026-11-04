@@ -153,6 +153,8 @@ export interface ViewConfig {
   /** Form: description under the title, required questions (property ids). */
   form_description?: string
   form_required?: string[]
+  /** Share form is on (the host's public link answers it): mirrors the last `source.formLink` call. */
+  form_shared?: boolean
   /** Table: draw the lines between columns (default true). */
   vertical_lines?: boolean
   /** Inline table: lines shown before "Load more" (default 50, 0 = no limit). */
@@ -289,6 +291,8 @@ export interface DatabaseSource {
   searchDatabases?: (query: string) => Promise<Array<{ id: string, title: string, icon?: string | null, path?: string }>>
   /** Properties of another database (rollup target, two-way names); without it the target id is typed. */
   propsOf?: (databaseId: string) => Promise<Prop[]>
+  /** Share form: turns the public link of a form view on or off; resolves to its URL (absent: no sharing). */
+  formLink?: (viewId: string, enabled: boolean) => Promise<{ url: string, enabled: boolean }>
   /** Checks a formula while it is typed in the property editor. */
   validateFormula?: (expression: string) => Promise<FormulaCheck> | FormulaCheck
   /**

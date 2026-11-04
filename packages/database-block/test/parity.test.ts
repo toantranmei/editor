@@ -176,3 +176,38 @@ describe('helpers', () => {
     expect(switchLayout({ ...v, config: { sorts: [{ prop: 'due', dir: 'asc' }] } }, 'calendar', props)).toEqual({ date_prop: 'due', sorts: [{ prop: 'due', dir: 'asc' }] })
   })
 })
+
+describe('share form', () => {
+  it('turns the public link on through source.formLink, shows it and remembers the switch', async () => {
+    const source = createMemorySource(sampleDatabase(5, { databaseId: 'db1' }))
+    source.upsertView({ id: 'v-form', name: 'Sign up', type: 'form', position: 'z0', config: {} })
+    const formLink = vi.fn(async (viewId: string, enabled: boolean) => ({ url: `https://x.test/notes/f/${viewId}`, enabled }))
+    Object.assign(source, { formLink })
+    const wrapper = mount({ render: () => h(DatabaseView, { source, databaseId: 'db1', viewId: 'v-form', locale: 'en' }) }, { attachTo: document.body })
+    wrappers.push(wrapper)
+    await settle()
+    const toggle = wrapper.find<HTMLInputElement>('[data-form-shared]')
+    expect(toggle.element.checked).toBe(false)
+    toggle.element.checked = true
+    await toggle.trigger('change')
+    await settle()
+    expect(formLink).toHaveBeenCalledWith('v-form', true)
+    expect(wrapper.find<HTMLInputElement>('[data-form-url]').element.value).toBe('https://x.test/notes/f/v-form')
+    expect(view(source, 'v-form').config.form_shared).toBe(true)
+    const off = wrapper.find<HTMLInputElement>('[data-form-shared]')
+    off.element.checked = false
+    await off.trigger('change')
+    await settle()
+    expect(formLink).toHaveBeenLastCalledWith('v-form', false)
+    expect(view(source, 'v-form').config.form_shared).toBeUndefined()
+  })
+
+  it('has no share section when the source cannot share', async () => {
+    const source = createMemorySource(sampleDatabase(5, { databaseId: 'db1' }))
+    source.upsertView({ id: 'v-form', name: 'Sign up', type: 'form', position: 'z0', config: {} })
+    const wrapper = mount({ render: () => h(DatabaseView, { source, databaseId: 'db1', viewId: 'v-form', locale: 'en' }) }, { attachTo: document.body })
+    wrappers.push(wrapper)
+    await settle()
+    expect(wrapper.find('[data-form-share]').exists()).toBe(false)
+  })
+})

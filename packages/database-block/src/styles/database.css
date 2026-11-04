@@ -453,6 +453,8 @@
   .me-db-form { display: flex; flex-direction: column; gap: var(--me-space-5); max-width: calc(var(--me-database-cell-min-width) * 6); margin: var(--me-space-5) auto; }
   .me-db-form-title { margin: 0; font-size: var(--me-database-title-size); }
   .me-db-form-desc { min-height: calc(var(--me-space-9) + var(--me-space-5)); resize: vertical; }
+  .me-db-form-share { display: grid; gap: var(--me-space-2); padding: var(--me-space-3); border: var(--me-border-width) solid var(--me-database-border-color); border-radius: var(--me-radius-md); }
+  .me-db-form-share svg { width: var(--me-icon-size-sm); height: var(--me-icon-size-sm); vertical-align: middle; }
   .me-db-form-desc-text { margin: 0; color: var(--me-database-muted-color); white-space: pre-wrap; }
   .me-db-form-q { display: flex; flex-direction: column; gap: var(--me-space-2); padding: var(--me-space-5); border: var(--me-border-width-thin) solid var(--me-database-border); border-radius: var(--me-radius-lg); }
   .me-db-form-q.is-missing { border-color: var(--me-palette-red-text); }

@@ -4,7 +4,7 @@
  * property visibility and order), required questions (`config.form_required`), and Submit, which creates a row
  * with the answers. Editors see "Edit form" hints; anyone who can add rows can fill it in.
  */
-import { CheckCircle2 } from '@lucide/vue'
+import { CheckCircle2, Link2 } from '@lucide/vue'
 import { computed, reactive, ref } from 'vue'
 import { useDb } from '../context'
 import type { Prop } from '../types'
@@ -21,6 +21,34 @@ const answers = reactive<Record<string, unknown>>({})
 const missing = ref<Set<string>>(new Set())
 const sent = ref(false)
 const editable = computed(() => db.canEditStructure.value)
+
+// Share form: the host's public link (source.formLink); the switch mirrors `config.form_shared`.
+const canShare = computed(() => editable.value && !!db.source.formLink && !!db.view.value)
+const shared = computed(() => !!c.value.form_shared)
+const shareUrl = ref('')
+const copied = ref(false)
+async function setShared(on: boolean) {
+  const view = db.view.value
+  if (!view || !db.source.formLink) return
+  try {
+    const link = await db.source.formLink(view.id, on)
+    shareUrl.value = link.enabled ? link.url : ''
+    db.updateView({ form_shared: link.enabled || undefined })
+  }
+  catch (error) {
+    db.report(error)
+  }
+}
+async function copyLink() {
+  if (!shareUrl.value) await setShared(true)
+  if (!shareUrl.value) return
+  try {
+    await navigator.clipboard.writeText(shareUrl.value)
+    copied.value = true
+    setTimeout(() => (copied.value = false), 1500)
+  }
+  catch {}
+}
 
 function toggleRequired(p: Prop) {
   const set = new Set(required.value)
@@ -65,6 +93,17 @@ function submit() {
       <button type="button" class="me-btn" data-form-again @click="sent = false">{{ m.formAgain }}</button>
     </div>
     <template v-else>
+      <div v-if="canShare" class="me-db-form-share" data-form-share>
+        <label class="me-db-toggle-row">
+          <span><Link2 /> {{ m.shareForm }}</span>
+          <input type="checkbox" class="me-db-switch" :checked="shared" data-form-shared @change="setShared(($event.target as HTMLInputElement).checked)">
+        </label>
+        <p class="me-db-hint">{{ m.shareFormHint }}</p>
+        <div v-if="shared" class="me-db-row">
+          <input v-if="shareUrl" class="me-input" readonly :value="shareUrl" :aria-label="m.shareForm" data-form-url>
+          <button type="button" class="me-btn" data-form-copy @click="copyLink">{{ copied ? m.linkCopied : m.copyFormLink }}</button>
+        </div>
+      </div>
       <h3 class="me-db-form-title">{{ db.view.value?.name }}</h3>
       <textarea
         v-if="editable"
