@@ -12,6 +12,7 @@ afterEach(() => {
   for (const w of wrappers.splice(0)) w.unmount()
   for (const e of editors.splice(0)) e.destroy()
   document.body.innerHTML = ''
+  localStorage.clear()
 })
 const settle = async () => {
   for (let i = 0; i < 6; i++) {

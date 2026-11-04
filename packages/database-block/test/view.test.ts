@@ -12,6 +12,7 @@ const wrappers: VueWrapper[] = []
 afterEach(() => {
   for (const w of wrappers.splice(0)) w.unmount()
   document.body.innerHTML = ''
+  localStorage.clear()
 })
 
 const settle = async () => {
@@ -444,5 +445,59 @@ describe('other views', () => {
     await wrapper.find('[data-widget-id="w-priority"] [data-widget-earlier]').trigger('click')
     await settle()
     expect(ids()).toEqual(['w-open', 'w-count', 'w-priority', 'w-status'])
+  })
+
+  it('drafts: the viewer\'s unsaved filter / sorts survive a reload (localStorage by default), Save / Reset clear them', async () => {
+    type Exposed = { db: { updateView: (p: object) => void, draft: { value: unknown }, resetDraft: () => void, saveDraft: () => void } }
+    const mountOnce = (options: object = {}) => {
+      const source = createMemorySource(sampleDatabase(50, { databaseId: 'db1' }))
+      const wrapper = mount({ render: () => h(DatabaseView, { source, databaseId: 'db1', viewId: 'v-table', locale: 'en', options: { userId: 'u1', ...options } }) }, { attachTo: document.body })
+      wrappers.push(wrapper)
+      return { source, wrapper, db: () => (wrapper.findComponent(DatabaseView).vm as unknown as Exposed).db }
+    }
+    const filter = { and: [{ prop: 'estimate', op: '>=', value: 7 }] }
+    const first = mountOnce()
+    await settle()
+    first.db().updateView({ filter, sorts: [{ prop: 'estimate', dir: 'desc' }] })
+    await settle()
+    expect(JSON.parse(localStorage.getItem('mei-db-draft:u1:db1:v-table')!)).toEqual({ filter, sorts: [{ prop: 'estimate', dir: 'desc' }] })
+    first.wrapper.unmount()
+
+    // A new session: the draft is back, the rows query uses it, the saved view is untouched.
+    const second = mountOnce()
+    await settle()
+    expect(second.db().draft.value).toEqual({ filter, sorts: [{ prop: 'estimate', dir: 'desc' }] })
+    expect(second.wrapper.find('[data-draft-reset]').exists()).toBe(true)
+    const q = second.source.log.filter(l => l.method === 'rows').at(-1)!.args[2] as { filter?: unknown }
+    expect(q.filter).toEqual(filter)
+    expect(second.source.views.value.find(v => v.id === 'v-table')!.config.filter).toBeUndefined()
+    await second.wrapper.find('[data-draft-reset]').trigger('click')
+    await settle()
+    expect(localStorage.getItem('mei-db-draft:u1:db1:v-table')).toBeNull()
+
+    // Save for everyone writes the view and clears the stored draft.
+    second.db().updateView({ filter })
+    await settle()
+    expect(localStorage.getItem('mei-db-draft:u1:db1:v-table')).not.toBeNull()
+    await second.wrapper.find('[data-draft-save]').trigger('click')
+    await settle()
+    expect(localStorage.getItem('mei-db-draft:u1:db1:v-table')).toBeNull()
+    expect(second.source.views.value.find(v => v.id === 'v-table')!.config.filter).toEqual(filter)
+
+    // A custom store is used instead; `false` keeps drafts in memory only.
+    const calls: Array<[string, string, unknown]> = []
+    const custom = mountOnce({ draftStore: { get: (id: string) => (calls.push(['get', id, null]), null), set: (id: string, d: unknown) => calls.push(['set', id, d]) } })
+    await settle()
+    custom.db().updateView({ sorts: [{ prop: 'due', dir: 'asc' }] })
+    await settle()
+    expect(calls[0]).toEqual(['get', 'v-table', null])
+    expect(calls.at(-1)).toEqual(['set', 'v-table', { sorts: [{ prop: 'due', dir: 'asc' }] }])
+    localStorage.clear()
+    const off = mountOnce({ draftStore: false })
+    await settle()
+    off.db().updateView({ sorts: [{ prop: 'due', dir: 'asc' }] })
+    await settle()
+    expect(localStorage.length).toBe(0)
+    expect(off.db().draft.value).toEqual({ sorts: [{ prop: 'due', dir: 'asc' }] })
   })
 })

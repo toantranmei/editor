@@ -349,6 +349,18 @@ export interface RowPreview { text?: string, image?: string }
 
 // ── Block options ─────────────────────────────────────────────────────────────
 
+/** A viewer's unsaved filter / sorts of a view (`filter: null` = the saved filter turned off). */
+export interface ViewDraft { filter?: FilterGroup | null, sorts?: Sort[] }
+
+/**
+ * Where viewers' drafts live between sessions (`DatabaseBlockOptions.draftStore`). `get` is read when a view opens,
+ * `set` on every change (`null` after Save / Reset). `databaseId` is passed too, for stores shared by databases.
+ */
+export interface DraftStore {
+  get: (viewId: string, databaseId?: string) => ViewDraft | null
+  set: (viewId: string, draft: ViewDraft | null, databaseId?: string) => void
+}
+
 export type DatabaseKind = 'inline' | 'full_page'
 
 export interface DatabaseBlockOptions {
@@ -367,6 +379,13 @@ export interface DatabaseBlockOptions {
   viewUrl?: ((databaseId: string, viewId: string) => string) | null
   /** Link to a row (Copy link in the row menu). Without it the menu has no Copy link. */
   rowUrl?: ((databaseId: string, rowId: string) => string) | null
+  /**
+   * Keeps each viewer's unsaved filter / sorts across sessions. Default: `localStorage`, per `userId`, database and
+   * view (`localDraftStore`). `false`: drafts last for the session only.
+   */
+  draftStore?: DraftStore | false | null
+  /** The signed-in user, to keep drafts of different users on one browser apart. */
+  userId?: string | null
   /** Called when `createDatabase` or a source call fails. Default: `console.error`. */
   onError?: ((error: unknown) => void) | null
   /** Override any string, per locale. */

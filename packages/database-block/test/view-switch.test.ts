@@ -11,6 +11,7 @@ const wrappers: VueWrapper[] = []
 afterEach(() => {
   for (const w of wrappers.splice(0)) w.unmount()
   document.body.innerHTML = ''
+  localStorage.clear()
 })
 
 const settle = async () => {

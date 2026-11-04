@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   defaultCondition, displayText, isLossyChange, navigate, normalizeFilter, opsFor, parseDateText, parseNumber,
   parseText, parseTsv, toTsv, valueInput, withOp, type Prop,
@@ -8,6 +8,7 @@ import { RowStore } from '../src/row-store'
 import { duplicateRows, positionAfter, uuidv7 } from '../src/util'
 import { colorsOf } from '../src/colors'
 import { withHistory } from '../src/history'
+import { draftKey, localDraftStore, parseDraft } from '../src/drafts'
 
 const p = (type: Prop['type'], config?: Prop['config'], id = type): Prop => ({ id, name: id, type, position: 'a0', config })
 const flush = () => new Promise(r => setTimeout(r, 0))
@@ -270,5 +271,31 @@ describe('RowStore', () => {
     expect(windows()).toEqual([{ offset: 5000, limit: 100 }])
     expect(store.rowAt(0, 5045)?.values.name).toBe('Changed')
     store.destroy()
+  })
+})
+
+describe('draft store', () => {
+  it('keeps drafts in localStorage per user, database and view; ignores junk and storage errors', () => {
+    localStorage.clear()
+    const a = localDraftStore('u1')
+    const b = localDraftStore('u2')
+    const d = { filter: { and: [{ prop: 'estimate', op: '>' as const, value: 3 }] }, sorts: [{ prop: 'due', dir: 'desc' as const }] }
+    a.set('v1', d, 'db1')
+    expect(JSON.parse(localStorage.getItem(draftKey('db1', 'v1', 'u1'))!)).toEqual(d)
+    expect(a.get('v1', 'db1')).toEqual(d)
+    expect(b.get('v1', 'db1')).toBeNull()
+    expect(a.get('v1', 'db2')).toBeNull()
+    a.set('v2', { filter: null }, 'db1')
+    expect(a.get('v2', 'db1')).toEqual({ filter: null })
+    a.set('v1', null, 'db1')
+    expect(localStorage.getItem(draftKey('db1', 'v1', 'u1'))).toBeNull()
+    localStorage.setItem(draftKey('db1', 'v3', 'u1'), '{not json')
+    expect(a.get('v3', 'db1')).toBeNull()
+    expect(parseDraft({ sorts: 'x' })).toBeNull()
+    expect(parseDraft({ filter: { nope: 1 }, sorts: [{ prop: 'a', dir: 'up' }, { prop: 'b', dir: 'asc' }] })).toEqual({ sorts: [{ prop: 'b', dir: 'asc' }] })
+    const spy = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('quota') })
+    expect(() => a.set('v4', d, 'db1')).not.toThrow()
+    spy.mockRestore()
+    localStorage.clear()
   })
 })
