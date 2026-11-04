@@ -1,6 +1,6 @@
 {
   "name": "@toantranmei/chart-block",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Chart block and database chart component (ECharts, lazy-loaded) for @toantranmei/editor.",
   "keywords": [
     "vue",
@@ -54,7 +54,7 @@
     "@tiptap/core": "3.32.0",
     "@tiptap/pm": "3.32.0",
     "@tiptap/vue-3": "3.32.0",
-    "@toantranmei/editor": "^0.3.0",
+    "@toantranmei/editor": "^0.4.0",
     "vue": "^3.5.0"
   },
   "dependencies": {
