@@ -117,7 +117,19 @@ export type FilterNode = FilterCondition | FilterGroup
  * A row template (New ▾): property values a new row starts with. Kept in the title property's
  * `config.templates` (database-wide, synced with the schema); `default` is used by "New".
  */
-export interface RowTemplate { id: string, name: string, values: Record<string, unknown>, default?: boolean }
+/**
+ * A row template. `body_from`: the row whose page content new rows get (`source.copyRowBody`). `repeat`: the host makes
+ * a row from it every day / week / month from `start` (RFC 3339), as `by` (Notion's "Duplicate every…").
+ */
+export interface RowTemplate {
+  id: string
+  name: string
+  values: Record<string, unknown>
+  default?: boolean
+  body_from?: string
+  repeat?: { every: TemplateRepeat, start: string, by?: string }
+}
+export type TemplateRepeat = 'day' | 'week' | 'month'
 
 // ── Buttons and automations ───────────────────────────────────────────────────
 
@@ -416,6 +428,8 @@ export interface DatabaseSource {
   propsOf?: (databaseId: string) => Promise<Prop[]>
   /** Share form: turns the public link of a form view on or off; resolves to its URL (absent: no sharing). */
   formLink?: (viewId: string, enabled: boolean) => Promise<{ url: string, enabled: boolean }>
+  /** Template page content: copy row `from`'s page into the new (empty) row `to`. */
+  copyRowBody?: (from: string, to: string) => Promise<void>
   /** Checks a formula while it is typed in the property editor. */
   validateFormula?: (expression: string) => Promise<FormulaCheck> | FormulaCheck
   /**

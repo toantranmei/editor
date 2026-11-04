@@ -738,6 +738,13 @@ export function createMemorySource(init: MemorySourceInit): MemorySource {
       return wait(dbId === databaseId ? props.value : [])
     },
     currentUserId: () => userId,
+    async copyRowBody(from, to) {
+      record('copyRowBody', [from, to])
+      const p = byId.get(from)?.preview
+      const r = byId.get(to)
+      if (p && r) r.preview = { ...p }
+      await wait(undefined)
+    },
     async people(q) {
       record('people', [q])
       const f = fold(q)

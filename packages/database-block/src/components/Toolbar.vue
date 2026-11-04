@@ -4,11 +4,11 @@
  * buttons (a label shows next to an active filter / sort while there is room), then the "New" split button (main
  * part adds a row, the chevron opens "add to top / bottom" and "Open pages in").
  */
-import { ArrowDownToLine, ArrowUpDown, ArrowUpToLine, Check, ChevronDown, Ellipsis, FileText, Group, ListFilter, Lock, Search, SlidersHorizontal, Star, Trash2 } from '@lucide/vue'
+import { ArrowDownToLine, ArrowUpDown, ArrowUpToLine, Check, ChevronDown, Ellipsis, FileText, Group, ListFilter, Lock, Repeat, Search, SlidersHorizontal, Star, Trash2 } from '@lucide/vue'
 import { computed, ref, shallowRef, watch } from 'vue'
 import { useDb } from '../context'
 import { countConditions } from '../filters'
-import type { OpenMode } from '../types'
+import type { OpenMode, RowTemplate, TemplateRepeat } from '../types'
 import DbPopover from './DbPopover.vue'
 import FilterBuilder from './FilterBuilder.vue'
 import OpenModeIcon from './OpenModeIcon.vue'
@@ -61,6 +61,20 @@ const panelLabel = computed(() => {
   if (!p) return undefined
   return p === 'settings' ? m.value.viewOptions : p === 'new' ? m.value.newRowOptions : m.value[p]
 })
+
+/** "Duplicate every…": from the next 9:00 (local), as the current user; '' stops it. */
+function setRepeat(t: RowTemplate, every: TemplateRepeat | '') {
+  const next = { ...t }
+  if (!every) delete next.repeat
+  else {
+    const start = new Date()
+    if (start.getHours() >= 9) start.setDate(start.getDate() + 1)
+    start.setHours(9, 0, 0, 0)
+    next.repeat = { every, start: start.toISOString(), by: db.source.currentUserId?.() ?? undefined }
+  }
+  db.saveTemplates(db.templates.value.map(x => (x.id === t.id ? next : x)))
+}
+const REPEATS: TemplateRepeat[] = ['day', 'week', 'month']
 </script>
 
 <template>
@@ -126,6 +140,13 @@ const panelLabel = computed(() => {
           <span v-if="t.default" class="me-db-menu-value" data-template-default>{{ m.defaultBadge }}</span>
           <template v-if="db.canEditStructure.value">
             <button type="button" class="me-db-icon-button" :aria-label="m.setAsDefault" :title="m.setAsDefault" data-template-set-default @click="db.saveTemplates(db.templates.value.map(x => ({ ...x, default: x.id === t.id ? !t.default : false })))"><Star /></button>
+            <label class="me-db-template-repeat" :title="m.repeatTemplate">
+              <Repeat class="me-db-menu-icon" :class="{ 'is-on': !!t.repeat }" />
+              <select class="me-input me-db-select" :value="t.repeat?.every ?? ''" :aria-label="m.repeatTemplate" data-template-repeat @change="setRepeat(t, ($event.target as HTMLSelectElement).value as TemplateRepeat | '')">
+                <option value="">{{ m.repeatNever }}</option>
+                <option v-for="r in REPEATS" :key="r" :value="r">{{ m.repeats[r] }}</option>
+              </select>
+            </label>
             <button type="button" class="me-db-icon-button" :aria-label="m.deleteTemplate" :title="m.deleteTemplate" data-template-delete @click="db.saveTemplates(db.templates.value.filter(x => x.id !== t.id))"><Trash2 /></button>
           </template>
         </div>

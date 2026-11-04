@@ -257,6 +257,9 @@ export interface DatabaseMessages {
   templatesHint: string
   saveAsTemplate: string
   deleteTemplate: string
+  repeatTemplate: string
+  repeatNever: string
+  repeats: Record<string, string>
   onePerson: string
   oneFile: string
   searchDatabases: string
@@ -584,6 +587,9 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     templatesHint: "No templates yet. Use a row's menu → Save as template.",
     saveAsTemplate: 'Save as template',
     deleteTemplate: 'Delete template',
+    repeatTemplate: 'Duplicate every…',
+    repeatNever: 'Do not repeat',
+    repeats: { day: 'Every day', week: 'Every week', month: 'Every month' },
     onePerson: '1 person',
     oneFile: '1 file',
     searchDatabases: 'Search databases…',
@@ -933,6 +939,9 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     templatesHint: 'Chưa có mẫu. Dùng menu của một row → Lưu làm mẫu.',
     saveAsTemplate: 'Lưu làm mẫu',
     deleteTemplate: 'Xoá mẫu',
+    repeatTemplate: 'Tạo lặp lại',
+    repeatNever: 'Không lặp',
+    repeats: { day: 'Mỗi ngày', week: 'Mỗi tuần', month: 'Mỗi tháng' },
     onePerson: '1 người',
     oneFile: '1 tệp',
     searchDatabases: 'Tìm database…',
@@ -1282,6 +1291,9 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     templatesHint: '还没有模板。使用行菜单 → 另存为模板。',
     saveAsTemplate: '另存为模板',
     deleteTemplate: '删除模板',
+    repeatTemplate: '定期复制',
+    repeatNever: '不重复',
+    repeats: { day: '每天', week: '每周', month: '每月' },
     onePerson: '1 人',
     oneFile: '1 个文件',
     searchDatabases: '搜索数据库…',

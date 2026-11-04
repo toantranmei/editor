@@ -49,7 +49,7 @@ async function copyLink() {
   emit('close')
 }
 
-/** The row's writable values become a template ("New ▾ → Templates"), named after its title. */
+/** The row's writable values become a template ("New ▾ → Templates"), named after its title; its page is the template's page. */
 function saveTemplate() {
   const row = single.value
   if (!row) return
@@ -57,7 +57,7 @@ function saveTemplate() {
   const title = db.props.value.find(p => p.type === 'title')
   const values = Object.fromEntries(Object.entries(row.values).filter(([k, v]) => keep.has(k) && k !== title?.id && v !== null && v !== undefined))
   const name = (title && String(row.values[title.id] ?? '').trim()) || m.value.untitled
-  db.saveTemplates([...db.templates.value, { id: uuidv7(), name, values }])
+  db.saveTemplates([...db.templates.value, { id: uuidv7(), name, values, body_from: row.id }])
   emit('close')
 }
 function remove() {

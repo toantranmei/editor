@@ -373,7 +373,12 @@ export function createContext(input: {
     },
     createRow(init = {}, opts = {}) {
       const values = initValues(init.values, opts.template)
-      return source.createRow(Object.keys(values).length || init.values ? { ...init, values } : init)
+      const id = source.createRow(Object.keys(values).length || init.values ? { ...init, values } : init)
+      // The template's page content follows (host side: the new row's page is still empty).
+      const list = props.value.find(p => p.type === 'title')?.config?.templates ?? []
+      const tpl = opts.template === false ? undefined : list.find(t => (opts.template ? t.id === opts.template : t.default))
+      if (tpl?.body_from && tpl.body_from !== id && source.copyRowBody) source.copyRowBody(tpl.body_from, id).catch(report)
+      return id
     },
     templates: computed(() => props.value.find(p => p.type === 'title')?.config?.templates ?? []),
     saveTemplates(list) {

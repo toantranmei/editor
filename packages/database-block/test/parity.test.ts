@@ -212,3 +212,34 @@ describe('share form', () => {
     expect(wrapper.find('[data-form-share]').exists()).toBe(false)
   })
 })
+
+describe('templates', () => {
+  it('copy the template page into a new row and repeat every week as the current user', async () => {
+    const source = createMemorySource(sampleDatabase(5, { databaseId: 'db1' }))
+    const title = source.props.value.find(p => p.type === 'title')!
+    const first = (await source.rows('v-table', { offset: 0, limit: 1 })).rows[0]!.id
+    source.upsertProp({ ...title, config: { ...title.config, templates: [{ id: 't1', name: 'Weekly', values: {}, default: true, body_from: first }] } })
+    const copyRowBody = vi.fn(async () => {})
+    Object.assign(source, { copyRowBody, currentUserId: () => 'u9' })
+    const wrapper = mount({ render: () => h(DatabaseView, { source, databaseId: 'db1', viewId: 'v-table', locale: 'en' }) }, { attachTo: document.body })
+    wrappers.push(wrapper)
+    await settle()
+    const db = (wrapper.findComponent(DatabaseView).vm as unknown as { db: { createRow: (i?: object, o?: object) => string } }).db
+    const id = db.createRow({})
+    await settle()
+    expect(copyRowBody).toHaveBeenCalledWith(first, id)
+    // without a template: nothing to copy
+    db.createRow({}, { template: false })
+    expect(copyRowBody).toHaveBeenCalledTimes(1)
+
+    await wrapper.find('[data-tool="new-more"]').trigger('click')
+    await settle()
+    const select = document.body.querySelector<HTMLSelectElement>('[data-template-repeat]')!
+    select.value = 'week'
+    select.dispatchEvent(new Event('change'))
+    await settle()
+    const saved = source.props.value.find(p => p.type === 'title')!.config!.templates![0]!
+    expect(saved.repeat).toMatchObject({ every: 'week', by: 'u9' })
+    expect(new Date(saved.repeat!.start).getHours()).toBe(9)
+  })
+})
