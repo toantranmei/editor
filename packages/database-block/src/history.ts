@@ -30,6 +30,17 @@ export function withHistory(inner: DatabaseSource): History {
   const canRedo = ref(false)
   let open: Step | null = null
   let replaying = false
+  // A row brought back as a new row (redo of a create, undo of a delete without `restoreRows`) has a new id: later
+  // steps still name the old one, so every closure resolves ids through this map.
+  const alias = new Map<string, string>()
+  const resolve = (id: string) => {
+    let at = id
+    for (let i = 0; i < 100 && alias.has(at); i++) at = alias.get(at)!
+    return at
+  }
+  const again = (old: string, created: string) => {
+    if (created !== old) alias.set(old, created)
+  }
   let holding = 0
 
   const sync = () => {
@@ -65,6 +76,15 @@ export function withHistory(inner: DatabaseSource): History {
     }
     return best?.id ?? null
   }
+  /** The cached row right after `r`; null = last. */
+  function nextOf(r: Row, skip: Set<string>): string | null {
+    let best: Row | null = null
+    for (const x of cache.values()) {
+      if (skip.has(x.id) || !x.position || !r.position || x.position <= r.position) continue
+      if (!best || x.position < best.position) best = x
+    }
+    return best?.id ?? null
+  }
   const patchCache = (id: string, propId: string, value: unknown) => {
     const r = cache.get(id)
     if (r) cache.set(id, { ...r, values: { ...r.values, [propId]: value } })
@@ -88,18 +108,20 @@ export function withHistory(inner: DatabaseSource): History {
       inner.setCell(rowId, propId, value)
       patchCache(rowId, propId, value)
       record(() => {
-        inner.setCell(rowId, propId, before)
-        patchCache(rowId, propId, before)
+        inner.setCell(resolve(rowId), propId, before)
+        patchCache(resolve(rowId), propId, before)
       }, () => {
-        inner.setCell(rowId, propId, value)
-        patchCache(rowId, propId, value)
+        inner.setCell(resolve(rowId), propId, value)
+        patchCache(resolve(rowId), propId, value)
       })
     },
     createRow(init) {
-      let id = inner.createRow(init)
+      const id = inner.createRow(init)
       cache.set(id, { id, position: '', values: { ...init?.values } })
-      record(() => inner.deleteRows([id]), () => {
-        id = inner.createRow(init)
+      record(() => inner.deleteRows([resolve(id)]), () => {
+        // Same id when the source can restore it, else a new row that later steps follow through `alias`.
+        if (inner.restoreRows) inner.restoreRows([resolve(id)])
+        else again(resolve(id), inner.createRow(init && { ...init, after: init.after ? resolve(init.after) : init.after }))
       })
       return id
     },
@@ -108,17 +130,19 @@ export function withHistory(inner: DatabaseSource): History {
       // Each row with the (kept) row before it, so it comes back in its place.
       const rows = ids.map(id => cache.get(id)).filter((r): r is Row => !!r).map(r => ({ row: r, after: previousOf(r, gone) }))
       inner.deleteRows(ids)
-      let restored = ids
       record(() => {
-        if (inner.restoreRows) inner.restoreRows(ids)
-        else restored = rows.map(({ row, after }) => inner.createRow({ values: row.values, after }))
-      }, () => inner.deleteRows(inner.restoreRows ? ids : restored))
+        if (inner.restoreRows) inner.restoreRows(ids.map(resolve))
+        else for (const { row, after } of rows) again(resolve(row.id), inner.createRow({ values: row.values, after: after && resolve(after) }))
+      }, () => inner.deleteRows(ids.map(resolve)))
     },
     moveRow(rowId, after, before) {
       const r = cache.get(rowId)
+      // Both neighbours: a host placing a row "after prev" alone could land it past the next row.
       const prev = r ? previousOf(r, new Set([rowId])) : null
+      const next = r ? nextOf(r, new Set([rowId])) : null
       inner.moveRow(rowId, after, before)
-      record(() => inner.moveRow(rowId, prev, null), () => inner.moveRow(rowId, after, before))
+      const opt = (id: string | null | undefined) => (id ? resolve(id) : id ?? null)
+      record(() => inner.moveRow(resolve(rowId), opt(prev), opt(next)), () => inner.moveRow(resolve(rowId), opt(after), opt(before)))
     },
   }
 

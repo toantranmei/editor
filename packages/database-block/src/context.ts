@@ -378,7 +378,8 @@ export function createContext(input: {
     templates: computed(() => props.value.find(p => p.type === 'title')?.config?.templates ?? []),
     saveTemplates(list) {
       const title = props.value.find(p => p.type === 'title')
-      if (!title || !(input.editable() && source.canEditStructure.value)) return
+      // A prop upsert: refused while locked (as the server does).
+      if (!title || !(input.editable() && source.canEditStructure.value) || source.meta.value?.locked) return
       const config = { ...title.config }
       if (list.length) config.templates = list
       else delete config.templates
@@ -387,7 +388,8 @@ export function createContext(input: {
     automations: automationList,
     saveAutomations(list) {
       const title = props.value.find(p => p.type === 'title')
-      if (!title || !(input.editable() && source.canEditStructure.value)) return
+      // A prop upsert: refused while locked (as the server does).
+      if (!title || !(input.editable() && source.canEditStructure.value) || source.meta.value?.locked) return
       const config = { ...title.config }
       if (list.length) config.automations = list
       else delete config.automations

@@ -408,3 +408,50 @@ describe('date reminders', () => {
     expect(withRemind({ start: '2026-11-10', remind: '1d', remind_at: 'x' }, '')).toEqual({ start: '2026-11-10' })
   })
 })
+
+describe('history across re-created rows', () => {
+  const flush = () => new Promise(r => setTimeout(r, 0))
+  it('redo of a created row keeps the writes made to it afterwards', async () => {
+    const { withHistory } = await import('../src/history')
+    const inner = createMemorySource(sampleDatabase(2))
+    const h = withHistory(inner)
+    const view = inner.views.value[0]!
+    const title = inner.props.value.find(x => x.type === 'title')!
+    const id = h.source.createRow({ values: {} })
+    await flush()
+    h.source.setCell(id, title.id, 'Typed')
+    await flush()
+    h.undo()
+    h.undo()
+    h.redo()
+    h.redo()
+    await flush()
+    const { rows } = await inner.rows(view.id, { offset: 0, limit: 10 })
+    expect(rows.map(r => r.values[title.id])).toContain('Typed')
+    expect(rows).toHaveLength(3)
+    // and undoing again removes the re-created row (its new id)
+    h.undo()
+    h.undo()
+    expect((await inner.rows(view.id, { offset: 0, limit: 10 })).rows).toHaveLength(2)
+  })
+
+  it('undo of moves puts rows back in their order', async () => {
+    const { withHistory } = await import('../src/history')
+    const inner = createMemorySource(sampleDatabase(4))
+    const h = withHistory(inner)
+    const view = inner.views.value[0]!
+    let { rows } = await h.source.rows(view.id, { offset: 0, limit: 10 })
+    const before = rows.map(r => r.id)
+    h.source.moveRow(rows[0]!.id, rows[3]!.id, null)
+    await flush()
+    rows = (await h.source.rows(view.id, { offset: 0, limit: 10 })).rows
+    h.source.moveRow(rows[1]!.id, rows[3]!.id, null)
+    await flush()
+    h.undo()
+    await flush()
+    await h.source.rows(view.id, { offset: 0, limit: 10 })
+    h.undo()
+    await flush()
+    expect((await inner.rows(view.id, { offset: 0, limit: 10 })).rows.map(r => r.id)).toEqual(before)
+  })
+})
