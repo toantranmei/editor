@@ -1,8 +1,9 @@
 import { computed, type ComputedRef, inject, type InjectionKey, reactive, type Ref, ref, shallowReactive, watch } from 'vue'
 import type { DatabaseMessages } from './messages'
-import type { Automation, DatabaseBlockOptions, DatabaseSource, FilterGroup, OpenMode, Prop, Row, RowQuery, RowTemplate, Sort, View, ViewConfig } from './types'
+import type { Automation, DatabaseBlockOptions, DatabaseSource, FilterGroup, OpenMode, Prop, Row, RowQuery, RowTemplate, Sort, View, ViewConfig, ViewDraft } from './types'
 import { type ActionEnv, runActions, runActionsNow, triggered, type TriggerEvent } from './actions'
 import { colorsOf, type RowColors } from './colors'
+import { localDraftStore } from './drafts'
 import { withHistory } from './history'
 import { normalizeFilter } from './filters'
 import type { ValueContext } from './values'
@@ -194,8 +195,26 @@ export function createContext(input: {
   }
   const views = computed(() => [...source.views.value].sort(byPosition))
   const saved = computed(() => views.value.find(v => v.id === input.viewId()) ?? views.value[0])
-  // Unsaved filter / sorts per view id (this viewer, this session).
-  const drafts = ref<Record<string, { filter?: FilterGroup | null, sorts?: Sort[] }>>({})
+  const report = (error: unknown) => (input.options.onError ? input.options.onError(error) : console.error('[database-block]', error))
+  // Unsaved filter / sorts per view id (this viewer), kept across sessions by the draft store.
+  const drafts = ref<Record<string, ViewDraft>>({})
+  const store = input.options.draftStore === false ? null : input.options.draftStore ?? localDraftStore(input.options.userId)
+  /** Sets (or drops, `null`) a view's draft, here and in the store. */
+  const setDraft = (viewId: string, d: ViewDraft | null) => {
+    if (d) drafts.value = { ...drafts.value, [viewId]: d }
+    else if (viewId in drafts.value) {
+      const { [viewId]: _, ...rest } = drafts.value
+      drafts.value = rest
+    }
+    try {
+      store?.set(viewId, d, input.databaseId)
+    }
+    catch (error) {
+      report(error)
+    }
+  }
+  // A view's stored draft comes back the first time it opens in this session.
+  const loaded = new Set<string>()
   const draft = computed(() => (saved.value ? drafts.value[saved.value.id] ?? null : null))
   /** The saved view with the viewer's draft on top: what every component reads. */
   const view = computed<View | undefined>(() => {
@@ -210,6 +229,18 @@ export function createContext(input: {
     if (d.sorts) config.sorts = d.sorts
     return { ...v, config }
   })
+  watch(() => saved.value?.id, (id) => {
+    if (!id || loaded.has(id) || !store) return
+    loaded.add(id)
+    if (id in drafts.value) return
+    try {
+      const d = store.get(id, input.databaseId)
+      if (d) drafts.value = { ...drafts.value, [id]: d }
+    }
+    catch (error) {
+      report(error)
+    }
+  }, { immediate: true })
   // A draft equal to the saved config is no draft.
   watch([drafts, saved], () => {
     const v = saved.value
@@ -217,13 +248,9 @@ export function createContext(input: {
     if (!v || !d) return
     const same = (!('filter' in d) || JSON.stringify(d.filter ?? undefined) === JSON.stringify(v.config.filter))
       && (!d.sorts || JSON.stringify(d.sorts) === JSON.stringify(v.config.sorts ?? []))
-    if (same) {
-      const { [v.id]: _, ...rest } = drafts.value
-      drafts.value = rest
-    }
+    if (same) setDraft(v.id, null)
   }, { deep: true })
   const props = computed(() => [...source.props.value].sort(byPosition))
-  const report = (error: unknown) => (input.options.onError ? input.options.onError(error) : console.error('[database-block]', error))
   const locale = computed(() => input.locale())
 
   const remember: DbContext['remember'] = (people, rows = []) => {
@@ -307,15 +334,13 @@ export function createContext(input: {
         if (d.sorts.length) config.sorts = d.sorts
         else delete config.sorts
       }
-      const { [v.id]: _, ...rest } = drafts.value
-      drafts.value = rest
+      setDraft(v.id, null)
       source.upsertView({ ...v, config })
     },
     resetDraft() {
       const v = saved.value
       if (!v) return
-      const { [v.id]: _, ...rest } = drafts.value
-      drafts.value = rest
+      setDraft(v.id, null)
     },
     updateView(patch) {
       const v = view.value
@@ -330,7 +355,7 @@ export function createContext(input: {
         const d = { ...drafts.value[base.id] }
         if (filterChanged) d.filter = config.filter ?? null
         if (sortsChanged) d.sorts = config.sorts ?? []
-        drafts.value = { ...drafts.value, [base.id]: d }
+        setDraft(base.id, d)
         return
       }
       // Locked: only filters and sorts change (the draft above), like Notion's lock.

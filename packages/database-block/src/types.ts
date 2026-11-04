@@ -90,7 +90,7 @@ export interface FileValue { id: string, name: string, url: string }
 
 // ── 1.3 View ──────────────────────────────────────────────────────────────────
 
-export type ViewType = 'table' | 'board' | 'calendar' | 'timeline' | 'gallery' | 'list' | 'chart' | 'pivot' | 'form'
+export type ViewType = 'table' | 'board' | 'calendar' | 'timeline' | 'gallery' | 'list' | 'chart' | 'pivot' | 'form' | 'feed' | 'dashboard'
 
 export type TextOp = 'equals' | 'not_equals' | 'contains' | 'not_contains' | 'starts_with' | 'ends_with' | 'is_empty' | 'is_not_empty'
 export type NumberOp = '=' | '!=' | '>' | '>=' | '<' | '<=' | 'is_empty' | 'is_not_empty'
@@ -174,6 +174,42 @@ export type OpenMode = 'side_peek' | 'center_peek' | 'full_page'
 export type ChartKind = 'bar' | 'line' | 'area' | 'pie' | 'donut' | 'scatter'
 export type ValueFn = 'count' | 'sum' | 'avg' | 'min' | 'max'
 
+/** The chart part of a chart view's config (also a dashboard chart widget's). */
+export interface ChartSpec {
+  chart?: ChartKind
+  x?: { prop: string, bucket?: 'day' | 'week' | 'month' | 'year' }
+  y?: Array<{ prop?: string, fn: ValueFn }>
+  series?: string
+  stacked?: boolean
+}
+
+/**
+ * A dashboard widget (`config.widgets`, in grid order): a chart (the `ChartSpec` fields) or a number card (`fn` of
+ * `prop` over the rows, Notion's calculations; `count` needs no prop). `filter` narrows the rows of this widget (on
+ * top of the view's filter). `span`: 1 = half the width, 2 = the whole width (default 1).
+ */
+export interface DashboardWidget extends ChartSpec {
+  id: string
+  kind: 'chart' | 'number'
+  title?: string
+  span?: 1 | 2
+  /** number: property and calculation (an `AggregateFn`, default `count`). */
+  prop?: string
+  fn?: AggregateFn
+  filter?: FilterGroup
+}
+
+/**
+ * Optional second argument of `chart`: a dashboard widget's chart (`widget` = its id in the view's
+ * `config.widgets`). Its fields replace the view's chart config; `filter`, when present, replaces the view's filter
+ * (`null` = none) like `RowQuery.filter`.
+ */
+export interface ChartQuery extends ChartSpec {
+  widget?: string
+  filter?: FilterGroup | null
+  search?: string
+}
+
 export interface ViewConfig {
   filter?: FilterGroup
   sorts?: Sort[]
@@ -203,13 +239,15 @@ export interface ViewConfig {
   form_shared?: boolean
   /** Table: draw the lines between columns (default true). */
   vertical_lines?: boolean
-  /** Inline table: lines shown before "Load more" (default 50, 0 = no limit). */
+  /** Inline table: lines shown before "Load more" (default 50, 0 = no limit). Feed: posts per page (default 10). */
   load_limit?: number
+  /** Feed: show each row's page content preview (`source.rowPreview`, default true). */
+  feed_preview?: boolean
   /** How rows open from this view. Default `side_peek`. */
   open_in?: OpenMode
   aggregates?: Record<string, AggregateFn | string>
   /**
-   * board / gallery / list / calendar / timeline: card preview (board; `CardPreview`), shown properties, card size
+   * board / gallery / list / calendar / timeline / feed: card preview (board; `CardPreview`), shown properties, card size
    * (board), card layout (board / gallery: properties one per line, `list`, the default, or wrapped, `compact`).
    */
   card?: { cover?: CardPreview, props?: string[], size?: 's' | 'm' | 'l', layout?: 'list' | 'compact' }
@@ -248,6 +286,8 @@ export interface ViewConfig {
   y?: Array<{ prop?: string, fn: ValueFn }>
   series?: string
   stacked?: boolean
+  /** dashboard: the widgets, in grid order. */
+  widgets?: DashboardWidget[]
   /** pivot */
   rows?: string[]
   cols?: string[]
@@ -336,7 +376,8 @@ export interface DatabaseSource {
   groups: (viewId: string, query?: RowQuery) => Promise<Group[]>
   rowsInGroup: (viewId: string, key: string | null, window: RowWindow, query?: RowQuery) => Promise<RowPage>
   aggregate: (viewId: string, propId: string, fn: string, query?: RowQuery) => Promise<number | string | null>
-  chart: (viewId: string) => Promise<ChartResult>
+  /** `query` (dashboard widgets): another chart config / filter than the view's own; older sources ignore it. */
+  chart: (viewId: string, query?: ChartQuery) => Promise<ChartResult>
   pivot: (viewId: string) => Promise<PivotResult>
   sql?: (query: string) => Promise<{ columns: string[], rows: unknown[][] } | { error: string }>
 
@@ -377,14 +418,26 @@ export interface DatabaseSource {
    */
   rowsInRange?: (viewId: string, propId: string, start: string, end: string, query?: RowQuery) => Promise<Row[]>
   /**
-   * Page cover / content previews of rows (board and gallery "Card preview: Page cover / Page content"), asked in
-   * batches for the cards on screen. Rows missing from the result have no preview. Without it those previews
+   * Page cover / content previews of rows (feed posts, board and gallery "Card preview: Page cover / Page content"),
+   * asked in batches for the rows on screen. Rows missing from the result have no preview. Without it those previews
    * stay empty.
    */
   rowPreview?: (rowIds: string[]) => Promise<Record<string, RowPreview>>
 }
 
 // ── Block options ─────────────────────────────────────────────────────────────
+
+/** A viewer's unsaved filter / sorts of a view (`filter: null` = the saved filter turned off). */
+export interface ViewDraft { filter?: FilterGroup | null, sorts?: Sort[] }
+
+/**
+ * Where viewers' drafts live between sessions (`DatabaseBlockOptions.draftStore`). `get` is read when a view opens,
+ * `set` on every change (`null` after Save / Reset). `databaseId` is passed too, for stores shared by databases.
+ */
+export interface DraftStore {
+  get: (viewId: string, databaseId?: string) => ViewDraft | null
+  set: (viewId: string, draft: ViewDraft | null, databaseId?: string) => void
+}
 
 export type DatabaseKind = 'inline' | 'full_page'
 
@@ -404,6 +457,13 @@ export interface DatabaseBlockOptions {
   viewUrl?: ((databaseId: string, viewId: string) => string) | null
   /** Link to a row (Copy link in the row menu). Without it the menu has no Copy link. */
   rowUrl?: ((databaseId: string, rowId: string) => string) | null
+  /**
+   * Keeps each viewer's unsaved filter / sorts across sessions. Default: `localStorage`, per `userId`, database and
+   * view (`localDraftStore`). `false`: drafts last for the session only.
+   */
+  draftStore?: DraftStore | false | null
+  /** The signed-in user, to keep drafts of different users on one browser apart. */
+  userId?: string | null
   /** Called when `createDatabase` or a source call fails. Default: `console.error`. */
   onError?: ((error: unknown) => void) | null
   /** Override any string, per locale. */

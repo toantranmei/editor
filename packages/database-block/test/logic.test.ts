@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   defaultCondition, displayText, isLossyChange, navigate, normalizeFilter, opsFor, parseDateText, parseNumber,
   parseText, parseTsv, toTsv, valueInput, withOp, type Prop,
@@ -10,6 +10,7 @@ import { colorsOf } from '../src/colors'
 import { withHistory } from '../src/history'
 import { resolveValue, resolveValues, runActions, safeUrl, triggered, type TriggerEvent } from '../src/actions'
 import type { Automation, DbAction } from '../src/types'
+import { draftKey, localDraftStore, parseDraft } from '../src/drafts'
 
 const p = (type: Prop['type'], config?: Prop['config'], id = type): Prop => ({ id, name: id, type, position: 'a0', config })
 const flush = () => new Promise(r => setTimeout(r, 0))
@@ -192,6 +193,24 @@ describe('memory source queries', () => {
     expect(pivot.cells.length).toBe(pivot.rows.length)
   })
 
+  it('charts a dashboard widget (its own config and filter) and previews rows', async () => {
+    const s = src()
+    const all = await s.chart('v-dashboard', { widget: 'w', chart: 'bar', x: { prop: 'priority' }, y: [{ fn: 'count' }] })
+    expect(all.x).toEqual(['Low', 'Medium', 'High'])
+    expect(all.series[0]!.data.reduce((n, v) => n + v, 0)).toBe(2000)
+    const high = await s.chart('v-dashboard', { x: { prop: 'priority' }, y: [{ fn: 'sum', prop: 'estimate' }], filter: { and: [{ prop: 'priority', op: 'is', value: 'p-high' }] } })
+    expect(high.x).toEqual(['High'])
+    expect(high.series[0]!.data[0]).toBe(s.all().filter(r => r.values.priority === 'p-high').reduce((n, r) => n + (r.values.estimate as number), 0))
+    // The number widget's calculation: aggregate with the widget filter as the query filter.
+    const open = await s.aggregate('v-dashboard', 'estimate', 'sum', { filter: { and: [{ prop: 'done', op: 'is', value: false }] } })
+    expect(open).toBe(s.all().filter(r => !r.values.done).reduce((n, r) => n + (r.values.estimate as number), 0))
+    const previews = await s.rowPreview!(['r1', 'r2', 'r4', 'nope'])
+    const keys = Object.keys(previews)
+    expect(keys.length).toBeGreaterThan(0)
+    expect(keys.every(k => ['r1', 'r2', 'r4'].includes(k))).toBe(true)
+    expect(Object.values(previews).every(p => !!p.text)).toBe(true)
+  })
+
   it('checks formulas', () => {
     const s = src()
     expect(s.validateFormula!('prop("Budget") / prop("Estimate")')).toEqual({ ok: true, type: 'number' })
@@ -347,5 +366,31 @@ describe('automation triggers', () => {
     expect(ids({ type: 'prop_changed', rowId: 'r', propId: 'notes', value: 'x' })).toEqual(['any'])
     expect(ids({ type: 'prop_changed', rowId: 'r', propId: 'status', value: 'todo' })).toEqual(['any', 'status'])
     expect(ids({ type: 'prop_changed', rowId: 'r', propId: 'status', value: 'done' })).toEqual(['any', 'status', 'to-done'])
+  })
+})
+
+describe('draft store', () => {
+  it('keeps drafts in localStorage per user, database and view; ignores junk and storage errors', () => {
+    localStorage.clear()
+    const a = localDraftStore('u1')
+    const b = localDraftStore('u2')
+    const d = { filter: { and: [{ prop: 'estimate', op: '>' as const, value: 3 }] }, sorts: [{ prop: 'due', dir: 'desc' as const }] }
+    a.set('v1', d, 'db1')
+    expect(JSON.parse(localStorage.getItem(draftKey('db1', 'v1', 'u1'))!)).toEqual(d)
+    expect(a.get('v1', 'db1')).toEqual(d)
+    expect(b.get('v1', 'db1')).toBeNull()
+    expect(a.get('v1', 'db2')).toBeNull()
+    a.set('v2', { filter: null }, 'db1')
+    expect(a.get('v2', 'db1')).toEqual({ filter: null })
+    a.set('v1', null, 'db1')
+    expect(localStorage.getItem(draftKey('db1', 'v1', 'u1'))).toBeNull()
+    localStorage.setItem(draftKey('db1', 'v3', 'u1'), '{not json')
+    expect(a.get('v3', 'db1')).toBeNull()
+    expect(parseDraft({ sorts: 'x' })).toBeNull()
+    expect(parseDraft({ filter: { nope: 1 }, sorts: [{ prop: 'a', dir: 'up' }, { prop: 'b', dir: 'asc' }] })).toEqual({ sorts: [{ prop: 'b', dir: 'asc' }] })
+    const spy = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('quota') })
+    expect(() => a.set('v4', d, 'db1')).not.toThrow()
+    spy.mockRestore()
+    localStorage.clear()
   })
 })

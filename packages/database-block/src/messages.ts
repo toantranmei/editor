@@ -10,7 +10,7 @@ export interface DatabaseMessages {
   openFullPage: string
   openDatabase: string
   /** View types. */
-  viewTypes: Record<'table' | 'board' | 'calendar' | 'timeline' | 'gallery' | 'list' | 'chart' | 'pivot' | 'form', string>
+  viewTypes: Record<'table' | 'board' | 'calendar' | 'timeline' | 'gallery' | 'list' | 'chart' | 'pivot' | 'form' | 'feed' | 'dashboard', string>
   addView: string
   renameView: string
   /** View tab menu: icon and "Display as". */
@@ -216,6 +216,23 @@ export interface DatabaseMessages {
   formNoQuestions: string
   required: string
   formRequiredError: string
+  addWidget: string
+  widgetKinds: Record<'chart' | 'number', string>
+  widgetTitle: string
+  editWidget: string
+  removeWidget: string
+  moveEarlier: string
+  moveLater: string
+  widgetWidth: string
+  widthHalf: string
+  widthFull: string
+  widgetFilterHint: string
+  dashboardEmpty: string
+  dragWidget: string
+  feedPreview: string
+  feedEmpty: string
+  feedNewPost: string
+  feedPostsPerPage: string
   subItems: string
   addSubItem: string
   parentItem: string
@@ -336,7 +353,7 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     error: 'Something went wrong',
     openFullPage: 'Open as full page',
     openDatabase: 'Open database {title}',
-    viewTypes: { table: 'Table', board: 'Board', calendar: 'Calendar', timeline: 'Timeline', gallery: 'Gallery', list: 'List', chart: 'Chart', pivot: 'Pivot', form: 'Form' },
+    viewTypes: { table: 'Table', board: 'Board', calendar: 'Calendar', timeline: 'Timeline', gallery: 'Gallery', list: 'List', chart: 'Chart', pivot: 'Pivot', form: 'Form', feed: 'Feed', dashboard: 'Dashboard' },
     addView: 'Add view',
     renameView: 'Rename',
     viewIcon: 'Icon',
@@ -523,6 +540,23 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     formNoQuestions: 'No questions: show properties in this view to ask them.',
     required: 'Required',
     formRequiredError: 'This question is required.',
+    addWidget: 'Add widget',
+    widgetKinds: { chart: 'Chart', number: 'Number' },
+    widgetTitle: 'Widget title',
+    editWidget: 'Edit widget',
+    removeWidget: 'Remove widget',
+    moveEarlier: 'Move earlier',
+    moveLater: 'Move later',
+    widgetWidth: 'Width',
+    widthHalf: 'Half',
+    widthFull: 'Full',
+    widgetFilterHint: 'Only rows matching this filter (and the view\'s filter) count.',
+    dashboardEmpty: 'No widgets yet: add a chart or a number.',
+    dragWidget: 'Drag to move',
+    feedPreview: 'Show page content',
+    feedEmpty: 'No posts yet',
+    feedNewPost: 'New post',
+    feedPostsPerPage: 'Posts per page',
     subItems: 'Sub-items',
     addSubItem: 'Add sub-item',
     parentItem: 'Parent item',
@@ -656,7 +690,7 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     error: 'Đã có lỗi xảy ra',
     openFullPage: 'Mở toàn trang',
     openDatabase: 'Mở cơ sở dữ liệu {title}',
-    viewTypes: { table: 'Bảng', board: 'Bảng Kanban', calendar: 'Lịch', timeline: 'Dòng thời gian', gallery: 'Thư viện', list: 'Danh sách', chart: 'Biểu đồ', pivot: 'Bảng tổng hợp', form: 'Biểu mẫu' },
+    viewTypes: { table: 'Bảng', board: 'Bảng Kanban', calendar: 'Lịch', timeline: 'Dòng thời gian', gallery: 'Thư viện', list: 'Danh sách', chart: 'Biểu đồ', pivot: 'Bảng tổng hợp', form: 'Biểu mẫu', feed: 'Bảng tin', dashboard: 'Bảng điều khiển' },
     addView: 'Thêm chế độ xem',
     renameView: 'Đổi tên',
     viewIcon: 'Biểu tượng',
@@ -851,6 +885,23 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     formNoQuestions: 'Chưa có câu hỏi: hiện thuộc tính trong view này để hỏi.',
     required: 'Bắt buộc',
     formRequiredError: 'Câu này bắt buộc.',
+    addWidget: 'Thêm tiện ích',
+    widgetKinds: { chart: 'Biểu đồ', number: 'Con số' },
+    widgetTitle: 'Tên tiện ích',
+    editWidget: 'Sửa tiện ích',
+    removeWidget: 'Xoá tiện ích',
+    moveEarlier: 'Chuyển lên trước',
+    moveLater: 'Chuyển ra sau',
+    widgetWidth: 'Độ rộng',
+    widthHalf: 'Một nửa',
+    widthFull: 'Toàn bộ',
+    widgetFilterHint: 'Chỉ tính các dòng khớp bộ lọc này (và bộ lọc của chế độ xem).',
+    dashboardEmpty: 'Chưa có tiện ích: thêm biểu đồ hoặc con số.',
+    dragWidget: 'Kéo để di chuyển',
+    feedPreview: 'Hiện nội dung trang',
+    feedEmpty: 'Chưa có bài nào',
+    feedNewPost: 'Bài mới',
+    feedPostsPerPage: 'Số bài mỗi lần tải',
     subItems: 'Mục con',
     addSubItem: 'Thêm mục con',
     parentItem: 'Mục cha',
@@ -984,7 +1035,7 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     error: '出错了',
     openFullPage: '以整页打开',
     openDatabase: '打开数据库 {title}',
-    viewTypes: { table: '表格', board: '看板', calendar: '日历', timeline: '时间线', gallery: '画廊', list: '列表', chart: '图表', pivot: '数据透视', form: '表单' },
+    viewTypes: { table: '表格', board: '看板', calendar: '日历', timeline: '时间线', gallery: '画廊', list: '列表', chart: '图表', pivot: '数据透视', form: '表单', feed: '动态', dashboard: '仪表板' },
     addView: '添加视图',
     renameView: '重命名',
     viewIcon: '图标',
@@ -1179,6 +1230,23 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     formNoQuestions: '没有问题：在此视图中显示属性即可提问。',
     required: '必填',
     formRequiredError: '此问题为必填项。',
+    addWidget: '添加组件',
+    widgetKinds: { chart: '图表', number: '数字' },
+    widgetTitle: '组件标题',
+    editWidget: '编辑组件',
+    removeWidget: '删除组件',
+    moveEarlier: '前移',
+    moveLater: '后移',
+    widgetWidth: '宽度',
+    widthHalf: '半宽',
+    widthFull: '全宽',
+    widgetFilterHint: '只统计符合此筛选（及视图筛选）的行。',
+    dashboardEmpty: '还没有组件：添加图表或数字。',
+    dragWidget: '拖动以移动',
+    feedPreview: '显示页面内容',
+    feedEmpty: '还没有帖子',
+    feedNewPost: '新帖子',
+    feedPostsPerPage: '每页帖子数',
     subItems: '子项',
     addSubItem: '添加子项',
     parentItem: '父项',

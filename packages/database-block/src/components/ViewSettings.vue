@@ -7,9 +7,10 @@
 import { Check, Eye, EyeOff, GripVertical, Lock, LockOpen, Zap } from '@lucide/vue'
 import { computed, ref } from 'vue'
 import { SUB_ITEM_VIEWS, useDb } from '../context'
-import type { ChartKind, OpenMode, Prop, ValueFn, ViewConfig, ViewType } from '../types'
+import type { OpenMode, Prop, ValueFn, ViewConfig, ViewType } from '../types'
 import { groupableTypes, positionAfter, switchLayout, uuidv7, visibleIds } from '../util'
 import AutomationsPanel from './AutomationsPanel.vue'
+import ChartSettings from './ChartSettings.vue'
 import ColorRules from './ColorRules.vue'
 import OpenModeIcon from './OpenModeIcon.vue'
 import PropIcon from './PropIcon.vue'
@@ -26,12 +27,11 @@ const groupable = computed(() => ofTypes(...groupableTypes(view.value?.type)))
 const dateProps = computed(() => ofTypes('date', 'created_time', 'last_edited_time'))
 const fileProps = computed(() => ofTypes('files'))
 const numberProps = computed(() => all.value.filter(p => p.type === 'number' || (p.type === 'formula' && p.config?.result_type === 'number') || p.type === 'rollup'))
-const CHARTS: ChartKind[] = ['bar', 'line', 'area', 'pie', 'donut', 'scatter']
 const FNS: ValueFn[] = ['count', 'sum', 'avg', 'min', 'max']
 const set = (patch: Partial<ViewConfig>) => db.updateView(patch)
 
 // Visibility: table columns (`visible`), card properties elsewhere (`card.props`).
-const usesCards = computed(() => ['board', 'gallery', 'list', 'calendar', 'timeline'].includes(view.value?.type ?? ''))
+const usesCards = computed(() => ['board', 'gallery', 'list', 'calendar', 'timeline', 'feed'].includes(view.value?.type ?? ''))
 const shown = computed(() => {
   if (!view.value) return []
   return usesCards.value ? c.value.card?.props ?? [] : visibleIds(view.value, all.value)
@@ -101,21 +101,12 @@ function turnOnSubItems() {
 function setGroup(id: string) {
   set({ group_by: id ? { ...c.value.group_by, prop: id } : undefined })
 }
-function setY(patch: { prop?: string, fn?: ValueFn }) {
-  const y = c.value.y?.[0] ?? { fn: 'count' as ValueFn }
-  const next = { ...y, ...patch }
-  if (next.fn === 'count') delete next.prop
-  else if (!next.prop) next.prop = numberProps.value[0]?.id
-  set({ y: [next] })
-}
-const xProp = computed(() => all.value.find(p => p.id === c.value.x?.prop))
-const isDateX = computed(() => !!xProp.value && ['date', 'created_time', 'last_edited_time'].includes(xProp.value.type))
 const pivotValue = computed(() => c.value.values?.[0] ?? { fn: 'count' })
 
 // ── Layout ──
-const LAYOUTS: ViewType[] = ['table', 'board', 'calendar', 'timeline', 'gallery', 'list', 'chart', 'pivot']
+const LAYOUTS: ViewType[] = ['table', 'board', 'calendar', 'timeline', 'gallery', 'list', 'chart', 'pivot', 'feed', 'dashboard']
 const MODES: OpenMode[] = ['side_peek', 'center_peek', 'full_page']
-const opensRows = computed(() => !['chart', 'pivot'].includes(view.value?.type ?? ''))
+const opensRows = computed(() => !['chart', 'pivot', 'dashboard'].includes(view.value?.type ?? ''))
 function setLayout(type: ViewType) {
   const v = view.value
   if (!v || !editable.value || v.type === type) return
@@ -265,6 +256,19 @@ const value = (e: Event) => (e.target as HTMLSelectElement).value
           </select>
         </label>
       </template>
+      <template v-if="view?.type === 'feed'">
+        <label class="me-db-toggle-row">
+          <span>{{ m.feedPreview }}</span>
+          <input type="checkbox" class="me-db-switch" data-setting="feed_preview" :checked="c.feed_preview !== false" :disabled="!editable" @change="set({ feed_preview: checked($event) ? undefined : false })">
+        </label>
+        <label class="me-db-field">
+          <span class="me-menu-label">{{ m.feedPostsPerPage }}</span>
+          <select class="me-input me-db-select" data-setting="load_limit" :value="String(c.load_limit ?? 10)" :disabled="!editable" @change="set({ load_limit: value($event) === '10' ? undefined : Number(value($event)) })">
+            <option v-for="n in [10, 25, 50, 100]" :key="n" :value="String(n)">{{ n }}</option>
+            <option value="0">{{ m.noLimit }}</option>
+          </select>
+        </label>
+      </template>
       <template v-if="view?.type === 'board' || view?.type === 'gallery'">
         <label class="me-db-field">
           <span class="me-menu-label">{{ m.cover }}</span>
@@ -345,47 +349,7 @@ const value = (e: Event) => (e.target as HTMLSelectElement).value
         </label>
       </template>
       <template v-if="view?.type === 'chart'">
-        <label class="me-db-field">
-          <span class="me-menu-label">{{ m.chartType }}</span>
-          <select class="me-input me-db-select" :value="c.chart ?? 'bar'" :disabled="!editable" data-setting="chart" @change="set({ chart: ($event.target as HTMLSelectElement).value as ChartKind })">
-            <option v-for="k in CHARTS" :key="k" :value="k">{{ m.chartTypes[k] }}</option>
-          </select>
-        </label>
-        <label class="me-db-field">
-          <span class="me-menu-label">{{ m.xAxis }}</span>
-          <select class="me-input me-db-select" :value="c.x?.prop ?? ''" :disabled="!editable" @change="set({ x: { prop: ($event.target as HTMLSelectElement).value } })">
-            <option v-for="p in all.filter(p => p.type !== 'button')" :key="p.id" :value="p.id">{{ p.name }}</option>
-          </select>
-        </label>
-        <label v-if="isDateX" class="me-db-field">
-          <span class="me-menu-label">{{ m.bucket }}</span>
-          <select class="me-input me-db-select" :value="c.x?.bucket ?? ''" :disabled="!editable" @change="set({ x: { prop: c.x!.prop, bucket: (($event.target as HTMLSelectElement).value || undefined) as 'day' | undefined } })">
-            <option value="">{{ m.buckets.none }}</option>
-            <option v-for="b in (['day', 'week', 'month', 'year'] as const)" :key="b" :value="b">{{ m.buckets[b] }}</option>
-          </select>
-        </label>
-        <label class="me-db-field">
-          <span class="me-menu-label">{{ m.yAxis }}</span>
-          <span class="me-db-row">
-            <select class="me-input me-db-select" :value="c.y?.[0]?.fn ?? 'count'" :disabled="!editable" @change="setY({ fn: ($event.target as HTMLSelectElement).value as ValueFn })">
-              <option v-for="f in FNS" :key="f" :value="f">{{ m.aggregates[f] ?? f }}</option>
-            </select>
-            <select v-if="(c.y?.[0]?.fn ?? 'count') !== 'count'" class="me-input me-db-select" :value="c.y?.[0]?.prop ?? ''" :disabled="!editable" @change="setY({ prop: ($event.target as HTMLSelectElement).value })">
-              <option v-for="p in numberProps" :key="p.id" :value="p.id">{{ p.name }}</option>
-            </select>
-          </span>
-        </label>
-        <label class="me-db-field">
-          <span class="me-menu-label">{{ m.series }}</span>
-          <select class="me-input me-db-select" :value="c.series ?? ''" :disabled="!editable" @change="set({ series: ($event.target as HTMLSelectElement).value || undefined })">
-            <option value="">–</option>
-            <option v-for="p in groupable" :key="p.id" :value="p.id">{{ p.name }}</option>
-          </select>
-        </label>
-        <label class="me-db-toggle-row">
-          <span>{{ m.stacked }}</span>
-          <input type="checkbox" class="me-db-switch" :checked="!!c.stacked" :disabled="!editable" @change="set({ stacked: ($event.target as HTMLInputElement).checked })">
-        </label>
+        <ChartSettings :spec="c" :editable="editable" @patch="set" />
       </template>
       <template v-if="view?.type === 'pivot'">
         <label class="me-db-field">
@@ -427,7 +391,7 @@ const value = (e: Event) => (e.target as HTMLSelectElement).value
         <span>{{ m.showTitle }}</span>
         <input type="checkbox" class="me-db-switch" data-setting="show_title" :checked="c.show_title !== false" :disabled="!editable" @change="set({ show_title: checked($event) ? undefined : false })">
       </label>
-      <details v-if="['table', 'board', 'gallery', 'list', 'calendar'].includes(view?.type ?? '')" class="me-db-details" data-setting="colors" :open="!!c.colors?.length">
+      <details v-if="['table', 'board', 'gallery', 'list', 'calendar', 'feed'].includes(view?.type ?? '')" class="me-db-details" data-setting="colors" :open="!!c.colors?.length">
         <summary class="me-menu-label">{{ m.conditionalColor }}<span v-if="c.colors?.length" class="me-db-menu-value">{{ c.colors.length }}</span></summary>
         <ColorRules />
       </details>
