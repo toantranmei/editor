@@ -456,3 +456,76 @@ describe('view tab icon and Display as', () => {
     expect(wrapper.find('.me-db-tab.is-active .me-db-tab-name').text()).toBe('Table')
   })
 })
+
+describe('sub-items in list and board, nested or flattened', () => {
+  async function withSubs(viewId: string, display?: 'flat') {
+    const init = sampleDatabase(30, { databaseId: 'db1' })
+    init.props = [...init.props, { id: 'parent', name: 'Parent item', type: 'relation', position: 'b0', config: { database_id: 'db1', limit: 1 } }]
+    for (const r of init.rows!) {
+      if (r.id === 'r2' || r.id === 'r3') r.values.parent = ['r1']
+      if (r.id === 'r4') r.values.parent = ['r2']
+    }
+    init.views = init.views.map(v => (v.id === viewId ? { ...v, config: { ...v.config, sub_items: 'parent', sub_items_display: display } } : v))
+    const source = createMemorySource(init)
+    const wrapper = mount({ render: () => h(DatabaseView, { source, databaseId: 'db1', viewId, locale: 'en' }) }, { attachTo: document.body })
+    wrappers.push(wrapper)
+    await settle()
+    const name = (id: string) => String(source.all().find(r => r.id === id)!.values.name)
+    return { source, wrapper, name }
+  }
+  const listIds = (w: VueWrapper) => w.findAll('.me-db-list-row').map(b => b.attributes('data-row-id'))
+
+  it('list nested: parents only, ▸ shows sub-items under their parent, at any depth', async () => {
+    const { wrapper } = await withSubs('v-list')
+    expect(listIds(wrapper).slice(0, 3)).toEqual(['r1', 'r5', 'r6'])
+    const toggle = wrapper.find('.me-db-list-item:first-child [data-subtoggle]')
+    expect(toggle.exists()).toBe(true)
+    await toggle.trigger('click')
+    await settle()
+    expect(listIds(wrapper).slice(0, 4)).toEqual(['r1', 'r2', 'r3', 'r5'])
+    expect(wrapper.findAll('.me-db-list-item.is-child').length).toBe(2)
+    // r2 has a sub-item of its own.
+    const r2 = wrapper.findAll('.me-db-list-item.is-child').find(i => i.find('[data-row-id="r2"]').exists())!
+    await r2.find('[data-subtoggle]').trigger('click')
+    await settle()
+    expect(listIds(wrapper).slice(0, 5)).toEqual(['r1', 'r2', 'r4', 'r3', 'r5'])
+  })
+
+  it('list flattened: every row, sub-items name their parent', async () => {
+    const { wrapper, name } = await withSubs('v-list', 'flat')
+    expect(listIds(wrapper).slice(0, 4)).toEqual(['r1', 'r2', 'r3', 'r4'])
+    expect(wrapper.find('[data-subtoggle]').exists()).toBe(false)
+    const r2 = wrapper.find('.me-db-list-row[data-row-id="r2"]')
+    expect(r2.find('.me-db-parent-label').text()).toBe(name('r1'))
+    expect(wrapper.find('.me-db-list-row[data-row-id="r1"] .me-db-parent-label').exists()).toBe(false)
+  })
+
+  it('board nested: parent cards show "N sub-items", opening it lists them; sub-items have no card', async () => {
+    const { wrapper, source } = await withSubs('v-board')
+    expect(wrapper.find('.me-db-card[data-row-id="r2"]').exists()).toBe(false)
+    const subs = wrapper.find('[data-subs-of="r1"]')
+    expect(subs.find('[data-subs-toggle]').text()).toBe('2 sub-items')
+    expect(subs.findAll('.me-db-card-sub').length).toBe(0)
+    await subs.find('[data-subs-toggle]').trigger('click')
+    await settle()
+    const items = wrapper.findAll('[data-subs-of="r1"] .me-db-card-sub')
+    expect(items.map(i => i.attributes('data-sub-row-id'))).toEqual(['r2', 'r3'])
+    await items[0]!.trigger('click')
+    expect(source.log.filter(l => l.method === 'openRow').at(-1)!.args[0]).toBe('r2')
+  })
+
+  it('table flattened: no ▸, sub-items name their parent; view options switch the display', async () => {
+    const { wrapper, source, name } = await withSubs('v-table', 'flat')
+    expect(wrapper.find('[data-subtoggle]').exists()).toBe(false)
+    expect(wrapper.find('.me-db-tr[data-row="1"] .me-db-td.is-first .me-db-parent-label').text()).toBe(name('r1'))
+    await wrapper.find('[data-tool="settings"]').trigger('click')
+    await settle()
+    const select = popover().querySelector<HTMLSelectElement>('[data-setting="sub_items_display"]')!
+    expect(select.value).toBe('flat')
+    select.value = 'nested'
+    select.dispatchEvent(new Event('change'))
+    await settle()
+    expect(source.views.value.find(v => v.id === 'v-table')!.config.sub_items_display).toBeUndefined()
+    expect(wrapper.find('[data-subtoggle]').exists()).toBe(true)
+  })
+})

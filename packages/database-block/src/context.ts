@@ -69,6 +69,16 @@ export interface DbContext {
   report: (error: unknown) => void
 }
 
+/** Views that show sub-items. */
+export const SUB_ITEM_VIEWS = ['table', 'list', 'board']
+
+/** Sub-items setting of a view: the parent relation and whether sub-items nest; undefined when off. */
+export function subItemsOf(view: View | undefined, props: Prop[]): { prop: Prop, nested: boolean } | undefined {
+  const id = view && SUB_ITEM_VIEWS.includes(view.type) ? view.config.sub_items : undefined
+  const prop = id ? props.find(p => p.id === id && p.type === 'relation') : undefined
+  return prop ? { prop, nested: view!.config.sub_items_display !== 'flat' } : undefined
+}
+
 export const DB_KEY: InjectionKey<DbContext> = Symbol('mei-database')
 
 export function useDb(): DbContext {
@@ -92,9 +102,37 @@ export function createContext(input: {
 }): DbContext {
   // Every write through the block can be undone (⌘Z) / redone (⌘⇧Z).
   const history = withHistory(input.source)
-  const { source } = history
   const names = { people: new Map<string, string>(), avatars: new Map<string, string>(), rows: new Map<string, string>() }
   const namesVersion = shallowReactive({ n: 0 })
+  // Rows read through the block name themselves (relations to this database, sub-items' parents show titles).
+  const learn = <T extends Row[]>(rows: T): T => {
+    const t = input.source.props.value.find(p => p.type === 'title')?.id
+    let changed = false
+    if (t) {
+      for (const r of rows) {
+        const title = r.values[t]
+        if (typeof title === 'string' && title && names.rows.get(r.id) !== title) {
+          names.rows.set(r.id, title)
+          changed = true
+        }
+      }
+    }
+    if (changed) namesVersion.n++
+    return rows
+  }
+  const inner = history.source
+  const source: DatabaseSource = {
+    ...inner,
+    rows: (viewId, window, query) => inner.rows(viewId, window, query).then((page) => {
+      learn(page.rows)
+      return page
+    }),
+    rowsInGroup: (viewId, key, window, query) => inner.rowsInGroup(viewId, key, window, query).then((page) => {
+      learn(page.rows)
+      return page
+    }),
+    rowsInRange: inner.rowsInRange ? (...args) => inner.rowsInRange!(...args).then(learn) : undefined,
+  }
   const views = computed(() => [...source.views.value].sort(byPosition))
   const saved = computed(() => views.value.find(v => v.id === input.viewId()) ?? views.value[0])
   // Unsaved filter / sorts per view id (this viewer, this session).
@@ -161,8 +199,8 @@ export function createContext(input: {
       const d = draft.value
       if (d && 'filter' in d) q.filter = normalizeFilter(d.filter ?? undefined) ?? null
       if (d?.sorts) q.sorts = d.sorts
-      // Sub-items on (table): the list shows the parents, rows without a parent.
-      const sub = view.value?.type === 'table' ? view.value.config.sub_items : undefined
+      // Sub-items nested (table / list / board): the view lists the parents, rows without a parent.
+      const sub = subItemsOf(view.value, props.value)?.nested ? view.value!.config.sub_items : undefined
       if (sub && props.value.some(p => p.id === sub)) {
         const base = 'filter' in q ? q.filter : view.value?.config.filter
         const top = { prop: sub, op: 'is_empty' as const }

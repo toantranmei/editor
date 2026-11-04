@@ -4,13 +4,14 @@
  * windows. Dragging a card to another column writes the new group value with `setCell`; inside a column it calls
  * `moveRow`. "+ Add group" creates a new option.
  */
-import { Plus } from '@lucide/vue'
+import { ChevronDown, ChevronRight, CornerDownRight, Plus } from '@lucide/vue'
 import { computed, ref, watch } from 'vue'
 import CardCover from '../components/CardCover.vue'
 import CellValue from '../components/CellValue.vue'
 import RowIcon from '../components/RowIcon.vue'
 import { useDb } from '../context'
 import { useCardPreview } from '../preview'
+import { useSubItems } from '../sub-items'
 import { fmt } from '../messages'
 import type { Row } from '../types'
 import { useRowStore } from '../use-rows'
@@ -39,6 +40,17 @@ const columnColor = (key: string | null | undefined) => {
   const c = optionOf(key)?.color
   return c && c !== 'default' ? c : undefined
 }
+// ── Sub-items: "N sub-items" under a parent card opens the list of its sub-items ──
+const sub = useSubItems(db)
+const openSubs = ref(new Set<string>())
+function toggleSubs(id: string) {
+  const next = new Set(openSubs.value)
+  if (next.has(id)) next.delete(id)
+  else next.add(id)
+  openSubs.value = next
+}
+const subsOf = (row: Row) => (sub.nested.value ? sub.childrenOf(row.id) : [])
+const titleOf = (row: Row) => (title.value ? String(cellValue(row, title.value) ?? '') || m.value.untitled : m.value.untitled)
 const PAGE = 50
 /** Cards loaded per column (grows with "Load more"). */
 const limits = ref<Record<string, number>>({})
@@ -155,12 +167,11 @@ const loadMore = (key: string | null | undefined) => (limits.value = { ...limits
         <button v-if="db.canEditContent.value" type="button" class="me-db-icon-button" :aria-label="m.newRow" :title="m.newRow" @click="newCard(i, $event)"><Plus /></button>
       </div>
       <div class="me-db-column-cards">
+        <template v-for="row in cardsOf(i)" :key="row.id">
         <button
-          v-for="row in cardsOf(i)"
-          :key="row.id"
           type="button"
           class="me-db-card"
-          :class="{ 'is-drop-before': over?.seg === i && over.before === row.id, 'is-dragging': dragging?.id === row.id }"
+          :class="{ 'is-drop-before': over?.seg === i && over.before === row.id, 'is-dragging': dragging?.id === row.id, 'has-subs': subsOf(row).length > 0 }"
           :data-cc="db.colors(row).row"
           :draggable="db.canEditContent.value"
           :data-row-id="row.id"
@@ -170,13 +181,25 @@ const loadMore = (key: string | null | undefined) => (limits.value = { ...limits
           @click="db.openRow(row.id, $event)"
         >
           <CardCover v-if="coverOf(row)" :cover="coverOf(row)!" />
-          <span class="me-db-card-title"><RowIcon v-if="pageIcon(db.view.value, row)" :icon="pageIcon(db.view.value, row)!" />{{ title ? String(cellValue(row, title) ?? '') || m.untitled : m.untitled }}</span>
+          <span v-if="!sub.nested.value && sub.parentTitle(row)" class="me-db-parent-label" :title="m.parentItem"><CornerDownRight />{{ sub.parentTitle(row) }}</span>
+          <span class="me-db-card-title"><RowIcon v-if="pageIcon(db.view.value, row)" :icon="pageIcon(db.view.value, row)!" />{{ titleOf(row) }}</span>
           <span v-if="shown.length" class="me-db-card-props" :class="{ 'is-compact': compact }">
             <template v-for="p in shown" :key="p!.id">
               <CellValue v-if="!isEmptyValue(cellValue(row, p!))" :prop="p!" :value="cellValue(row, p!)" compact />
             </template>
           </span>
         </button>
+        <div v-if="subsOf(row).length" class="me-db-card-subs" :data-subs-of="row.id">
+          <button type="button" class="me-db-card-subs-toggle" :aria-expanded="openSubs.has(row.id)" data-subs-toggle @click="toggleSubs(row.id)">
+            <ChevronDown v-if="openSubs.has(row.id)" /><ChevronRight v-else />{{ subsOf(row).length === 1 ? m.subItemCount : fmt(m.subItemsCount, { n: subsOf(row).length }) }}
+          </button>
+          <template v-if="openSubs.has(row.id)">
+            <button v-for="c in subsOf(row)" :key="c.id" type="button" class="me-db-card-sub" :data-sub-row-id="c.id" @click="db.openRow(c.id, $event)">
+              <RowIcon v-if="pageIcon(db.view.value, c)" :icon="pageIcon(db.view.value, c)!" /><span class="me-db-card-sub-title">{{ titleOf(c) }}</span>
+            </button>
+          </template>
+        </div>
+        </template>
         <button v-if="s.count > limitOf(s.key)" type="button" class="me-db-text-button" @click="loadMore(s.key)">{{ m.loadMore }}</button>
         <button v-if="db.canEditContent.value" type="button" class="me-db-new-row is-card" @click="newCard(i, $event)"><Plus />{{ m.newRow }}</button>
       </div>

@@ -188,6 +188,11 @@ export interface DatabaseMessages {
   addSubItem: string
   parentItem: string
   turnOnSubItems: string
+  /** Board card footer: "{n} sub-items" (`subItemCount` when n = 1). */
+  subItemsCount: string
+  subItemCount: string
+  subItemsDisplay: string
+  subItemsDisplays: Record<'nested' | 'flat', string>
   off: string
   searchFormula: string
   formulaType: string
@@ -486,6 +491,10 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     addSubItem: 'Add sub-item',
     parentItem: 'Parent item',
     turnOnSubItems: 'Turn on sub-items',
+    subItemsCount: '{n} sub-items',
+    subItemCount: '1 sub-item',
+    subItemsDisplay: 'Show sub-items as',
+    subItemsDisplays: { nested: 'Nested in toggle', flat: 'Flattened list' },
     off: 'Off',
     searchFormula: 'Search properties and functions…',
     formulaType: 'Type',
@@ -779,6 +788,10 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     addSubItem: 'Thêm mục con',
     parentItem: 'Mục cha',
     turnOnSubItems: 'Bật mục con',
+    subItemsCount: '{n} mục con',
+    subItemCount: '1 mục con',
+    subItemsDisplay: 'Hiện mục con dạng',
+    subItemsDisplays: { nested: 'Lồng trong nút mở', flat: 'Danh sách phẳng' },
     off: 'Tắt',
     searchFormula: 'Tìm thuộc tính và hàm…',
     formulaType: 'Kiểu',
@@ -1072,6 +1085,10 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     addSubItem: '添加子项',
     parentItem: '父项',
     turnOnSubItems: '开启子项',
+    subItemsCount: '{n} 个子项',
+    subItemCount: '1 个子项',
+    subItemsDisplay: '子项显示方式',
+    subItemsDisplays: { nested: '嵌套在折叠中', flat: '平铺列表' },
     off: '关闭',
     searchFormula: '搜索属性和函数…',
     formulaType: '类型',

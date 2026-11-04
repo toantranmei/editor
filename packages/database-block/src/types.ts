@@ -148,8 +148,13 @@ export interface ViewConfig {
   freeze?: number
   /** Conditional colors, first match wins (row / card, or per cell with scope `prop`). */
   colors?: ColorRule[]
-  /** Table: sub-items — a relation to this database holding each row's parent; parents list, sub-items nest. */
+  /** Table / list / board: sub-items — a relation to this database holding each row's parent. */
   sub_items?: string
+  /**
+   * How sub-items show (Notion's "Show sub-items as"): `nested` (default; parents listed, sub-items under their
+   * parent: ▸ in table / list, "N sub-items" on board cards) or `flat` (every row, sub-items name their parent).
+   */
+  sub_items_display?: 'nested' | 'flat'
   /** Form: description under the title, required questions (property ids). */
   form_description?: string
   form_required?: string[]

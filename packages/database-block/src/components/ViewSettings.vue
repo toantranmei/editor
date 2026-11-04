@@ -6,7 +6,7 @@
  */
 import { Check, Eye, EyeOff, GripVertical, Lock, LockOpen } from '@lucide/vue'
 import { computed, ref } from 'vue'
-import { useDb } from '../context'
+import { SUB_ITEM_VIEWS, useDb } from '../context'
 import type { ChartKind, OpenMode, Prop, ValueFn, ViewConfig, ViewType } from '../types'
 import { groupableTypes, positionAfter, switchLayout, uuidv7, visibleIds } from '../util'
 import ColorRules from './ColorRules.vue'
@@ -243,6 +243,12 @@ const value = (e: Event) => (e.target as HTMLSelectElement).value
             <option value="0">{{ m.noLimit }}</option>
           </select>
         </label>
+        <label class="me-db-toggle-row">
+          <span>{{ m.verticalLines }}</span>
+          <input type="checkbox" class="me-db-switch" data-setting="vertical_lines" :checked="c.vertical_lines !== false" :disabled="!editable" @change="set({ vertical_lines: checked($event) ? undefined : false })">
+        </label>
+      </template>
+      <template v-if="SUB_ITEM_VIEWS.includes(view?.type ?? '')">
         <label class="me-db-field">
           <span class="me-menu-label">{{ m.subItems }}</span>
           <select class="me-input me-db-select" data-setting="sub_items" :value="c.sub_items ?? ''" :disabled="!editable" @change="set({ sub_items: value($event) || undefined })">
@@ -251,9 +257,11 @@ const value = (e: Event) => (e.target as HTMLSelectElement).value
           </select>
         </label>
         <button v-if="!selfRelations.length && editable" type="button" class="me-db-text-button" data-turn-on-sub-items @click="turnOnSubItems">{{ m.turnOnSubItems }}</button>
-        <label class="me-db-toggle-row">
-          <span>{{ m.verticalLines }}</span>
-          <input type="checkbox" class="me-db-switch" data-setting="vertical_lines" :checked="c.vertical_lines !== false" :disabled="!editable" @change="set({ vertical_lines: checked($event) ? undefined : false })">
+        <label v-if="c.sub_items" class="me-db-field">
+          <span class="me-menu-label">{{ m.subItemsDisplay }}</span>
+          <select class="me-input me-db-select" data-setting="sub_items_display" :value="c.sub_items_display ?? 'nested'" :disabled="!editable" @change="set({ sub_items_display: value($event) === 'flat' ? 'flat' : undefined })">
+            <option v-for="d in (['nested', 'flat'] as const)" :key="d" :value="d">{{ m.subItemsDisplays[d] }}</option>
+          </select>
         </label>
       </template>
       <template v-if="view?.type === 'board' || view?.type === 'gallery'">
