@@ -23,7 +23,7 @@ const FUNCTIONS: Record<string, Array<{ name: string, sig: string, example: stri
     { name: 'if', sig: 'if(condition, then, else)', example: 'if(prop("Done"), "✅", "⏳")' },
     { name: 'ifs', sig: 'ifs(cond1, value1, cond2, value2, …, else)', example: 'ifs(prop("Score") > 8, "A", prop("Score") > 5, "B", "C")' },
     { name: 'empty', sig: 'empty(value)', example: 'empty(prop("Due"))' },
-    { name: 'length', sig: 'length(text)', example: 'length(prop("Name"))' },
+    { name: 'length', sig: 'length(text)  ·  text.length()', example: 'prop("Name").length()' },
     { name: 'format', sig: 'format(value)', example: 'format(prop("Estimate")) + " pts"' },
     { name: 'toNumber', sig: 'toNumber(text)', example: 'toNumber("42")' },
   ],
@@ -34,7 +34,7 @@ const FUNCTIONS: Record<string, Array<{ name: string, sig: string, example: stri
     { name: 'replaceAll', sig: 'replaceAll(text, search, with)', example: 'replaceAll(prop("Name"), " ", "_")' },
     { name: 'slice', sig: 'slice(text, start, end)', example: 'slice(prop("Name"), 0, 3)' },
     { name: 'substring', sig: 'substring(text, start, end?)', example: 'substring(prop("Name"), 0, 3)' },
-    { name: 'upper', sig: 'upper(text)', example: 'upper(prop("Code"))' },
+    { name: 'upper', sig: 'upper(text)  ·  text.upper()', example: 'prop("Code").upper()' },
     { name: 'lower', sig: 'lower(text)', example: 'lower(prop("Email"))' },
     { name: 'trim', sig: 'trim(text)', example: 'trim(prop("Name"))' },
   ],
@@ -52,7 +52,7 @@ const FUNCTIONS: Record<string, Array<{ name: string, sig: string, example: stri
   date: [
     { name: 'now', sig: 'now()', example: 'now()' },
     { name: 'today', sig: 'today()', example: 'dateBetween(prop("Due"), today(), "days")' },
-    { name: 'dateAdd', sig: 'dateAdd(date, amount, "days" | "weeks" | "months" | "years" | "hours" | "minutes")', example: 'dateAdd(prop("Start"), 7, "days")' },
+    { name: 'dateAdd', sig: 'dateAdd(date, amount, "days" | "weeks" | "months" | "years" | "hours" | "minutes")', example: 'prop("Start").dateAdd(7, "days")' },
     { name: 'dateBetween', sig: 'dateBetween(a, b, unit)', example: 'dateBetween(prop("End"), prop("Start"), "days")' },
     { name: 'dateSubtract', sig: 'dateSubtract(date, amount, unit)', example: 'dateSubtract(prop("Due"), 2, "days")' },
     { name: 'formatDate', sig: 'formatDate(date, pattern)', example: 'formatDate(prop("Due"), "DD/MM/YYYY")' },
@@ -90,6 +90,8 @@ function insert(text: string, back = 0) {
     el?.setSelectionRange(at, at)
   })
 }
+/** A one-word name goes in bare (`Price`), any other as `prop("Name")` (the formula language reads both). */
+const propRef = (name: string) => (/^[\p{L}_][\p{L}\p{N}_]*$/u.test(name) && !['true', 'false', 'and', 'or', 'not'].includes(name) ? name : `prop("${name}")`)
 const insertFn = (name: string) => (['and', 'or', 'not', 'true', 'false'].includes(name) ? insert(` ${name} `) : insert(`${name}()`, 1))
 const typeLabel = computed(() => (props.check?.ok && props.check.type ? m.value.formulaTypes[props.check.type] ?? props.check.type : null))
 </script>
@@ -116,7 +118,7 @@ const typeLabel = computed(() => (props.check?.ok && props.check.type ? m.value.
       <div class="me-db-formula-list">
         <input v-model="query" class="me-input" :placeholder="m.searchFormula" :aria-label="m.searchFormula" data-formula-search>
         <div class="me-menu-label">{{ m.properties }}</div>
-        <button v-for="p in propItems" :key="p.id" type="button" class="me-menu-item" :data-insert-prop="p.id" @click="insert(`prop(&quot;${p.name}&quot;)`)" @mouseenter="hover = { sig: `prop(&quot;${p.name}&quot;)`, example: '' }">
+        <button v-for="p in propItems" :key="p.id" type="button" class="me-menu-item" :data-insert-prop="p.id" @click="insert(propRef(p.name))" @mouseenter="hover = { sig: `prop(&quot;${p.name}&quot;)`, example: '' }">
           <PropIcon :type="p.type" /><span class="me-menu-title">{{ p.name }}</span>
         </button>
         <template v-for="g in fnGroups" :key="g.group">
