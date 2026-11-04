@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /** Read-only rendering of one value (table cells, cards, list rows). */
-import { Check, FileText } from '@lucide/vue'
+import { AlarmClock, Check, FileText } from '@lucide/vue'
 import { computed } from 'vue'
 import { useDb } from '../context'
 import { resultType } from '../filters'
@@ -98,6 +98,6 @@ const initials = (name: string) => name.split(/\s+/).filter(Boolean).slice(-2).m
       <span v-if="meter.number" class="me-db-meter-number">{{ text }}</span>
     </span>
     <a v-else-if="href" class="me-db-link" :href="href" target="_blank" rel="noopener" @click.stop>{{ linkText }}</a>
-    <span v-else class="me-db-text">{{ text }}</span>
+    <span v-else class="me-db-text">{{ text }}<AlarmClock v-if="prop.type === 'date' && (value as { remind?: string } | null)?.remind" class="me-db-remind-icon" :aria-label="db.m.value.remind" data-has-remind /></span>
   </span>
 </template>

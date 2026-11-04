@@ -472,7 +472,9 @@
   .me-db-form { display: flex; flex-direction: column; gap: var(--me-space-5); max-width: calc(var(--me-database-cell-min-width) * 6); margin: var(--me-space-5) auto; }
   .me-db-form-title { margin: 0; font-size: var(--me-database-title-size); }
   .me-db-form-desc { min-height: calc(var(--me-space-9) + var(--me-space-5)); resize: vertical; }
-  .me-db-template-repeat { display: inline-flex; align-items: center; gap: var(--me-space-1); }
+  .me-db-remind-icon { width: var(--me-icon-size-xs, var(--me-icon-size-sm)); height: var(--me-icon-size-xs, var(--me-icon-size-sm)); margin-left: var(--me-space-1); vertical-align: middle; color: var(--me-database-muted-color); }
+  .me-db-template-row:has(.me-db-template-repeat) { flex-wrap: wrap; }
+  .me-db-template-repeat { display: flex; flex-basis: 100%; order: 9; align-items: center; gap: var(--me-space-1); padding-left: var(--me-space-6); color: var(--me-database-muted-color); }
   .me-db-template-repeat .me-db-select { width: auto; }
   .me-db-template-repeat .is-on { color: var(--me-database-accent-color, currentColor); }
   .me-db-form-share { display: grid; gap: var(--me-space-2); padding: var(--me-space-3); border: var(--me-border-width) solid var(--me-database-border-color); border-radius: var(--me-radius-md); }
