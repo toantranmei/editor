@@ -31,15 +31,19 @@ describe('switching away from chart / pivot views', () => {
     wrappers.push(wrapper)
     await settle()
     // Like a user: click the tabs.
-    for (const id of ['v-table', 'v-pivot', 'v-table', 'v-chart', 'v-pivot', 'v-board']) {
+    for (const id of ['v-table', 'v-pivot', 'v-table', 'v-chart', 'v-dashboard', 'v-pivot', 'v-board', 'v-dashboard', 'v-table']) {
       await wrapper.find(`.me-db-tab[data-view-id="${id}"]`).trigger('click')
       await settle()
       expect(wrapper.find('.me-db-tab.is-active').attributes('data-view-id')).toBe(id)
     }
     const views = new Map(source.views.value.map(v => [v.id, v]))
-    const asked = source.log.filter(l => l.method === 'chart' || l.method === 'pivot').map(l => [l.method, views.get(l.args[0] as string)?.type])
+    const asked = source.log.filter(l => l.method === 'chart' || l.method === 'pivot').map(l => [l.method, views.get(l.args[0] as string)?.type, l.args[1]])
     expect(asked.length).toBeGreaterThan(0)
-    for (const [method, type] of asked) expect(type, `${method} asked for a ${type} view`).toBe(method)
+    // A dashboard asks for its widgets' charts, always with the widget's query.
+    for (const [method, type, query] of asked) {
+      if (type === 'dashboard') expect(method === 'chart' && !!query, 'dashboard chart without its widget query').toBe(true)
+      else expect(type, `${method} asked for a ${type} view`).toBe(method)
+    }
   })
 
   it('a chart without an x axis is not queried', async () => {

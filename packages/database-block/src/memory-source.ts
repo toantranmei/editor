@@ -497,10 +497,12 @@ export function createMemorySource(init: MemorySourceInit): MemorySource {
       if (!prop) return wait(null)
       return wait(aggregateValues(query(viewId, q).map(r => valueOf(r, prop, props.value)), fn, prop))
     },
-    async chart(viewId): Promise<ChartResult> {
-      record('chart', [viewId])
+    async chart(viewId, cq): Promise<ChartResult> {
+      record('chart', cq ? [viewId, cq] : [viewId])
       const view = viewOf(viewId)
-      const c = view?.config ?? {}
+      const { widget: _w, filter: wf, search: ws, ...spec } = cq ?? {}
+      const c: ViewConfig = { ...view?.config, ...spec }
+      const rq: RowQuery | undefined = cq ? { ...('filter' in cq ? { filter: wf ?? null } : {}), ...(ws ? { search: ws } : {}) } : undefined
       const all = props.value
       const xProp = all.find(p => p.id === c.x?.prop)
       if (!xProp) return wait({ x: [], series: [] })
@@ -517,7 +519,7 @@ export function createMemorySource(init: MemorySourceInit): MemorySource {
       }
       const cells = new Map<string, Map<string, MemoryRow[]>>()
       const seriesNames = new Set<string>()
-      for (const r of query(viewId)) {
+      for (const r of query(viewId, rq)) {
         const sKeys = seriesProp ? groupKeys(r, seriesProp, all).map(k => (k === null ? '' : groupLabel(seriesProp, k, people, titleById))) : ['']
         for (const x of xKey(r)) {
           let m = cells.get(x)
@@ -871,6 +873,16 @@ export function sampleDatabase(count: number, options: { databaseId?: string, se
     { id: 'v-chart', name: 'Chart', type: 'chart', position: 'a6', config: { chart: 'bar', x: { prop: 'status' }, y: [{ fn: 'count' }], series: 'priority', stacked: true } },
     { id: 'v-pivot', name: 'Pivot', type: 'pivot', position: 'a7', config: { rows: ['status'], cols: ['priority'], values: [{ prop: 'estimate', fn: 'sum' }], totals: true } },
     { id: 'v-feed', name: 'Feed', type: 'feed', position: 'a8', config: { card: { props: ['status', 'owner', 'tags'] } } },
+    {
+      id: 'v-dashboard', name: 'Dashboard', type: 'dashboard', position: 'a9', config: {
+        widgets: [
+          { id: 'w-count', kind: 'number', title: 'Tasks', fn: 'count' },
+          { id: 'w-open', kind: 'number', title: 'Open estimate', prop: 'estimate', fn: 'sum', filter: { and: [{ prop: 'done', op: 'is', value: false }] } },
+          { id: 'w-status', kind: 'chart', title: 'By status', span: 2, chart: 'bar', x: { prop: 'status' }, y: [{ fn: 'count' }], series: 'priority', stacked: true },
+          { id: 'w-priority', kind: 'chart', title: 'High priority by owner', chart: 'donut', x: { prop: 'owner' }, y: [{ fn: 'count' }], filter: { and: [{ prop: 'priority', op: 'is', value: 'p-high' }] } },
+        ],
+      },
+    },
   ]
   return { databaseId: options.databaseId, meta: { title: 'Tasks', icon: '✅' }, props, views, rows, people }
 }

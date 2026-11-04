@@ -13,7 +13,7 @@ const emit = defineEmits<{ select: [viewId: string] }>()
 const db = useDb()
 const m = computed(() => db.m.value)
 const views = computed(() => [...db.source.views.value].sort(byPosition))
-const TYPES: ViewType[] = ['table', 'board', 'calendar', 'timeline', 'gallery', 'list', 'chart', 'pivot', 'form', 'feed']
+const TYPES: ViewType[] = ['table', 'board', 'calendar', 'timeline', 'gallery', 'list', 'chart', 'pivot', 'form', 'feed', 'dashboard']
 const adding = shallowRef<HTMLElement | null>(null)
 const menu = shallowRef<{ view: View, anchor: HTMLElement } | null>(null)
 const renaming = ref<string | null>(null)

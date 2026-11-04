@@ -25,8 +25,9 @@ const filters = computed(() => countConditions(db.view.value?.config.filter))
 const sorts = computed(() => db.view.value?.config.sorts?.length ?? 0)
 const type = computed(() => db.view.value?.type)
 const hasGroup = computed(() => ['table', 'list', 'board'].includes(type.value ?? ''))
-const hasProps = computed(() => !['chart', 'pivot'].includes(type.value ?? ''))
-const canAdd = computed(() => db.canEditContent.value && !['chart', 'pivot'].includes(type.value ?? ''))
+const hasProps = computed(() => !['chart', 'pivot', 'dashboard'].includes(type.value ?? ''))
+const hasSort = computed(() => type.value !== 'dashboard')
+const canAdd = computed(() => db.canEditContent.value && !['chart', 'pivot', 'dashboard'].includes(type.value ?? ''))
 const ordered = computed(() => ['table', 'list'].includes(type.value ?? '') && !sorts.value)
 const searching = ref(!!db.search.value)
 const searchInput = ref<HTMLInputElement | null>(null)
@@ -78,7 +79,7 @@ const panelLabel = computed(() => {
     >
       <ListFilter /><span v-if="filters" class="me-db-tool-label">{{ m.filter }}</span><span v-if="filters" class="me-db-badge">{{ filters }}</span>
     </button>
-    <button :ref="el => (buttons.sort = el as HTMLElement)" type="button" class="me-db-tool" :class="{ 'is-on': sorts > 0 }" data-tool="sort" :aria-label="m.sort" :title="m.sort" :aria-expanded="open?.panel === 'sort'" @click="toggle('sort', $event)">
+    <button v-if="hasSort" :ref="el => (buttons.sort = el as HTMLElement)" type="button" class="me-db-tool" :class="{ 'is-on': sorts > 0 }" data-tool="sort" :aria-label="m.sort" :title="m.sort" :aria-expanded="open?.panel === 'sort'" @click="toggle('sort', $event)">
       <ArrowUpDown /><span v-if="sorts" class="me-db-tool-label">{{ m.sort }}</span><span v-if="sorts" class="me-db-badge">{{ sorts }}</span>
     </button>
     <button v-if="hasGroup" type="button" class="me-db-tool" :class="{ 'is-on': !!db.view.value?.config.group_by }" data-tool="group" :aria-label="m.group" :title="m.group" :aria-expanded="open?.panel === 'group'" @click="toggle('group', $event)">

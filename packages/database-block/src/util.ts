@@ -90,6 +90,7 @@ export function viewDefaults(type: ViewType, props: Prop[]): ViewConfig {
     case 'gallery': return { cover: first('files'), size: 'm', card: { props: [] } }
     case 'list': return { card: { props: [] } }
     case 'feed': return { card: { props: [] } }
+    case 'dashboard': return { widgets: [{ id: uuidv7(), kind: 'number', fn: 'count' }, { id: uuidv7(), kind: 'chart', ...viewDefaults('chart', props) }] }
     case 'chart': return { chart: 'bar', x: { prop: first('status', 'select', 'date') ?? props[0]?.id ?? '' }, y: [{ fn: 'count' }] }
     case 'pivot': return { rows: [first('status', 'select') ?? ''].filter(Boolean), cols: [], values: [{ fn: 'count' }], totals: true }
     default: return {}

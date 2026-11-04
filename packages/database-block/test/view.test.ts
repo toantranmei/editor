@@ -1,9 +1,12 @@
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
-import { afterEach, describe, expect, it } from 'vitest'
-import { h, nextTick } from 'vue'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { defineComponent, h, nextTick } from 'vue'
 import DatabaseView from '../src/DatabaseView.vue'
 import { createMemorySource, sampleDatabase, type MemorySource } from '../src/memory-source'
 import type { DateValue } from '../src/types'
+
+// The real chart needs a canvas.
+vi.mock('@toantranmei/chart-block', () => ({ DatabaseChart: defineComponent({ render: () => h('div', { class: 'stub-chart' }) }) }))
 
 const wrappers: VueWrapper[] = []
 afterEach(() => {
@@ -378,5 +381,68 @@ describe('other views', () => {
     source.upsertView({ ...source.views.value.find(v => v.id === 'v-feed')!, config: { card: { props: [] }, feed_preview: false } })
     await settle()
     expect(wrapper.find('[data-preview-text]').exists()).toBe(false)
+  })
+
+  it('dashboard: number and chart widgets with their own filter, add / edit / resize / move / remove widgets', async () => {
+    const { source, wrapper } = await setup(40, 'v-dashboard')
+    expect(wrapper.find('.me-db').attributes('data-view-type')).toBe('dashboard')
+    const ids = () => wrapper.findAll('.me-db-widget').map(w => w.attributes('data-widget-id'))
+    expect(ids()).toEqual(['w-count', 'w-open', 'w-status', 'w-priority'])
+    const num = (id: string) => wrapper.find(`[data-widget-id="${id}"] [data-value]`).text()
+    expect(num('w-count')).toBe('40')
+    const open = source.all().filter(r => !r.values.done).reduce((n, r) => n + (r.values.estimate as number), 0)
+    expect(num('w-open').replace(/\D/g, '')).toBe(String(open))
+    // Chart widgets ask the source with their own config and filter.
+    const chartCalls = source.log.filter(l => l.method === 'chart').map(l => l.args[1] as { widget?: string, filter?: unknown })
+    expect(chartCalls.find(c => c.widget === 'w-priority')!.filter).toEqual({ and: [{ prop: 'priority', op: 'is', value: 'p-high' }] })
+    expect(wrapper.find('[data-widget-id="w-status"]').attributes('data-span')).toBe('2')
+
+    // The view's (toolbar) filter narrows every widget, on top of their own.
+    ;(wrapper.findComponent(DatabaseView).vm as unknown as { db: { updateView: (p: object) => void } }).db.updateView({ filter: { and: [{ prop: 'done', op: 'is', value: true }] } })
+    await settle()
+    expect(num('w-count')).toBe(String(source.all().filter(r => r.values.done).length))
+    expect(num('w-open')).toBe('0')
+
+    // Add a number widget, then edit it in its popover.
+    await wrapper.find('[data-add-widget]').trigger('click')
+    await settle()
+    popover().querySelector<HTMLElement>('[data-widget-kind="number"]')!.click()
+    await settle()
+    const view = () => source.views.value.find(v => v.id === 'v-dashboard')!
+    const added = view().config.widgets!.at(-1)!
+    expect(added).toMatchObject({ kind: 'number', fn: 'count' })
+    const settings = popover().querySelector<HTMLElement>('[data-widget-settings]')!
+    const title = settings.querySelector<HTMLInputElement>('[data-setting="title"]')!
+    title.value = 'Budget'
+    title.dispatchEvent(new Event('change'))
+    await settle()
+    const propSel = popover().querySelector<HTMLSelectElement>('[data-setting="prop"]')!
+    propSel.value = 'budget'
+    propSel.dispatchEvent(new Event('change'))
+    await settle()
+    const fnSel = popover().querySelector<HTMLSelectElement>('[data-setting="fn"]')!
+    fnSel.value = 'max'
+    fnSel.dispatchEvent(new Event('change'))
+    await settle()
+    const span = popover().querySelector<HTMLSelectElement>('[data-setting="span"]')!
+    span.value = '2'
+    span.dispatchEvent(new Event('change'))
+    await settle()
+    expect(view().config.widgets!.at(-1)).toMatchObject({ id: added.id, title: 'Budget', prop: 'budget', fn: 'max', span: 2 })
+    // Its own filter, from the filter builder in the popover.
+    popover().querySelector<HTMLElement>('[data-widget-settings] [data-add-filter]')!.click()
+    await settle()
+    expect(view().config.widgets!.at(-1)!.filter).toBeTruthy()
+    popover().querySelector<HTMLElement>('[data-widget-remove]')!.click()
+    await settle()
+    expect(ids()).toEqual(['w-count', 'w-open', 'w-status', 'w-priority'])
+
+    // Move later / earlier.
+    await wrapper.find('[data-widget-id="w-count"] [data-widget-later]').trigger('click')
+    await settle()
+    expect(ids()).toEqual(['w-open', 'w-count', 'w-status', 'w-priority'])
+    await wrapper.find('[data-widget-id="w-priority"] [data-widget-earlier]').trigger('click')
+    await settle()
+    expect(ids()).toEqual(['w-open', 'w-count', 'w-priority', 'w-status'])
   })
 })

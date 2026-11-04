@@ -84,7 +84,7 @@ export interface FileValue { id: string, name: string, url: string }
 
 // ── 1.3 View ──────────────────────────────────────────────────────────────────
 
-export type ViewType = 'table' | 'board' | 'calendar' | 'timeline' | 'gallery' | 'list' | 'chart' | 'pivot' | 'form' | 'feed'
+export type ViewType = 'table' | 'board' | 'calendar' | 'timeline' | 'gallery' | 'list' | 'chart' | 'pivot' | 'form' | 'feed' | 'dashboard'
 
 export type TextOp = 'equals' | 'not_equals' | 'contains' | 'not_contains' | 'starts_with' | 'ends_with' | 'is_empty' | 'is_not_empty'
 export type NumberOp = '=' | '!=' | '>' | '>=' | '<' | '<=' | 'is_empty' | 'is_not_empty'
@@ -132,6 +132,42 @@ export type OpenMode = 'side_peek' | 'center_peek' | 'full_page'
 
 export type ChartKind = 'bar' | 'line' | 'area' | 'pie' | 'donut' | 'scatter'
 export type ValueFn = 'count' | 'sum' | 'avg' | 'min' | 'max'
+
+/** The chart part of a chart view's config (also a dashboard chart widget's). */
+export interface ChartSpec {
+  chart?: ChartKind
+  x?: { prop: string, bucket?: 'day' | 'week' | 'month' | 'year' }
+  y?: Array<{ prop?: string, fn: ValueFn }>
+  series?: string
+  stacked?: boolean
+}
+
+/**
+ * A dashboard widget (`config.widgets`, in grid order): a chart (the `ChartSpec` fields) or a number card (`fn` of
+ * `prop` over the rows, Notion's calculations; `count` needs no prop). `filter` narrows the rows of this widget (on
+ * top of the view's filter). `span`: 1 = half the width, 2 = the whole width (default 1).
+ */
+export interface DashboardWidget extends ChartSpec {
+  id: string
+  kind: 'chart' | 'number'
+  title?: string
+  span?: 1 | 2
+  /** number: property and calculation (an `AggregateFn`, default `count`). */
+  prop?: string
+  fn?: AggregateFn
+  filter?: FilterGroup
+}
+
+/**
+ * Optional second argument of `chart`: a dashboard widget's chart (`widget` = its id in the view's
+ * `config.widgets`). Its fields replace the view's chart config; `filter`, when present, replaces the view's filter
+ * (`null` = none) like `RowQuery.filter`.
+ */
+export interface ChartQuery extends ChartSpec {
+  widget?: string
+  filter?: FilterGroup | null
+  search?: string
+}
 
 export interface ViewConfig {
   filter?: FilterGroup
@@ -193,6 +229,8 @@ export interface ViewConfig {
   y?: Array<{ prop?: string, fn: ValueFn }>
   series?: string
   stacked?: boolean
+  /** dashboard: the widgets, in grid order. */
+  widgets?: DashboardWidget[]
   /** pivot */
   rows?: string[]
   cols?: string[]
@@ -262,7 +300,8 @@ export interface DatabaseSource {
   groups: (viewId: string, query?: RowQuery) => Promise<Group[]>
   rowsInGroup: (viewId: string, key: string | null, window: RowWindow, query?: RowQuery) => Promise<RowPage>
   aggregate: (viewId: string, propId: string, fn: string, query?: RowQuery) => Promise<number | string | null>
-  chart: (viewId: string) => Promise<ChartResult>
+  /** `query` (dashboard widgets): another chart config / filter than the view's own; older sources ignore it. */
+  chart: (viewId: string, query?: ChartQuery) => Promise<ChartResult>
   pivot: (viewId: string) => Promise<PivotResult>
   sql?: (query: string) => Promise<{ columns: string[], rows: unknown[][] } | { error: string }>
 

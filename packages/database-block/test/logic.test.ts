@@ -190,6 +190,22 @@ describe('memory source queries', () => {
     expect(pivot.cells.length).toBe(pivot.rows.length)
   })
 
+  it('charts a dashboard widget (its own config and filter) and previews rows', async () => {
+    const s = src()
+    const all = await s.chart('v-dashboard', { widget: 'w', chart: 'bar', x: { prop: 'priority' }, y: [{ fn: 'count' }] })
+    expect(all.x).toEqual(['Low', 'Medium', 'High'])
+    expect(all.series[0]!.data.reduce((n, v) => n + v, 0)).toBe(2000)
+    const high = await s.chart('v-dashboard', { x: { prop: 'priority' }, y: [{ fn: 'sum', prop: 'estimate' }], filter: { and: [{ prop: 'priority', op: 'is', value: 'p-high' }] } })
+    expect(high.x).toEqual(['High'])
+    expect(high.series[0]!.data[0]).toBe(s.all().filter(r => r.values.priority === 'p-high').reduce((n, r) => n + (r.values.estimate as number), 0))
+    // The number widget's calculation: aggregate with the widget filter as the query filter.
+    const open = await s.aggregate('v-dashboard', 'estimate', 'sum', { filter: { and: [{ prop: 'done', op: 'is', value: false }] } })
+    expect(open).toBe(s.all().filter(r => !r.values.done).reduce((n, r) => n + (r.values.estimate as number), 0))
+    const previews = await s.rowPreview!(['r1', 'r2', 'r4', 'nope'])
+    expect(Object.keys(previews)).toEqual(['r1', 'r4'])
+    expect(previews.r1!.text).toMatch(/Tóm tắt/)
+  })
+
   it('checks formulas', () => {
     const s = src()
     expect(s.validateFormula!('prop("Budget") / prop("Estimate")')).toEqual({ ok: true, type: 'number' })
