@@ -259,6 +259,11 @@ export interface DatabaseMessages {
   colorColumns: string
   cardSize: string
   fitImage: string
+  /** Card preview options besides None and the files properties. */
+  coverPageCover: string
+  coverPageContent: string
+  cardLayout: string
+  cardLayouts: Record<'list' | 'compact', string>
   showWeekends: string
   showTable: string
   tableOptions: string
@@ -546,6 +551,10 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     colorColumns: 'Color columns',
     cardSize: 'Card size',
     fitImage: 'Fit image',
+    coverPageCover: 'Page cover',
+    coverPageContent: 'Page content',
+    cardLayout: 'Card layout',
+    cardLayouts: { list: 'List', compact: 'Compact' },
     showWeekends: 'Show weekends',
     showTable: 'Show table',
     tableOptions: 'Table',
@@ -829,6 +838,10 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     colorColumns: 'Tô màu cột',
     cardSize: 'Cỡ thẻ',
     fitImage: 'Vừa khung ảnh',
+    coverPageCover: 'Ảnh bìa trang',
+    coverPageContent: 'Nội dung trang',
+    cardLayout: 'Bố cục thẻ',
+    cardLayouts: { list: 'Danh sách', compact: 'Gọn' },
     showWeekends: 'Hiện cuối tuần',
     showTable: 'Hiện bảng',
     tableOptions: 'Bảng',
@@ -1112,6 +1125,10 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     colorColumns: '列着色',
     cardSize: '卡片大小',
     fitImage: '适应图片',
+    coverPageCover: '页面封面',
+    coverPageContent: '页面内容',
+    cardLayout: '卡片布局',
+    cardLayouts: { list: '列表', compact: '紧凑' },
     showWeekends: '显示周末',
     showTable: '显示表格',
     tableOptions: '表格',

@@ -6,7 +6,7 @@
 import { ref } from 'vue'
 import type {
   ChartResult, DatabaseSource, DateValue, FilterCondition, FilterGroup, FilterNode, FormulaCheck, Group, Person,
-  OpenMode, PivotResult, Prop, Row, RowQuery, View, ViewConfig,
+  OpenMode, PivotResult, Prop, Row, RowPreview, RowQuery, View, ViewConfig,
 } from './types'
 import { byPosition, fold, isEmptyValue, uuidv7 } from './util'
 import { dateMs, DAY, dayMs, matchNode, startOfDay } from './match'
@@ -17,6 +17,8 @@ export interface MemoryRow extends Row {
   last_edited_time?: number
   last_edited_by?: string
   unique_id?: number
+  /** Page cover / start of the page content, served by `rowPreview` (card previews). */
+  preview?: RowPreview
 }
 
 export interface MemorySourceInit {
@@ -449,8 +451,10 @@ export function createMemorySource(init: MemorySourceInit): MemorySource {
     return new Map([[null, nulls], ...out])
   }
 
+  /** A row as read by the block (without the memory-only fields). */
+  const out = ({ preview: _, ...r }: MemoryRow): Row => ({ ...r, computed: computedOf(r) })
   const page = (list: MemoryRow[], w: { offset: number, limit: number }) => ({
-    rows: list.slice(w.offset, w.offset + w.limit).map(r => ({ ...r, computed: computedOf(r) })),
+    rows: list.slice(w.offset, w.offset + w.limit).map(out),
     total: list.length,
   })
   function computedOf(r: MemoryRow): Record<string, unknown> | undefined {
@@ -615,7 +619,7 @@ export function createMemorySource(init: MemorySourceInit): MemorySource {
         if (s === null) return false
         const e = dayMs(v?.end) ?? s
         return s <= b && e >= a
-      }).slice(0, 5000).map(r => ({ ...r, computed: computedOf(r) })))
+      }).slice(0, 5000).map(out))
     },
 
     setCell(rowId, propId, value) {
@@ -718,6 +722,15 @@ export function createMemorySource(init: MemorySourceInit): MemorySource {
       const list = [{ id: databaseId, title: meta.value.title, icon: meta.value.icon ?? null }, ...Object.keys(init.related ?? {}).map(id => ({ id, title: id, icon: null }))]
       return wait(list.filter(d => fold(d.title).includes(f)))
     },
+    async rowPreview(ids) {
+      record('rowPreview', [ids])
+      const result: Record<string, RowPreview> = {}
+      for (const id of ids) {
+        const p = byId.get(id)?.preview
+        if (p) result[id] = p
+      }
+      return wait(result)
+    },
     async propsOf(dbId) {
       record('propsOf', [dbId])
       return wait(dbId === databaseId ? props.value : [])
@@ -760,6 +773,16 @@ export function createMemorySource(init: MemorySourceInit): MemorySource {
 // ── Sample data (playground, benchmarks) ─────────────────────────────────────
 
 const WORDS = ['Kế hoạch', 'Thiết kế', 'Báo cáo', 'Roadmap', 'Sprint', 'Launch', 'Review', 'Audit', 'Migration', 'Onboarding', 'Research', 'Hiring', 'Budget', 'Landing page', 'Release', 'Bugfix', 'Workshop', 'Dashboard']
+/** Sample page previews: every other row has some text, every fourth a cover (an inline SVG gradient). */
+function samplePreview(i: number, name: string): RowPreview | undefined {
+  if (i % 2) return undefined
+  const hue = (i * 47) % 360
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="320" height="160"><defs><linearGradient id="g" x2="1" y2="1"><stop offset="0" stop-color="hsl(${hue},70%,72%)"/><stop offset="1" stop-color="hsl(${(hue + 60) % 360},70%,55%)"/></linearGradient></defs><rect width="320" height="160" fill="url(#g)"/></svg>`
+  return {
+    text: `${name}: goals, scope and open questions. Notes from the last sync, next steps and owners.`,
+    cover: i % 4 === 0 ? `data:image/svg+xml,${encodeURIComponent(svg)}` : undefined,
+  }
+}
 const AREAS = ['Q4', 'mobile', 'web', 'API', 'billing', 'search', 'notes', 'editor', 'sync', 'infra']
 
 /** A task database with `count` deterministic rows and one view of each type. */
@@ -840,6 +863,7 @@ export function sampleDatabase(count: number, options: { databaseId?: string, se
       last_edited_time: base,
       last_edited_by: pick(people).id,
       unique_id: i + 1,
+      preview: samplePreview(i, String(values.name)),
     }
   })
 

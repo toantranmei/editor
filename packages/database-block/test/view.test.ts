@@ -345,3 +345,57 @@ describe('other views', () => {
     }
   })
 })
+
+describe('card previews and layout', () => {
+  const withView = async (viewId: string, patch: Record<string, unknown>, drop?: 'rowPreview') => {
+    const init = sampleDatabase(40, { databaseId: 'db1' })
+    init.views = init.views.map(v => (v.id === viewId ? { ...v, config: { ...v.config, ...patch } } : v))
+    const source = createMemorySource(init)
+    if (drop) delete (source as Partial<MemorySource>)[drop]
+    const wrapper = mount({ render: () => h(DatabaseView, { source, databaseId: 'db1', viewId, locale: 'en' }) }, { attachTo: document.body })
+    wrappers.push(wrapper)
+    await settle()
+    return { source, wrapper }
+  }
+
+  it('gallery: page content shows the page text, page cover its cover, batched through rowPreview', async () => {
+    const { source, wrapper } = await withView('v-gallery', { cover: 'page_content' })
+    const card = wrapper.find('.me-db-card[data-row-id="r1"]')
+    expect(card.find('.me-db-cover-text').text()).toContain('goals, scope')
+    expect(wrapper.find('.me-db-card[data-row-id="r2"] .me-db-cover').attributes('data-cover')).toBe('empty')
+    const calls = source.log.filter(l => l.method === 'rowPreview')
+    expect(calls.length).toBe(1)
+    expect((calls[0]!.args[0] as string[])).toContain('r1')
+
+    const { wrapper: w2 } = await withView('v-gallery', { cover: 'page_cover' })
+    expect(w2.find('.me-db-card[data-row-id="r1"] .me-db-cover-img').attributes('src')).toMatch(/^data:image\/svg/)
+    expect(w2.find('.me-db-card[data-row-id="r3"] .me-db-cover').attributes('data-cover')).toBe('empty')
+  })
+
+  it('board: shows a preview only when there is one, compact layout wraps properties; no rowPreview: no preview', async () => {
+    const { wrapper } = await withView('v-board', { card: { props: ['priority', 'owner', 'due'], cover: 'page_content', layout: 'compact' } })
+    expect(wrapper.find('.me-db-card[data-row-id="r1"] .me-db-cover-text').exists()).toBe(true)
+    expect(wrapper.find('.me-db-card[data-row-id="r2"] .me-db-cover').exists()).toBe(false)
+    expect(wrapper.find('.me-db-card-props').classes()).toContain('is-compact')
+
+    const { wrapper: w2 } = await withView('v-board', { card: { props: ['priority'], cover: 'page_cover' } }, 'rowPreview')
+    expect(w2.findAll('.me-db-card[data-row-id]').length).toBeGreaterThan(0)
+    expect(w2.find('.me-db-cover').exists()).toBe(false)
+    expect(w2.find('.me-db-card-props').classes()).not.toContain('is-compact')
+  })
+
+  it('view options list Page cover / Page content and the card layout', async () => {
+    const { source, wrapper } = await withView('v-board', {})
+    await wrapper.find('[data-tool="settings"]').trigger('click')
+    await settle()
+    const select = popover().querySelector<HTMLSelectElement>('[data-setting="cover"]')!
+    expect([...select.options].map(o => o.value).slice(0, 3)).toEqual(['', 'page_cover', 'page_content'])
+    select.value = 'page_content'
+    select.dispatchEvent(new Event('change'))
+    const layout = popover().querySelector<HTMLSelectElement>('[data-setting="card_layout"]')!
+    layout.value = 'compact'
+    layout.dispatchEvent(new Event('change'))
+    await settle()
+    expect(source.views.value.find(v => v.id === 'v-board')!.config.card).toMatchObject({ cover: 'page_content', layout: 'compact' })
+  })
+})

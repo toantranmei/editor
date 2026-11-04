@@ -6,12 +6,14 @@
  */
 import { Plus } from '@lucide/vue'
 import { computed, ref, watch } from 'vue'
+import CardCover from '../components/CardCover.vue'
 import CellValue from '../components/CellValue.vue'
 import { useDb } from '../context'
+import { useCardPreview } from '../preview'
 import { fmt } from '../messages'
 import type { Row } from '../types'
 import { useRowStore } from '../use-rows'
-import { cellValue, coverImage, isEmptyValue, isReadOnly } from '../util'
+import { cellValue, isEmptyValue, isReadOnly } from '../util'
 import { newOption, optionById } from '../values'
 
 defineProps<{ full?: boolean }>()
@@ -21,10 +23,15 @@ const store = useRowStore(db, { grouped: () => !!db.view.value?.config.group_by?
 const groupProp = computed(() => db.props.value.find(p => p.id === db.view.value?.config.group_by?.prop))
 const title = computed(() => db.props.value.find(p => p.type === 'title'))
 const shown = computed(() => (db.view.value?.config.card?.props ?? []).map(id => db.props.value.find(p => p.id === id)).filter(p => !!p))
-const coverProp = computed(() => db.props.value.find(p => p.id === db.view.value?.config.card?.cover && p.type === 'files'))
 const config = computed(() => db.view.value?.config ?? {})
 const cardSize = computed(() => config.value.card?.size ?? 'm')
-const coverUrl = (row: Row) => (coverProp.value ? coverImage(cellValue(row, coverProp.value)) : null)
+const compact = computed(() => config.value.card?.layout === 'compact')
+const preview = useCardPreview(db, () => config.value.card?.cover)
+/** Board cards only show a preview that has something in it. */
+const coverOf = (row: Row) => {
+  const c = preview.coverOf(row)
+  return c && c.kind !== 'empty' ? c : null
+}
 /** Option color of a column (when "Color columns" is on). */
 const columnColor = (key: string | null | undefined) => {
   if (!config.value.color_columns) return undefined
@@ -161,13 +168,13 @@ const loadMore = (key: string | null | undefined) => (limits.value = { ...limits
           @dragend="dragging = null; over = null"
           @click="db.openRow(row.id, $event)"
         >
-          <span v-if="coverProp && coverUrl(row)" class="me-db-cover">
-            <img :src="coverUrl(row)!" alt="" loading="lazy" decoding="async" class="me-db-cover-img">
-          </span>
+          <CardCover v-if="coverOf(row)" :cover="coverOf(row)!" />
           <span class="me-db-card-title">{{ title ? String(cellValue(row, title) ?? '') || m.untitled : m.untitled }}</span>
-          <template v-for="p in shown" :key="p!.id">
-            <CellValue v-if="!isEmptyValue(cellValue(row, p!))" :prop="p!" :value="cellValue(row, p!)" compact />
-          </template>
+          <span v-if="shown.length" class="me-db-card-props" :class="{ 'is-compact': compact }">
+            <template v-for="p in shown" :key="p!.id">
+              <CellValue v-if="!isEmptyValue(cellValue(row, p!))" :prop="p!" :value="cellValue(row, p!)" compact />
+            </template>
+          </span>
         </button>
         <button v-if="s.count > limitOf(s.key)" type="button" class="me-db-text-button" @click="loadMore(s.key)">{{ m.loadMore }}</button>
         <button v-if="db.canEditContent.value" type="button" class="me-db-new-row is-card" @click="newCard(i, $event)"><Plus />{{ m.newRow }}</button>

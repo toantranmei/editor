@@ -683,6 +683,19 @@
     background: var(--me-database-cover-bg);
   }
   .me-db-cover-img { width: 100%; height: 100%; object-fit: cover; }
+  .me-db-cover.is-text { padding: var(--me-space-4) var(--me-space-5); text-align: left; }
+  .me-db-cover-text {
+    display: -webkit-box;
+    overflow: hidden;
+    color: var(--me-database-muted-color);
+    font-size: var(--me-font-size-xs);
+    line-height: var(--me-font-line-height);
+    white-space: pre-wrap;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 5;
+  }
+  .me-db-card-props { display: flex; flex-direction: column; align-items: flex-start; gap: var(--me-space-2); width: 100%; min-width: 0; }
+  .me-db-card-props.is-compact { flex-direction: row; flex-wrap: wrap; align-items: center; }
 
   .me-db-board[data-size="s"] .me-db-column { width: calc(var(--me-database-column-width) * 0.8); }
   .me-db-board[data-size="l"] .me-db-column { width: calc(var(--me-database-column-width) * 1.25); }
