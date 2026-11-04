@@ -1,5 +1,30 @@
 # @toantranmei/database-block
 
+## 0.3.0
+
+### Minor Changes
+
+- 14dcd6f: Cards, icons and sub-items:
+  
+  - Board / gallery card preview: Page cover and Page content (optional `source.rowPreview(rowIds)`, batched for the cards shown) besides None and a files property; card layout List / Compact (`config.card.layout`).
+  - Row page icons (`Row.icon`, emoji or image URL) before the title in table, list, board, gallery and the static render; view option Show page icon (`config.show_page_icon`).
+  - View tabs: an icon (`config.icon`) set from the tab menu, and Display as Icon and name / Icon only (`config.tab_display`).
+  - Sub-items in list (nested ▸, any depth) and board ("N sub-items" on a parent card); Show sub-items as Nested / Flattened list (`config.sub_items_display`) in table, list and board. Relation cells pointing at rows of the same database show their titles once those rows were read.
+- 4a730e9: Feed and dashboard views, drafts that persist:
+  
+  - Feed view (`type: 'feed'`): rows as posts (author / created time, `config.card.props`, page content preview from the new optional `source.rowPreview(rowIds)`, `config.feed_preview`), pages of `config.load_limit` (default 10) with Load more, infinite scroll on a full page or with no limit.
+  - Dashboard view (`type: 'dashboard'`): `config.widgets`, chart and number widgets in a grid, each with its own filter on top of the view's; add, remove, reorder, half / full width, edit in a popover. `source.chart(viewId, query?)` takes an optional widget query (`ChartQuery`).
+  - Viewers' unsaved filter / sorts survive reloads: `options.draftStore` (default `localStorage`, per `options.userId`, database and view; `false` for session only), `localDraftStore` exported.
+- b4e84ab: Notion parity round for the database block:
+  
+  - Filters: Is empty / Is not empty for every type, Files filterable, status filters by group, a filter bar with a chip per sort and filter, and the viewer's unsaved filter / sorts (`RowQuery.filter` / `sorts`) with Reset and Save for everyone.
+  - Rows: row menu (⋮⋮ click, right-click, bulk ⋯) with open in side / center / full page, edit a property of every selected row, duplicate (⌘D), copy link (`options.rowUrl`), save as template, add sub-item, delete; undo / redo (⌘Z, ⌘⇧Z) of data writes (`source.restoreRows` when present).
+  - Properties: the editor saves as you edit; options drag to reorder, sort A → Z / Z → A, swatch colors; status options under their groups with set as default and move to group; number shown as bar / ring, currency list; full / short dates, 12 / 24 hour; URL host only; relation database picker (`source.searchDatabases`) and limit; rollup targets of another database (`source.propsOf`); person / files limit; descriptions; a formula editor with a catalog of properties and functions.
+  - Views: header menu Group and Calculate; group sort / hide / reorder, no-value group last; conditional colors; calendar week view and wrapped titles; timeline quarter / year scales; table vertical lines, load limit with Load more, sub-items; form view; property visibility with search, drag and shown / hidden; lock database (`meta.locked`); copy link to view (`options.viewUrl`); row templates (title property `config.templates`); show / hide the database title.
+  - Button property (`type: 'button'`, `config: { label?, actions }`): edit properties of the row (today / now / me), add a page (optionally opened), open a URL, show a confirmation; one undo step per click; the signed-in person comes from the optional `source.currentUserId`.
+  - Automations (View settings → Automations, title property `config.automations`): when a page is added or a property is edited (optionally only to a matching value), edit properties of that page or add a page; run by the block right after this client's own write, in the same undo step, never re-triggered by their own writes.
+  - Look: switches, grey pill tabs, faint toolbar until hovered, status dots, popovers kept on screen.
+
 ## 0.2.0
 
 ### Minor Changes
