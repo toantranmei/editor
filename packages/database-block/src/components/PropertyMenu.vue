@@ -30,6 +30,8 @@ const db = useDb()
 const m = computed(() => db.m.value)
 const structure = computed(() => db.canEditStructure.value)
 const isTitle = computed(() => props.prop.type === 'title')
+/** Buttons hold no value: no filter, sort or calculation. */
+const valueless = computed(() => props.prop.type === 'button')
 const name = ref(props.prop.name)
 const panel = ref<'menu' | 'types' | 'confirmType' | 'confirmDelete' | 'edit' | 'insert' | 'calc'>('menu')
 const insertSide = ref<'left' | 'right'>('right')
@@ -146,11 +148,13 @@ function remove() {
           </button>
         </template>
         <div class="me-db-separator" role="separator" />
-        <button type="button" class="me-menu-item" role="menuitem" @click="filter"><ListFilter class="me-db-menu-icon" />{{ m.filterBy }}</button>
-        <button type="button" class="me-menu-item" role="menuitem" data-action="sort-asc" @click="sort('asc')"><ArrowUp class="me-db-menu-icon" />{{ sortLabels[0] }}</button>
-        <button type="button" class="me-menu-item" role="menuitem" data-action="sort-desc" @click="sort('desc')"><ArrowDown class="me-db-menu-icon" />{{ sortLabels[1] }}</button>
+        <template v-if="!valueless">
+          <button type="button" class="me-menu-item" role="menuitem" @click="filter"><ListFilter class="me-db-menu-icon" />{{ m.filterBy }}</button>
+          <button type="button" class="me-menu-item" role="menuitem" data-action="sort-asc" @click="sort('asc')"><ArrowUp class="me-db-menu-icon" />{{ sortLabels[0] }}</button>
+          <button type="button" class="me-menu-item" role="menuitem" data-action="sort-desc" @click="sort('desc')"><ArrowDown class="me-db-menu-icon" />{{ sortLabels[1] }}</button>
+        </template>
         <button v-if="canGroup" type="button" class="me-menu-item" role="menuitem" data-action="group" @click="group"><Group class="me-db-menu-icon" />{{ groupedHere ? m.ungroup : m.groupByThis }}</button>
-        <button v-if="isTable" type="button" class="me-menu-item" role="menuitem" data-action="calculate" @click="panel = 'calc'">
+        <button v-if="isTable && !valueless" type="button" class="me-menu-item" role="menuitem" data-action="calculate" @click="panel = 'calc'">
           <Calculator class="me-db-menu-icon" /><span class="me-menu-title">{{ m.calculate }}</span><span v-if="aggregate" class="me-db-menu-value">{{ m.aggregates[aggregate] ?? aggregate }}</span><ChevronRight class="me-db-menu-end" />
         </button>
         <div class="me-db-separator" role="separator" />

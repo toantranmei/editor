@@ -1,13 +1,15 @@
 <script setup lang="ts">
 /**
  * Creates a property ("+" in the table header, "Add property") or edits one's settings: name, type, number format,
- * options, date format, formula (checked with the optional `validateFormula`), relation / rollup, ID prefix.
+ * options, date format, formula (checked with the optional `validateFormula`), relation / rollup, ID prefix, button label
+ * and actions.
  */
 import { Check } from '@lucide/vue'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useDb } from '../context'
 import type { DateDisplay, FormulaCheck, NumberFormat, Prop, PropConfig, PropType, RollupFn, SelectOption } from '../types'
 import { clone, CREATABLE_TYPES, OPTION_TYPES, placeColumn, positionAfter, uuidv7 } from '../util'
+import ActionEditor from './ActionEditor.vue'
 import DbPopover from './DbPopover.vue'
 import FormulaEditor from './FormulaEditor.vue'
 import NumberShowAs from './NumberShowAs.vue'
@@ -57,6 +59,7 @@ function defaultsFor(t: PropType): PropConfig {
     case 'relation': return { database_id: db.databaseId }
     case 'rollup': return { fn: 'count' }
     case 'formula': return { expression: '' }
+    case 'button': return { actions: [] }
     default: return {}
   }
 }
@@ -323,6 +326,17 @@ function save(andClose = true) {
             <option v-for="f in ROLLUP_FNS" :key="f" :value="f">{{ m.rollupFns[f] }}</option>
           </select>
         </label>
+      </template>
+
+      <template v-else-if="type === 'button'">
+        <label class="me-db-field">
+          <span class="me-menu-label">{{ m.buttonLabel }}</span>
+          <input :value="config.label ?? ''" class="me-input" :placeholder="name || m.types.button" data-setting="button_label" @input="patchConfig({ label: ($event.target as HTMLInputElement).value || undefined })">
+        </label>
+        <div class="me-db-field" data-setting="button_actions">
+          <span class="me-menu-label">{{ m.actionsLabel }}</span>
+          <ActionEditor :actions="config.actions ?? []" kind="button" @change="actions => patchConfig({ actions })" />
+        </div>
       </template>
 
       <label v-else-if="type === 'unique_id'" class="me-db-field">

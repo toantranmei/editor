@@ -934,7 +934,7 @@ defineExpose({ sel, checked, startEdit, pasteMatrix, store, rowVirtualizer, colV
                     >
                       <ChevronDown v-if="isExpanded(r.row.id)" /><ChevronRight v-else />
                     </button>
-                    <CellValue v-if="cols[sl.col]" :prop="cols[sl.col]!" :value="valueAt(r.row, sl.col)" />
+                    <CellValue v-if="cols[sl.col]" :prop="cols[sl.col]!" :value="valueAt(r.row, sl.col)" :row="r.row" />
                     <button
                       v-if="sl.col === 0"
                       type="button"
@@ -966,6 +966,7 @@ defineExpose({ sel, checked, startEdit, pasteMatrix, store, rowVirtualizer, colV
           <div class="me-db-tf me-db-gutter" :style="{ width: `${gutter}px` }" />
           <template v-for="sl in slots" :key="sl.key">
             <div v-if="sl.kind === 'pad'" class="me-db-spacer" :style="slotStyle(sl)" />
+            <div v-else-if="cols[sl.col] && !aggregatesFor(cols[sl.col]!).length" class="me-db-tf" :class="{ 'is-first': sl.col === 0, 'is-frozen': sl.left !== undefined, 'is-frozen-last': sl.last }" :style="slotStyle(sl)" />
             <button
               v-else-if="cols[sl.col]"
               type="button"

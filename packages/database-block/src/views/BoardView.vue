@@ -166,7 +166,7 @@ const loadMore = (key: string | null | undefined) => (limits.value = { ...limits
           </span>
           <span class="me-db-card-title">{{ title ? String(cellValue(row, title) ?? '') || m.untitled : m.untitled }}</span>
           <template v-for="p in shown" :key="p!.id">
-            <CellValue v-if="!isEmptyValue(cellValue(row, p!))" :prop="p!" :value="cellValue(row, p!)" compact />
+            <CellValue v-if="p!.type === 'button' || !isEmptyValue(cellValue(row, p!))" :prop="p!" :value="cellValue(row, p!)" :row="row" compact />
           </template>
         </button>
         <button v-if="s.count > limitOf(s.key)" type="button" class="me-db-text-button" @click="loadMore(s.key)">{{ m.loadMore }}</button>

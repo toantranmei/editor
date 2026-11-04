@@ -722,6 +722,7 @@ export function createMemorySource(init: MemorySourceInit): MemorySource {
       record('propsOf', [dbId])
       return wait(dbId === databaseId ? props.value : [])
     },
+    currentUserId: () => userId,
     async people(q) {
       record('people', [q])
       const f = fold(q)

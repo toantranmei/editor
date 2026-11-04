@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { h, nextTick } from 'vue'
 import DatabaseView from '../src/DatabaseView.vue'
 import { createMemorySource, sampleDatabase, type MemorySource } from '../src/memory-source'
-import type { DateValue } from '../src/types'
+import type { Automation, DateValue } from '../src/types'
 
 const wrappers: VueWrapper[] = []
 afterEach(() => {
@@ -343,5 +343,140 @@ describe('other views', () => {
       await settle()
       expect(source.props.value.find(p => p.id === 'tags')!.type).toBe('select')
     }
+  })
+})
+
+describe('button property', () => {
+  it('runs its actions on the row after the confirmation, as one undo step, and is off without edit rights', async () => {
+    const { source, wrapper } = await setup(20)
+    source.upsertProp({
+      id: 'btn',
+      name: 'Finish',
+      type: 'button',
+      position: 'a05',
+      config: { label: 'Mark done', actions: [
+        { id: 'a1', type: 'show_confirm', message: 'Finish it?' },
+        { id: 'a2', type: 'set_values', values: [{ prop: 'status', value: 's-done' }, { prop: 'due', dynamic: 'today' }, { prop: 'owner', dynamic: 'me' }] },
+      ] },
+    })
+    await settle()
+    const button = wrapper.find<HTMLButtonElement>('[data-row="0"] [data-button="btn"]')
+    expect(button.text()).toBe('Mark done')
+    const rowId = (await source.rows('v-table', { offset: 0, limit: 1 })).rows[0]!.id
+    await button.trigger('click')
+    await settle()
+    const dialog = document.body.querySelector<HTMLElement>('[data-button-confirm]')!
+    expect(dialog.textContent).toContain('Finish it?')
+    expect(source.log.filter(l => l.method === 'setCell')).toHaveLength(0)
+    dialog.querySelector<HTMLButtonElement>('[data-confirm]')!.click()
+    await settle()
+    const sets = source.log.filter(l => l.method === 'setCell').map(l => l.args)
+    const d = new Date()
+    const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+    expect(sets).toEqual([[rowId, 'status', 's-done'], [rowId, 'due', { start: today }], [rowId, 'owner', ['u1']]])
+    // One ⌘Z puts every value back.
+    const db = (wrapper.findComponent(DatabaseView).vm as unknown as { db: { undo: () => void, canUndo: { value: boolean } } }).db
+    db.undo()
+    expect(db.canUndo.value).toBe(false)
+    expect(source.log.filter(l => l.method === 'setCell')).toHaveLength(6)
+    // Buttons are neither filterable nor calculable.
+    expect(wrapper.find('[data-agg="btn"]').exists()).toBe(false)
+    source.canEditContent.value = false
+    await settle()
+    expect(wrapper.find<HTMLButtonElement>('[data-row="0"] [data-button="btn"]').element.disabled).toBe(true)
+  })
+
+  it('is created from the property editor with a label and its steps', async () => {
+    const { source, wrapper } = await setup(20)
+    await wrapper.find('.me-db-add-col').trigger('click')
+    await settle()
+    popover().querySelector<HTMLElement>('[data-type="button"]')!.click()
+    await settle()
+    const label = popover().querySelector<HTMLInputElement>('[data-setting="button_label"]')!
+    label.value = 'Ship'
+    label.dispatchEvent(new Event('input'))
+    await settle()
+    const add = () => popover().querySelector<HTMLSelectElement>('[data-action-add]')!
+    add().value = 'set_values'
+    add().dispatchEvent(new Event('change'))
+    await settle()
+    popover().querySelector<HTMLElement>('[data-action-add-value]')!.click()
+    await settle()
+    add().value = 'open_url'
+    add().dispatchEvent(new Event('change'))
+    await settle()
+    const url = popover().querySelector<HTMLInputElement>('[data-action-url]')!
+    url.value = 'example.com'
+    url.dispatchEvent(new Event('change'))
+    await settle()
+    popover().querySelector<HTMLFormElement>('form')!.dispatchEvent(new Event('submit'))
+    await settle()
+    const added = source.props.value.at(-1)!
+    expect(added).toMatchObject({ type: 'button', config: { label: 'Ship', actions: [
+      { type: 'set_values', values: [{ prop: 'name', value: null }] },
+      { type: 'open_url', url: 'example.com' },
+    ] } })
+  })
+})
+
+describe('automations', () => {
+  it('run after the triggering write in the same undo step, never re-trigger, and are edited in View settings', async () => {
+    const { source, wrapper } = await setup(20)
+    const db = (wrapper.findComponent(DatabaseView).vm as unknown as { db: { source: MemorySource, undo: () => void, createRow: (i?: object) => string } }).db
+    const title = source.props.value.find(p => p.type === 'title')!
+    const automations: Automation[] = [
+      // Done → check "Done" and stamp the due date; setting status again from an action must not loop.
+      { id: 'a1', enabled: true, trigger: { type: 'prop_changed', prop: 'status', condition: { prop: 'status', op: 'is', value: 's-done' } }, actions: [
+        { id: 's1', type: 'set_values', values: [{ prop: 'done', value: true }, { prop: 'status', value: 's-done' }] },
+      ] },
+      { id: 'a2', enabled: true, trigger: { type: 'row_added' }, actions: [{ id: 's2', type: 'set_values', values: [{ prop: 'owner', dynamic: 'me' }] }] },
+      { id: 'a3', enabled: false, trigger: { type: 'prop_changed' }, actions: [{ id: 's3', type: 'add_row', values: [] }] },
+    ]
+    source.upsertProp({ ...title, config: { ...title.config, automations } })
+    await settle()
+    const rowId = (await source.rows('v-table', { offset: 0, limit: 1 })).rows[0]!.id
+    const sets = () => source.log.filter(l => l.method === 'setCell').map(l => l.args)
+    db.source.setCell(rowId, 'status', 's-todo')
+    expect(sets()).toEqual([[rowId, 'status', 's-todo']])
+    await settle()
+    db.source.setCell(rowId, 'status', 's-done')
+    expect(sets().slice(1)).toEqual([[rowId, 'status', 's-done'], [rowId, 'done', true], [rowId, 'status', 's-done']])
+    await settle()
+    const id = db.createRow({})
+    expect(sets().at(-1)).toEqual([id, 'owner', ['u1']])
+    expect(source.log.filter(l => l.method === 'createRow')).toHaveLength(1)
+    await settle()
+    // Undo of the new row also drops the automation's write (one step).
+    db.undo()
+    db.undo()
+    expect(sets().slice(-3)).toEqual([[rowId, 'status', 's-done'], [rowId, 'done', false], [rowId, 'status', 's-todo']])
+
+    // View settings → Automations: add one, switch the trigger, add a step, turn it off.
+    await wrapper.find('[data-tool="settings"]').trigger('click')
+    await settle()
+    const panel = () => popover().querySelector<HTMLElement>('[data-panel="automations"]')!
+    popover().querySelector<HTMLElement>('[data-setting="automations"] summary')!.click()
+    panel().querySelector<HTMLElement>('[data-automation-add]')!.click()
+    await settle()
+    const card = () => [...panel().querySelectorAll<HTMLElement>('[data-automation]')].at(-1)!
+    const change = (el: HTMLInputElement | HTMLSelectElement, v: string) => {
+      el.value = v
+      el.dispatchEvent(new Event('change'))
+    }
+    change(card().querySelector<HTMLSelectElement>('[data-trigger-type]')!, 'prop_changed')
+    await settle()
+    change(card().querySelector<HTMLSelectElement>('[data-trigger-prop]')!, 'priority')
+    await settle()
+    card().querySelector<HTMLInputElement>('[data-trigger-condition]')!.click()
+    await settle()
+    change(card().querySelector<HTMLSelectElement>('[data-action-add]')!, 'add_row')
+    await settle()
+    // Buttons-only steps are not offered.
+    expect([...card().querySelectorAll<HTMLOptionElement>('[data-action-add] option')].map(o => o.value)).toEqual(['', 'set_values', 'add_row'])
+    card().querySelector<HTMLInputElement>('[data-automation-enabled]')!.click()
+    await settle()
+    const saved = source.props.value.find(p => p.type === 'title')!.config!.automations!
+    expect(saved).toHaveLength(4)
+    expect(saved[3]).toMatchObject({ enabled: false, trigger: { type: 'prop_changed', prop: 'priority', condition: { prop: 'priority', op: 'is', value: 'p-low' } }, actions: [{ type: 'add_row', values: [] }] })
   })
 })

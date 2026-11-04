@@ -133,5 +133,5 @@ export function normalizeFilter(group: FilterGroup | undefined): FilterGroup | u
   return clean(group) ?? undefined
 }
 
-/** Props a filter condition can target. */
-export const filterableProps = (props: Prop[]) => props
+/** Props a filter condition can target (not buttons: they hold no value). */
+export const filterableProps = (props: Prop[]) => props.filter(p => p.type !== 'button')

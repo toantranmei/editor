@@ -33,14 +33,17 @@ export const byPosition = <T extends { position: string }>(a: T, b: T) => (a.pos
 /** Accent- and case-insensitive text, like the contract's `fold` matching. */
 export const fold = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D').toLowerCase()
 
-export const READ_ONLY_TYPES: ReadonlySet<PropType> = new Set(['rollup', 'formula', 'created_time', 'last_edited_time', 'created_by', 'last_edited_by', 'unique_id'])
+/** Types without a value a user edits (computed, or a button). */
+export const READ_ONLY_TYPES: ReadonlySet<PropType> = new Set(['rollup', 'formula', 'created_time', 'last_edited_time', 'created_by', 'last_edited_by', 'unique_id', 'button'])
+/** Types that hold no value at all: not filterable, sortable, groupable or calculable. */
+export const VALUELESS_TYPES: ReadonlySet<PropType> = new Set(['button'])
 export const isReadOnly = (type: PropType) => READ_ONLY_TYPES.has(type)
 export const OPTION_TYPES: ReadonlySet<PropType> = new Set(['select', 'multi_select', 'status'])
 
 /** Types a user can pick for a new property (title exists exactly once). */
 export const CREATABLE_TYPES: PropType[] = [
   'text', 'number', 'select', 'multi_select', 'status', 'date', 'person', 'files', 'checkbox', 'url', 'email', 'phone',
-  'relation', 'rollup', 'formula', 'created_time', 'last_edited_time', 'created_by', 'last_edited_by', 'unique_id',
+  'relation', 'rollup', 'formula', 'created_time', 'last_edited_time', 'created_by', 'last_edited_by', 'unique_id', 'button',
 ]
 
 /** Visible properties of a view, in column order. The title always comes first. */

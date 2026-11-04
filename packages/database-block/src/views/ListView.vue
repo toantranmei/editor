@@ -81,7 +81,7 @@ function newRow(e: MouseEvent) {
           </button>
           <span class="me-db-list-props">
             <template v-for="p in shown" :key="p!.id">
-              <CellValue v-if="!isEmptyValue(cellValue(it.row, p!))" :prop="p!" :value="cellValue(it.row, p!)" compact />
+              <CellValue v-if="p!.type === 'button' || !isEmptyValue(cellValue(it.row, p!))" :prop="p!" :value="cellValue(it.row, p!)" :row="it.row" compact />
             </template>
           </span>
         </template>

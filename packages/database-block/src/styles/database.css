@@ -423,6 +423,16 @@
   .me-db-color-rules { display: flex; flex-direction: column; gap: var(--me-space-3); padding-top: var(--me-space-2); }
   .me-db-color-rule { display: flex; flex-direction: column; gap: var(--me-space-2); padding: var(--me-space-3); border: var(--me-border-width-thin) solid var(--me-database-border); border-radius: var(--me-radius-md); background: var(--me-db-cc-bg, transparent); }
   .me-db-color-rule .me-db-row > .me-menu-label { flex: none; min-width: var(--me-database-cell-min-width); }
+  /* Button property (cell) and the action steps of buttons / automations. */
+  .me-db-button-cell { display: inline-flex; align-items: center; max-width: 100%; padding: 0 var(--me-space-2); border: var(--me-border-width-thin) solid var(--me-database-border); border-radius: var(--me-database-radius); background: var(--me-database-bg); color: var(--me-color-text); font: inherit; font-size: var(--me-font-size-sm); line-height: var(--me-line-height-normal); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
+  .me-db-button-cell:hover:not(:disabled) { background: var(--me-database-hover-bg); }
+  .me-db-button-cell:disabled { opacity: var(--me-button-disabled-opacity); cursor: default; }
+  .me-db-actions-editor, .me-db-automations { display: flex; flex-direction: column; gap: var(--me-space-3); }
+  .me-db-action, .me-db-automation { display: flex; flex-direction: column; gap: var(--me-space-2); min-width: 0; margin: 0; padding: var(--me-space-3); border: var(--me-border-width-thin) solid var(--me-database-border); border-radius: var(--me-radius-md); }
+  .me-db-action .me-db-row > .me-db-select, .me-db-automation .me-db-row > .me-db-select, .me-db-automation .me-db-row > .me-input { flex: 1; min-width: 0; }
+  .me-db-action-set { display: flex; flex-direction: column; gap: var(--me-space-1); }
+  .me-db-action-value { display: flex; flex-direction: column; gap: var(--me-space-1); }
+  .me-db-automation.is-off { opacity: var(--me-button-disabled-opacity); }
   .me-db-locked { display: inline-flex; align-items: center; gap: var(--me-space-1); padding: 0 var(--me-space-2); color: var(--me-database-muted-color); font-size: var(--me-font-size-xs); }
   .me-db-locked svg { width: var(--me-font-size-xs); height: var(--me-font-size-xs); }
   /* Filter bar (chips of the sorts and filters, Reset / Save for everyone). */
