@@ -16,6 +16,8 @@ export interface History {
   canRedo: Ref<boolean>
   undo: () => void
   redo: () => void
+  /** Every write made while `fn` runs (even after it awaits, e.g. a button's confirmation) is one step. */
+  group: <T>(fn: () => Promise<T> | T) => Promise<T>
 }
 
 const LIMIT = 100
@@ -28,6 +30,7 @@ export function withHistory(inner: DatabaseSource): History {
   const canRedo = ref(false)
   let open: Step | null = null
   let replaying = false
+  let holding = 0
 
   const sync = () => {
     canUndo.value = done.length > 0
@@ -42,7 +45,7 @@ export function withHistory(inner: DatabaseSource): History {
       undone.length = 0
       const step = open
       queueMicrotask(() => {
-        if (open === step) open = null
+        if (open === step && !holding) open = null
       })
     }
     open.undo.unshift(undo)
@@ -139,5 +142,16 @@ export function withHistory(inner: DatabaseSource): History {
     canRedo,
     undo: () => play(done, undone, 'undo'),
     redo: () => play(undone, done, 'redo'),
+    async group(fn) {
+      if (!holding) open = null
+      holding++
+      try {
+        return await fn()
+      }
+      finally {
+        holding--
+        if (!holding) open = null
+      }
+    },
   }
 }

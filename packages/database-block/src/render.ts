@@ -30,6 +30,7 @@ type RenderOptions = Pick<DatabaseBlockOptions, 'messages'> & {
 }
 
 function cellHtml(prop: Prop, row: Row, ctx: RenderContext, db: StaticDatabase, locale: string): string {
+  if (prop.type === 'button') return `<span class="me-db-button-cell">${ctx.escape(prop.config?.label?.trim() || prop.name)}</span>`
   const v = cellValue(row, prop)
   if (isEmptyValue(v)) return ''
   const tag = (name: string, color?: string) => `<span class="me-db-tag"${color && color !== 'default' ? ctx.attr('data-color', color) : ''}>${ctx.escape(name)}</span>`

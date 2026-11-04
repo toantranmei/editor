@@ -6,6 +6,7 @@ const COMMON: AggregateFn[] = ['count', 'count_values', 'count_empty', 'count_no
 
 /** Footer calculations offered for a property. */
 export function aggregatesFor(prop: Prop): AggregateFn[] {
+  if (prop.type === 'button') return []
   const type = resultType(prop)
   if (type === 'checkbox') return ['count', 'checked', 'unchecked', 'percent_checked']
   if (type === 'number' || type === 'unique_id') return [...COMMON, 'sum', 'avg', 'min', 'max', 'median', 'range']

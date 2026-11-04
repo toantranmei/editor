@@ -149,6 +149,23 @@ export interface DatabaseMessages {
   more: string
   loadMore: string
   /** Slash menu (also in block messages). */
+  /** Button property and automations. */
+  buttonLabel: string
+  actionsLabel: string
+  addAction: string
+  deleteAction: string
+  actionTypes: Record<'set_values' | 'add_row' | 'open_url' | 'show_confirm', string>
+  noActions: string
+  setProperty: string
+  openNewRow: string
+  urlFrom: string
+  typedUrl: string
+  confirmMessage: string
+  confirmDefault: string
+  emptyValue: string
+  dynamicNow: string
+  customDate: string
+  me: string
   inline: string
   fullPage: string
   /** Layout / view settings (0.2). */
@@ -339,7 +356,7 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
       title: 'Title', text: 'Text', number: 'Number', select: 'Select', multi_select: 'Multi-select', status: 'Status',
       date: 'Date', person: 'Person', files: 'Files & media', checkbox: 'Checkbox', url: 'URL', email: 'Email',
       phone: 'Phone', relation: 'Relation', rollup: 'Rollup', formula: 'Formula', created_time: 'Created time',
-      last_edited_time: 'Last edited time', created_by: 'Created by', last_edited_by: 'Last edited by', unique_id: 'ID',
+      last_edited_time: 'Last edited time', created_by: 'Created by', last_edited_by: 'Last edited by', unique_id: 'ID', button: 'Button',
     },
     rename: 'Rename',
     changeType: 'Change type',
@@ -553,6 +570,22 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     addRowBelow: 'Click to add below',
     inline: 'Database – inline',
     fullPage: 'Database – full page',
+    buttonLabel: 'Button label',
+    actionsLabel: 'Actions',
+    addAction: 'Add action',
+    deleteAction: 'Delete action',
+    actionTypes: { set_values: 'Edit property', add_row: 'Add page', open_url: 'Open URL', show_confirm: 'Show confirmation' },
+    noActions: 'No actions yet',
+    setProperty: 'Set a property',
+    openNewRow: 'Open the new page',
+    urlFrom: 'Open',
+    typedUrl: 'A link',
+    confirmMessage: 'Message',
+    confirmDefault: 'Are you sure?',
+    emptyValue: 'Empty',
+    dynamicNow: 'Now',
+    customDate: 'A date',
+    me: 'Me',
   },
   vi: {
     untitled: 'Không có tiêu đề',
@@ -622,7 +655,7 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
       title: 'Tiêu đề', text: 'Văn bản', number: 'Số', select: 'Chọn', multi_select: 'Chọn nhiều', status: 'Trạng thái',
       date: 'Ngày', person: 'Người', files: 'Tệp & phương tiện', checkbox: 'Hộp kiểm', url: 'URL', email: 'Email',
       phone: 'Điện thoại', relation: 'Liên kết', rollup: 'Tổng hợp', formula: 'Công thức', created_time: 'Thời gian tạo',
-      last_edited_time: 'Sửa lần cuối', created_by: 'Người tạo', last_edited_by: 'Người sửa cuối', unique_id: 'ID',
+      last_edited_time: 'Sửa lần cuối', created_by: 'Người tạo', last_edited_by: 'Người sửa cuối', unique_id: 'ID', button: 'Nút',
     },
     rename: 'Đổi tên',
     changeType: 'Đổi kiểu',
@@ -836,6 +869,22 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     addRowBelow: 'Bấm để thêm bên dưới',
     inline: 'Cơ sở dữ liệu – trong trang',
     fullPage: 'Cơ sở dữ liệu – toàn trang',
+    buttonLabel: 'Nhãn nút',
+    actionsLabel: 'Hành động',
+    addAction: 'Thêm hành động',
+    deleteAction: 'Xóa hành động',
+    actionTypes: { set_values: 'Sửa thuộc tính', add_row: 'Thêm trang', open_url: 'Mở URL', show_confirm: 'Hiện xác nhận' },
+    noActions: 'Chưa có hành động',
+    setProperty: 'Đặt một thuộc tính',
+    openNewRow: 'Mở trang mới',
+    urlFrom: 'Mở',
+    typedUrl: 'Một liên kết',
+    confirmMessage: 'Lời nhắn',
+    confirmDefault: 'Bạn có chắc không?',
+    emptyValue: 'Để trống',
+    dynamicNow: 'Bây giờ',
+    customDate: 'Một ngày',
+    me: 'Tôi',
   },
   zh: {
     untitled: '无标题',
@@ -905,7 +954,7 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
       title: '标题', text: '文本', number: '数字', select: '单选', multi_select: '多选', status: '状态',
       date: '日期', person: '人员', files: '文件和媒体', checkbox: '复选框', url: '网址', email: '电子邮件',
       phone: '电话', relation: '关联', rollup: '汇总', formula: '公式', created_time: '创建时间',
-      last_edited_time: '最后编辑时间', created_by: '创建者', last_edited_by: '最后编辑者', unique_id: 'ID',
+      last_edited_time: '最后编辑时间', created_by: '创建者', last_edited_by: '最后编辑者', unique_id: 'ID', button: '按钮',
     },
     rename: '重命名',
     changeType: '更改类型',
@@ -1119,6 +1168,22 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     addRowBelow: '点击在下方添加',
     inline: '数据库 – 内嵌',
     fullPage: '数据库 – 整页',
+    buttonLabel: '按钮文字',
+    actionsLabel: '操作',
+    addAction: '添加操作',
+    deleteAction: '删除操作',
+    actionTypes: { set_values: '编辑属性', add_row: '添加页面', open_url: '打开链接', show_confirm: '显示确认' },
+    noActions: '暂无操作',
+    setProperty: '设置属性',
+    openNewRow: '打开新页面',
+    urlFrom: '打开',
+    typedUrl: '一个链接',
+    confirmMessage: '提示信息',
+    confirmDefault: '确定吗？',
+    emptyValue: '空',
+    dynamicNow: '现在',
+    customDate: '指定日期',
+    me: '我',
   },
 }
 

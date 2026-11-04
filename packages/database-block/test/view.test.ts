@@ -345,3 +345,76 @@ describe('other views', () => {
     }
   })
 })
+
+describe('button property', () => {
+  it('runs its actions on the row after the confirmation, as one undo step, and is off without edit rights', async () => {
+    const { source, wrapper } = await setup(20)
+    source.upsertProp({
+      id: 'btn',
+      name: 'Finish',
+      type: 'button',
+      position: 'a05',
+      config: { label: 'Mark done', actions: [
+        { id: 'a1', type: 'show_confirm', message: 'Finish it?' },
+        { id: 'a2', type: 'set_values', values: [{ prop: 'status', value: 's-done' }, { prop: 'due', dynamic: 'today' }, { prop: 'owner', dynamic: 'me' }] },
+      ] },
+    })
+    await settle()
+    const button = wrapper.find<HTMLButtonElement>('[data-row="0"] [data-button="btn"]')
+    expect(button.text()).toBe('Mark done')
+    const rowId = (await source.rows('v-table', { offset: 0, limit: 1 })).rows[0]!.id
+    await button.trigger('click')
+    await settle()
+    const dialog = document.body.querySelector<HTMLElement>('[data-button-confirm]')!
+    expect(dialog.textContent).toContain('Finish it?')
+    expect(source.log.filter(l => l.method === 'setCell')).toHaveLength(0)
+    dialog.querySelector<HTMLButtonElement>('[data-confirm]')!.click()
+    await settle()
+    const sets = source.log.filter(l => l.method === 'setCell').map(l => l.args)
+    const d = new Date()
+    const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+    expect(sets).toEqual([[rowId, 'status', 's-done'], [rowId, 'due', { start: today }], [rowId, 'owner', ['u1']]])
+    // One ⌘Z puts every value back.
+    const db = (wrapper.findComponent(DatabaseView).vm as unknown as { db: { undo: () => void, canUndo: { value: boolean } } }).db
+    db.undo()
+    expect(db.canUndo.value).toBe(false)
+    expect(source.log.filter(l => l.method === 'setCell')).toHaveLength(6)
+    // Buttons are neither filterable nor calculable.
+    expect(wrapper.find('[data-agg="btn"]').exists()).toBe(false)
+    source.canEditContent.value = false
+    await settle()
+    expect(wrapper.find<HTMLButtonElement>('[data-row="0"] [data-button="btn"]').element.disabled).toBe(true)
+  })
+
+  it('is created from the property editor with a label and its steps', async () => {
+    const { source, wrapper } = await setup(20)
+    await wrapper.find('.me-db-add-col').trigger('click')
+    await settle()
+    popover().querySelector<HTMLElement>('[data-type="button"]')!.click()
+    await settle()
+    const label = popover().querySelector<HTMLInputElement>('[data-setting="button_label"]')!
+    label.value = 'Ship'
+    label.dispatchEvent(new Event('input'))
+    await settle()
+    const add = () => popover().querySelector<HTMLSelectElement>('[data-action-add]')!
+    add().value = 'set_values'
+    add().dispatchEvent(new Event('change'))
+    await settle()
+    popover().querySelector<HTMLElement>('[data-action-add-value]')!.click()
+    await settle()
+    add().value = 'open_url'
+    add().dispatchEvent(new Event('change'))
+    await settle()
+    const url = popover().querySelector<HTMLInputElement>('[data-action-url]')!
+    url.value = 'example.com'
+    url.dispatchEvent(new Event('change'))
+    await settle()
+    popover().querySelector<HTMLFormElement>('form')!.dispatchEvent(new Event('submit'))
+    await settle()
+    const added = source.props.value.at(-1)!
+    expect(added).toMatchObject({ type: 'button', config: { label: 'Ship', actions: [
+      { type: 'set_values', values: [{ prop: 'name', value: null }] },
+      { type: 'open_url', url: 'example.com' },
+    ] } })
+  })
+})

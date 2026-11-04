@@ -8,6 +8,8 @@ import { RowStore } from '../src/row-store'
 import { duplicateRows, positionAfter, uuidv7 } from '../src/util'
 import { colorsOf } from '../src/colors'
 import { withHistory } from '../src/history'
+import { resolveValue, resolveValues, runActions, safeUrl } from '../src/actions'
+import type { DbAction } from '../src/types'
 
 const p = (type: Prop['type'], config?: Prop['config'], id = type): Prop => ({ id, name: id, type, position: 'a0', config })
 const flush = () => new Promise(r => setTimeout(r, 0))
@@ -254,5 +256,78 @@ describe('RowStore', () => {
     expect(windows()).toEqual([{ offset: 5000, limit: 100 }])
     expect(store.rowAt(0, 5045)?.values.name).toBe('Changed')
     store.destroy()
+  })
+})
+
+describe('button actions', () => {
+  const p = (type: Prop['type'], config: Prop['config'], id: string): Prop => ({ id, name: id, type, position: 'a0', config })
+  const props = [p('title', undefined, 'name'), p('date', undefined, 'due'), p('person', undefined, 'owner'), p('status', { options: [{ id: 'done', name: 'Done', color: 'green' }] }, 'status'), p('url', undefined, 'link'), p('formula', undefined, 'f')]
+  const now = new Date(2026, 10, 4, 9, 30)
+
+  it('resolves dynamic values (today, now, me) and literals', () => {
+    expect(resolveValue({ prop: 'due', dynamic: 'today' }, props[1]!, { now })).toEqual({ start: '2026-11-04' })
+    expect(resolveValue({ prop: 'due', dynamic: 'now' }, props[1]!, { now })).toEqual({ start: now.toISOString() })
+    expect(resolveValue({ prop: 'owner', dynamic: 'me' }, props[2]!, { currentUserId: 'u1' })).toEqual(['u1'])
+    expect(resolveValue({ prop: 'owner', dynamic: 'me' }, props[2]!, {})).toBeUndefined()
+    expect(resolveValue({ prop: 'status', value: 'done' }, props[3]!, {})).toBe('done')
+    expect(resolveValue({ prop: 'status', value: '' }, props[3]!, {})).toBeNull()
+    // Computed properties are never written.
+    expect(resolveValues([{ prop: 'f', value: 1 }, { prop: 'gone', value: 1 }, { prop: 'status', value: 'done' }], { props })).toEqual({ status: 'done' })
+  })
+
+  it('runs steps in order and stops when the confirmation is declined', async () => {
+    const writes: unknown[][] = []
+    const opened: string[] = []
+    const env = {
+      props,
+      now,
+      setCell: (...a: unknown[]) => void writes.push(['set', ...a]),
+      createRow: (values: Record<string, unknown>) => (writes.push(['create', values]), 'new-row'),
+      openUrl: (u: string) => void opened.push(u),
+      openRow: (id: string) => void opened.push(`row:${id}`),
+    }
+    const row = { id: 'r1', position: 'a0', values: { link: 'example.com/a' } }
+    const actions: DbAction[] = [
+      { id: '1', type: 'set_values', values: [{ prop: 'status', value: 'done' }, { prop: 'due', dynamic: 'today' }] },
+      { id: '2', type: 'add_row', values: [{ prop: 'name', value: 'Follow-up' }], open: true },
+      { id: '3', type: 'open_url', prop: 'link' },
+      { id: '4', type: 'show_confirm', message: 'Really?' },
+      { id: '5', type: 'open_url', url: 'javascript:alert(1)' },
+      { id: '6', type: 'set_values', values: [{ prop: 'name', value: 'After' }] },
+    ]
+    const asked: string[] = []
+    await runActions(actions, row, { ...env, confirm: (msg) => { asked.push(msg); return false } })
+    expect(writes).toEqual([['set', 'r1', 'status', 'done'], ['set', 'r1', 'due', { start: '2026-11-04' }], ['create', { name: 'Follow-up' }]])
+    expect(opened).toEqual(['row:new-row', 'https://example.com/a'])
+    expect(asked).toEqual(['Really?'])
+    writes.length = 0
+    opened.length = 0
+    await runActions(actions, row, { ...env, confirm: () => true })
+    // Unsafe URLs are not opened.
+    expect(opened).toEqual(['row:new-row', 'https://example.com/a'])
+    expect(writes.at(-1)).toEqual(['set', 'r1', 'name', 'After'])
+    expect(safeUrl('mailto:a@b.c')).toBe('mailto:a@b.c')
+    expect(safeUrl('data:text/html,x')).toBeNull()
+  })
+
+  it('groups writes made across an await into one undo step', async () => {
+    const inner = createMemorySource(sampleDatabase(3))
+    const h = withHistory(inner)
+    const view = inner.views.value[0]!
+    const { rows } = await h.source.rows(view.id, { offset: 0, limit: 3 })
+    const r0 = rows[0]!
+    const before = r0.values.name
+    await h.group(async () => {
+      h.source.setCell(r0.id, 'name', 'A')
+      await flush()
+      h.source.setCell(r0.id, 'notes', 'B')
+    })
+    h.source.setCell(r0.id, 'estimate', 9)
+    await flush()
+    h.undo()
+    h.undo()
+    const after = (await inner.rows(view.id, { offset: 0, limit: 3 })).rows.find(r => r.id === r0.id)!
+    expect(after.values.name).toBe(before)
+    expect(h.canUndo.value).toBe(false)
   })
 })

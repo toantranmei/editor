@@ -337,7 +337,7 @@ const value = (e: Event) => (e.target as HTMLSelectElement).value
         <label class="me-db-field">
           <span class="me-menu-label">{{ m.xAxis }}</span>
           <select class="me-input me-db-select" :value="c.x?.prop ?? ''" :disabled="!editable" @change="set({ x: { prop: ($event.target as HTMLSelectElement).value } })">
-            <option v-for="p in all" :key="p.id" :value="p.id">{{ p.name }}</option>
+            <option v-for="p in all.filter(p => p.type !== 'button')" :key="p.id" :value="p.id">{{ p.name }}</option>
           </select>
         </label>
         <label v-if="isDateX" class="me-db-field">

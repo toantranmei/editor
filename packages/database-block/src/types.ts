@@ -11,7 +11,7 @@ import type { DatabaseMessages } from './messages'
 export type PropType =
   | 'title' | 'text' | 'number' | 'select' | 'multi_select' | 'status' | 'date' | 'person' | 'files' | 'checkbox'
   | 'url' | 'email' | 'phone' | 'relation' | 'rollup' | 'formula'
-  | 'created_time' | 'last_edited_time' | 'created_by' | 'last_edited_by' | 'unique_id'
+  | 'created_time' | 'last_edited_time' | 'created_by' | 'last_edited_by' | 'unique_id' | 'button'
 
 /** Option color: an editor palette name (`default` = no color). */
 export type OptionColor = PaletteName | 'default'
@@ -47,6 +47,10 @@ export interface PropConfig {
   expression?: string
   /** title: row templates of the database. */
   templates?: RowTemplate[]
+  /** button: text on the button (default: the property name). */
+  label?: string
+  /** button: what a click does, in order. */
+  actions?: DbAction[]
   /** Any property: a description shown when hovering its header (Notion's ⓘ). */
   description?: string
   /** unique_id */
@@ -106,6 +110,30 @@ export type FilterNode = FilterCondition | FilterGroup
  * `config.templates` (database-wide, synced with the schema); `default` is used by "New".
  */
 export interface RowTemplate { id: string, name: string, values: Record<string, unknown>, default?: boolean }
+
+// ── Buttons and automations ───────────────────────────────────────────────────
+
+/**
+ * A value an action writes into a property: `value` is a contract cell value (as `setCell` takes it; `null` clears),
+ * or `dynamic` is resolved when the action runs: `today` / `now` (date: `{ start: 'YYYY-MM-DD' }` / RFC 3339),
+ * `me` (person: `[current user id]`, from `source.currentUserId`).
+ */
+export interface ActionValue { prop: string, value?: unknown, dynamic?: 'today' | 'now' | 'me' }
+
+/**
+ * One step of a button or an automation (Notion's actions). `set_values`: edit properties of the row;
+ * `add_row`: create a row in this database (`open`: open it, buttons only); `open_url`: open `url` or the row's
+ * URL property `prop` (buttons only); `show_confirm`: ask before running the next steps (buttons only).
+ */
+export type DbAction =
+  | { id: string, type: 'set_values', values: ActionValue[] }
+  | { id: string, type: 'add_row', values: ActionValue[], open?: boolean }
+  | { id: string, type: 'open_url', url?: string, prop?: string }
+  | { id: string, type: 'show_confirm', message?: string }
+export type DbActionType = DbAction['type']
+
+/** Config of a `button` property. */
+export interface ButtonConfig { label?: string, actions: DbAction[] }
 
 /** A conditional color rule (`config.colors`): rows (or one cell) matching `condition` get `color`. */
 export interface ColorRule { id: string, condition: FilterCondition, color: OptionColor, scope?: 'row' | 'prop' }
@@ -283,6 +311,8 @@ export interface DatabaseSource {
   upload?: (file: File) => Promise<FileValue>
 
   // ── Additions of this block (optional) ──
+  /** Id of the signed-in person (buttons / automations "Me"); without it "Me" is not offered. */
+  currentUserId?: () => string | null | undefined
   /** Brings deleted rows back (same ids, values and body); undo uses it when present. */
   restoreRows?: (ids: string[]) => void
   /** Databases a relation can point to (Relation → "Related to" picker); without it the id is typed. */

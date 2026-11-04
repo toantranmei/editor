@@ -4,11 +4,13 @@ import { Check, FileText } from '@lucide/vue'
 import { computed } from 'vue'
 import { useDb } from '../context'
 import { resultType } from '../filters'
-import type { FileValue, Prop } from '../types'
+import type { FileValue, Prop, Row } from '../types'
 import { displayText, optionById } from '../values'
 import { isEmptyValue } from '../util'
+import ButtonCell from './ButtonCell.vue'
 
-const props = defineProps<{ prop: Prop, value: unknown, compact?: boolean }>()
+/** `row`: the row shown (buttons run their actions on it). */
+const props = defineProps<{ prop: Prop, value: unknown, compact?: boolean, row?: Row | null }>()
 const db = useDb()
 
 const type = computed(() => resultType(props.prop))
@@ -65,7 +67,8 @@ const initials = (name: string) => name.split(/\s+/).filter(Boolean).slice(-2).m
 
 <template>
   <span class="me-db-value" :class="{ 'is-number': isNumber, 'is-compact': compact }">
-    <span v-if="isCheckbox" class="me-db-checkbox" :class="{ 'is-checked': !!value }" role="img" :aria-label="value ? db.m.value.checked : db.m.value.unchecked">
+    <ButtonCell v-if="prop.type === 'button'" :prop="prop" :row="row ?? null" />
+    <span v-else-if="isCheckbox" class="me-db-checkbox" :class="{ 'is-checked': !!value }" role="img" :aria-label="value ? db.m.value.checked : db.m.value.unchecked">
       <Check v-if="value" />
     </span>
     <template v-else-if="options.length">
