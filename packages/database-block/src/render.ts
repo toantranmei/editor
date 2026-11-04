@@ -1,7 +1,7 @@
 import type { BlockRenderers, NodeRenderer, RenderBlock, RenderContext } from '@toantranmei/editor/render'
 import { type DatabaseMessages, databaseMessages } from './messages'
 import type { DatabaseBlockOptions, FileValue, Prop, Row, View } from './types'
-import { byPosition, cellValue, isEmptyValue, visibleProps } from './util'
+import { byPosition, cellValue, isEmptyValue, isImageIcon, pageIcon, visibleProps } from './util'
 import { displayText, optionById } from './values'
 
 /**
@@ -86,6 +86,8 @@ export function renderStaticDatabase(
     let content = cellHtml(p, r, ctx, db, locale)
     if (p === titleProp) {
       content ||= `<span class="me-db-muted">${ctx.escape(m.untitled)}</span>`
+      const rowIcon = pageIcon(view, r)
+      if (rowIcon && !isImageIcon(rowIcon)) content = `<span class="me-db-row-icon" aria-hidden="true">${ctx.escape(rowIcon)}</span>${content}`
       const href = hrefOf(r)
       if (href) content = `<a class="me-db-row-link"${ctx.attr('href', href)}>${content}</a>`
     }
