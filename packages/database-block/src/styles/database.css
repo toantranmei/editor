@@ -589,7 +589,8 @@
   .me-db-popover { position: fixed; z-index: 60; overflow: auto; font-size: var(--me-database-font-size); color: var(--me-color-text); }
   .me-db-popover.is-over { padding: 0; }
   .me-db-menu { display: flex; flex-direction: column; gap: var(--me-space-1); width: var(--me-database-menu-width); }
-  .me-db-menu > .me-input { margin-bottom: var(--me-space-2); }
+  /* In a column `.me-input`'s flex: 1 (meant for rows) would collapse it to its text height. */
+  .me-db-menu > .me-input { flex: none; margin-bottom: var(--me-space-2); }
   .me-db-prop-editor { gap: var(--me-space-3); }
   .me-db-field { display: flex; flex-direction: column; gap: var(--me-space-1); }
   .me-db-field > .me-menu-label { padding: 0; }
@@ -646,6 +647,9 @@
   .me-db-picker-list { width: auto; }
   .me-db-picker-item { cursor: pointer; }
   .me-db-picker-check { width: var(--me-font-size-sm); height: var(--me-font-size-sm); margin-left: auto; color: var(--me-database-muted-color); }
+  /* "…" sits at the right edge, after the check when the option is selected. */
+  .me-db-picker-item > .me-db-icon-button { margin-left: auto; }
+  .me-db-picker-check ~ .me-db-icon-button { margin-left: 0; }
   .me-db-picker-item .me-db-icon-button { opacity: 0; }
   .me-db-picker-item:hover .me-db-icon-button, .me-db-picker-item.is-active .me-db-icon-button { opacity: 1; }
   .me-db-files { display: flex; flex-direction: column; gap: var(--me-space-1); width: var(--me-database-menu-width); }
