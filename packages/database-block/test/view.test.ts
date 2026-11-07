@@ -820,3 +820,33 @@ describe('sub-items in list and board, nested or flattened', () => {
     expect(wrapper.find('[data-subtoggle]').exists()).toBe(true)
   })
 })
+
+describe('a host that posts every call to a worker (structured clone)', () => {
+  /** Like a host that sends each call over postMessage: a Vue proxy in an argument throws DataCloneError. */
+  function cloning(source: MemorySource): MemorySource {
+    const out = { ...source } as MemorySource
+    for (const [key, fn] of Object.entries(source)) {
+      if (typeof fn === 'function') (out as unknown as Record<string, unknown>)[key] = (...args: unknown[]) => (fn as (...a: unknown[]) => unknown)(...args.map(a => structuredClone(a)))
+    }
+    return out
+  }
+
+  for (const type of ['select', 'multi_select', 'status'] as const) {
+    it(`adds a ${type} property`, async () => {
+      const source = cloning(createMemorySource(sampleDatabase(20, { databaseId: 'db1' })))
+      const errors: unknown[] = []
+      const wrapper = mount({ render: () => h(DatabaseView, { source, databaseId: 'db1', viewId: 'v-table', locale: 'en', onError: (e: unknown) => errors.push(e) }) }, { attachTo: document.body })
+      wrappers.push(wrapper)
+      await settle()
+      await wrapper.find('.me-db-add-col').trigger('click')
+      await settle()
+      popover().querySelector<HTMLElement>(`[data-type="${type}"]`)!.click()
+      await settle()
+      popover().querySelector<HTMLButtonElement>('button[type="submit"]')!.click()
+      await settle()
+      const added = source.props.value.at(-1)!
+      expect(added.type).toBe(type)
+      expect(errors).toEqual([])
+    })
+  }
+})

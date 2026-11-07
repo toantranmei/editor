@@ -7,7 +7,7 @@ import { localDraftStore } from './drafts'
 import { withHistory } from './history'
 import { normalizeFilter } from './filters'
 import type { ValueContext } from './values'
-import { byPosition, visibleProps } from './util'
+import { byPosition, plainArgs, visibleProps } from './util'
 
 /** Everything the views of one database share (provided by `DatabaseView`). */
 export interface DbContext {
@@ -111,7 +111,8 @@ export function createContext(input: {
   onOpenRow?: (rowId: string, mode: OpenMode, event?: MouseEvent | KeyboardEvent) => void
 }): DbContext {
   // Every write through the block can be undone (⌘Z) / redone (⌘⇧Z).
-  const history = withHistory(input.source)
+  // Every call reaches the host with plain data: a host may post it to a worker, where a Vue proxy can't be cloned.
+  const history = withHistory(plainArgs(input.source))
   // Automations run right after the write that triggers them, in the same undo step. Their own writes go to the
   // history source directly, so they never trigger automations again; undo / redo replay bypasses both layers.
   const recorded = history.source

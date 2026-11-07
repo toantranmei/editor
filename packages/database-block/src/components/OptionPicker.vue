@@ -160,7 +160,7 @@ function remove() {
       <div class="me-db-menu">
         <input v-model="editName" class="me-input" :aria-label="m.optionName" @keydown.enter.prevent="rename(); editing = null" @blur="rename">
         <button type="button" class="me-menu-item me-db-danger" @click="remove"><Trash2 class="me-db-menu-icon" />{{ m.deleteOption }}</button>
-        <div class="me-menu-label">{{ m.colors.default }}</div>
+        <div class="me-menu-label">{{ m.optionColor }}</div>
         <button
           v-for="c in COLORS"
           :key="c"

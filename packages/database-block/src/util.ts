@@ -1,3 +1,4 @@
+import { isProxy, toRaw } from 'vue'
 import type { DatabaseSource, FileValue, Prop, PropType, Row, View, ViewConfig, ViewType } from './types'
 
 /** UUIDv7 (time-ordered), as the contract's ids: clients may create them. */
@@ -72,6 +73,30 @@ export const isEmptyValue = (v: unknown) => v === undefined || v === null || v =
 
 /** Deep clone of plain JSON data. */
 export const clone = <T>(v: T): T => (v === undefined ? v : JSON.parse(JSON.stringify(v)) as T)
+
+/**
+ * A deep copy of `v` without Vue proxies (plain objects and arrays copied, anything else such as a File kept as is).
+ * Hosts may send what the block hands them to a worker (`postMessage`), and a reactive proxy can't be cloned there.
+ */
+export function plain<T>(v: T): T {
+  const raw = isProxy(v) ? toRaw(v) : v
+  if (Array.isArray(raw)) return raw.map(plain) as T
+  if (raw && typeof raw === 'object' && (Object.getPrototypeOf(raw) === Object.prototype || Object.getPrototypeOf(raw) === null)) {
+    const out: Record<string, unknown> = {}
+    for (const [k, x] of Object.entries(raw)) out[k] = plain(x)
+    return out as T
+  }
+  return raw
+}
+
+/** `source` whose every method gets plain arguments ({@link plain}): what the block's components hold may be reactive. */
+export function plainArgs(source: DatabaseSource): DatabaseSource {
+  const out = { ...source } as Record<string, unknown>
+  for (const [key, fn] of Object.entries(source)) {
+    if (typeof fn === 'function') out[key] = (...args: unknown[]) => (fn as (...a: unknown[]) => unknown).apply(source, args.map(plain))
+  }
+  return out as unknown as DatabaseSource
+}
 
 /** Reads a numeric CSS length (px) of a token from an element, with a fallback. */
 export function cssPx(el: Element | null | undefined, name: string, fallback: string): number {
