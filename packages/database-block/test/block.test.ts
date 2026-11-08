@@ -66,7 +66,12 @@ describe('databaseView node', () => {
   it('"Database – inline" creates a database and inserts it on the empty line; full page inserts a link and opens it', async () => {
     const createDatabase = vi.fn(async (kind: string) => (kind === 'inline' ? 'db-new' : 'db-page'))
     const open = vi.fn()
-    const { editor, block } = setup({ source: () => createMemorySource(sampleDatabase(3)), createDatabase, open }, {
+    // A slow source (a worker-backed host): the title row shows up well after the block mounts.
+    const source = async () => {
+      await new Promise(r => setTimeout(r, 60))
+      return createMemorySource(sampleDatabase(3))
+    }
+    const { editor, block } = setup({ source, createDatabase, open }, {
       type: 'doc',
       content: [{ type: 'paragraph', content: [{ type: 'text', text: 'intro' }] }, { type: 'paragraph' }],
     })
@@ -80,9 +85,7 @@ describe('databaseView node', () => {
     // Like Notion: the new block isn't left selected (no block highlight); its title takes the focus.
     expect(editor.state.selection).not.toBeInstanceOf(NodeSelection)
     expect(document.querySelector('.me-db-node')!.classList.contains('is-selected')).toBe(false)
-    await vi.waitFor(() => expect(document.querySelector('[data-db-title]')).not.toBeNull())
-    await settle()
-    expect(document.activeElement?.matches('[data-db-title]')).toBe(true)
+    await vi.waitFor(() => expect(document.activeElement?.matches('[data-db-title]')).toBe(true))
 
     editor.commands.setTextSelection(editor.state.doc.content.size - 1)
     block.items[1]!.insert(editor.chain().focus()).run()

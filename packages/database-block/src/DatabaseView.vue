@@ -5,7 +5,7 @@
  */
 import { Maximize2 } from '@lucide/vue'
 import { baseTokensCss, type LocaleName } from '@toantranmei/editor'
-import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, provide, ref, watch } from 'vue'
 import FilterBar from './components/FilterBar.vue'
 import Toolbar from './components/Toolbar.vue'
 import TitleMenu from './components/TitleMenu.vue'
@@ -99,11 +99,18 @@ function editTitle() {
   titleInput.value?.focus()
   titleInput.value?.select()
 }
-// Just created from the slash menu: type its name right away (like Notion).
-onMounted(() => {
-  if (!takeNewDatabase(props.databaseId)) return
-  nextTick(() => titleInput.value?.focus())
-})
+// Just created from the slash menu: type its name right away (like Notion). The title row appears once the view has
+// loaded (later on a slow / worker-backed source), so focus it when it shows up.
+const focusTitle = takeNewDatabase(props.databaseId)
+if (focusTitle) {
+  let done = false
+  const stop = watch(titleInput, (el) => {
+    if (!el || done) return
+    done = true
+    nextTick(() => el.focus())
+  }, { flush: 'post' })
+  onBeforeUnmount(stop)
+}
 // Remote / host renames show up unless the user is typing here.
 watch(metaTitle, (t) => {
   if (!titleFocused.value) title.value = t
