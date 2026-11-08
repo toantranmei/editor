@@ -1,5 +1,20 @@
 # @toantranmei/editor
 
+## 0.4.1
+
+### Patch Changes
+
+- 08f36e5: Database title row like Notion: a 24px title as wide as its text with no rule under it (focused or not), "+" (add view) right after it on hover, and — with a single view — no tab bar: the toolbar sits at the end of the title row and the table starts right under it. The row handle and checkbox now sit in the page margin when there is room, so the first column lines up with the title and the page text. New token `database.headerRowHeight`; `database.titleSize` is now 24px.
+  
+  The title row gets Notion's "⋯" menu (copy link to view, duplicate view, view database, edit title, edit icon, edit layout, hide title), and "+" (add view, in the title row or the tab bar) opens Notion's "Add a new view" grid: 4 columns of layouts, icon over name. New tokens `database.addViewWidth` and `database.addViewTileHeight`.
+- 08f36e5: "+" in the table header opens Notion's menu: "Type property name…" over the header row (focused), then "Select type" with the types in two columns, in three groups (basic, advanced, automatic), 404px wide. Picking a type creates the property and closes the menu (Enter in the name makes a text property; Escape creates nothing); it is set up from its column menu. A popover over its anchor stays there and scrolls when the window is short instead of jumping up. Lists that scroll inside a popover (block menu search, mention results, emoji grid, relation databases) share `.me-popover-scroll`: only vertical, scrollbar at the popover's edge. Editor tokens: `database.newPropWidth`, `database.propEditorWidth`.
+- 08f36e5: Dragging table rows works like Notion and no longer stutters: it runs on pointer events (not HTML5 drag and drop) and hit tests once per frame, so a move re-renders nothing but one line. The row stays in place, selected; a see-through copy of the whole row (frozen columns included) follows the pointer; one blue line shows where it lands; the page or a full-page table scrolls when the pointer nears an edge; Escape cancels; a click on the handle without moving still opens the row menu. Editor tokens: `database.dragGhostOpacity` (0.4) and `database.dragGhostZ`. The block now needs `@toantranmei/editor` 0.4.1.
+- 08f36e5: Scrollbars look like Notion's in the editor and everything it opens (menus, popovers, database settings): native width, a soft thumb (`--me-color-scrollbar-thumb`: Notion's tertiary text color at 50%, light `#a19e99`, dark `#7d7a75`) on a transparent track.
+- 08f36e5: Tables work like Notion's simple table: the hovered row and column get a small pill on the table's left / top border that grows into a ⋮⋮ button when pointed at — click opens the row / column menu (Escape now closes it), drag moves the row / column (the moving one shows selected, a blue line shows where it lands, Escape cancels). The "+" bars sit 8px from the table, outlined. The block handle (+ ⋮⋮) keeps 18px from the block (`handle.offset`), as Notion, so a click meant for the block doesn't hit it. Table handles stay clickable over the cell toolbar. Tokens: `tableControls.*` reworked (pill / grip sizes and colors, `addGap`, `addBorder`).
+- 08f36e5: A table can be selected as a whole block again (`allowTableNodeSelection`): prosemirror-tables turned the drag handle's selection of the table into a selection of its cells, so dragging a table copied it (only the cells' text was removed from the original) instead of moving it.
+  
+  The block handle no longer disappears while you move the pointer toward it from a lower line of a tall block (a table, an image, code): like Notion, it stays while the pointer is in the block's band left of the content, and hides when the pointer leaves it.
+
 ## 0.4.0
 
 ### Minor Changes

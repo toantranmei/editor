@@ -1,5 +1,23 @@
 # @toantranmei/database-block
 
+## 0.3.2
+
+### Patch Changes
+
+- 08f36e5: A database created from the slash menu is no longer left selected (it showed the block-selection highlight until you clicked another block). Like Notion, the caret leaves the block and an inline database's title takes the focus so you can name it right away.
+- 08f36e5: Database title row like Notion: a 24px title as wide as its text with no rule under it (focused or not), "+" (add view) right after it on hover, and — with a single view — no tab bar: the toolbar sits at the end of the title row and the table starts right under it. The row handle and checkbox now sit in the page margin when there is room, so the first column lines up with the title and the page text. New token `database.headerRowHeight`; `database.titleSize` is now 24px.
+  
+  The title row gets Notion's "⋯" menu (copy link to view, duplicate view, view database, edit title, edit icon, edit layout, hide title), and "+" (add view, in the title row or the tab bar) opens Notion's "Add a new view" grid: 4 columns of layouts, icon over name. New tokens `database.addViewWidth` and `database.addViewTileHeight`.
+- 08f36e5: "+" in the table header opens Notion's menu: "Type property name…" over the header row (focused), then "Select type" with the types in two columns, in three groups (basic, advanced, automatic), 404px wide. Picking a type creates the property and closes the menu (Enter in the name makes a text property; Escape creates nothing); it is set up from its column menu. A popover over its anchor stays there and scrolls when the window is short instead of jumping up. Lists that scroll inside a popover (block menu search, mention results, emoji grid, relation databases) share `.me-popover-scroll`: only vertical, scrollbar at the popover's edge. Editor tokens: `database.newPropWidth`, `database.propEditorWidth`.
+- 08f36e5: Options of select / multi-select / status work as in Notion. The column menu's "Edit property ›" opens the options beside it (the menu stays open): "Sort  Manual ›", the options as colored tags with a drag handle and "›", "+ Add an option"; status lists them under To-do / In progress / Complete with "+" per group and the default marked. An option opens its own menu (name, Delete, Set as default and Group › for status, Colors), the same menu as "…" in a cell (now also for status). Name and description fields of the property editor are no longer squashed.
+  
+  The column menu focuses its name field when it opens, the caret after the name, as in Notion.
+- 08f36e5: Database menus and popovers show all their items, as Notion's: no fixed height. Only when the window is too short does the popover shrink to the room below its anchor (or above, whichever is larger) and scroll, with its scrollbar at its edge instead of inside the padding.
+  
+  While a database menu or popover is open the page no longer scrolls under it (as in Notion): the wheel only scrolls a popover that can scroll that way, and if the page scrolls anyway (its scrollbar dragged) the popover follows its column. The wheel over an inline table scrolls the page again (the table scrolls sideways only).
+- 08f36e5: Dragging table rows works like Notion and no longer stutters: it runs on pointer events (not HTML5 drag and drop) and hit tests once per frame, so a move re-renders nothing but one line. The row stays in place, selected; a see-through copy of the whole row (frozen columns included) follows the pointer; one blue line shows where it lands; the page or a full-page table scrolls when the pointer nears an edge; Escape cancels; a click on the handle without moving still opens the row menu. Editor tokens: `database.dragGhostOpacity` (0.4) and `database.dragGhostZ`. The block now needs `@toantranmei/editor` 0.4.1.
+- 08f36e5: Tables scroll like Notion's. A table that grows with its rows no longer shows a second, vertical scrollbar when it also scrolls sideways (its height includes the sideways scrollbar). The table's scroll area reaches out to the edges of the page's scroll area, so the sideways scrollbar spans the page and a full-page table's vertical scrollbar sits at the page edge, while the columns stay in line with the text; row lines start at the first column. The area is the nearest ancestor that scrolls or carries `data-me-bleed-root` (mark the main column of a page that scrolls the document); `bleed: false` in the block options turns it off.
+
 ## 0.3.1
 
 ### Patch Changes
