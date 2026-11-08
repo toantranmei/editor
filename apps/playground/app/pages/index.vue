@@ -85,7 +85,8 @@ const statusText = computed(() => ({ idle: '', saving: 'Đang lưu...', saved: '
 </script>
 
 <template>
-  <div class="min-h-screen">
+  <!-- data-me-bleed-root: database tables reach out to the page edges (the document scrolls this page) -->
+  <div class="min-h-screen" data-me-bleed-root>
     <header class="sticky top-0 z-20 flex h-11 items-center justify-between bg-white/90 px-4 text-sm backdrop-blur dark:bg-[#191919]/90">
       <div class="truncate text-neutral-700 dark:text-neutral-300">
         {{ title || 'Không có tiêu đề' }}

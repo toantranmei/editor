@@ -41,7 +41,7 @@ const pointerMoved = usePointerMoved()
 <template>
   <!-- Always render a root element (the popup positions it); hide it while empty. -->
   <div ref="root" v-bind="scope" class="me-popover me-emoji-menu" :hidden="!items.length">
-    <div class="me-emoji-menu-grid">
+    <div class="me-emoji-menu-grid me-popover-scroll">
       <button
         v-for="(e, i) in items"
         :key="e.unicode"

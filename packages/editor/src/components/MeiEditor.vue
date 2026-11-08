@@ -24,6 +24,7 @@ import BlockMenu from './BlockMenu.vue'
 import FormatMenu from './FormatMenu.vue'
 import MeiOutline from './MeiOutline.vue'
 import TableControls from './TableControls.vue'
+import { HandleGutter } from '../extensions/handle-gutter'
 
 const props = withDefaults(defineProps<{
   /** Document as Tiptap JSON. Use with `v-model`. */
@@ -177,6 +178,14 @@ function createEditor(extra: AnyExtension[]) {
         // Collaboration brings Yjs undo (Mod-z / Mod-Shift-z); two histories would fight.
         undoRedo: !collaboration,
       }),
+      HandleGutter.configure({
+        block: () => {
+          const dom = handlePos === null ? null : editor.value?.view.nodeDOM(handlePos)
+          return dom instanceof HTMLElement ? dom : null
+        },
+        handle: () => rootEl.value?.querySelector<HTMLElement>('.me-drag-handle') ?? null,
+        locked: () => handleLocked,
+      }),
       ...extra,
       ...(props.extensions ?? []),
     ],
@@ -289,7 +298,9 @@ function onDragStart() {
   if (config) config.active = true
 }
 
+let handleLocked = false
 function setHandleLocked(locked: boolean) {
+  handleLocked = locked
   const ed = editor.value
   if (ed && !ed.isDestroyed) ed.view.dispatch(ed.state.tr.setMeta('lockDragHandle', locked))
 }

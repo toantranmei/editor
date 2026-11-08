@@ -1,16 +1,15 @@
 <script setup lang="ts">
 /**
  * Select / multi-select / status editor: search, pick, create an option (when the user may edit the schema),
- * and edit an option (rename, color, delete) through its "⋯" menu.
+ * and edit an option through its "⋯" menu (the property's option menu: name, delete, default / group, color).
  */
-import { Check, MoreHorizontal, Plus, Trash2, X } from '@lucide/vue'
-import { COLORS } from '@toantranmei/editor'
+import { Check, MoreHorizontal, Plus, X } from '@lucide/vue'
 import { computed, nextTick, onMounted, ref } from 'vue'
 import { useDb } from '../context'
-import type { OptionColor, Prop, SelectOption } from '../types'
+import type { Prop, PropConfig, SelectOption } from '../types'
 import { fold } from '../util'
 import { newOption, optionsOf } from '../values'
-import DbPopover from './DbPopover.vue'
+import OptionMenu from './OptionMenu.vue'
 
 const props = withDefaults(defineProps<{
   prop: Prop
@@ -28,8 +27,12 @@ const m = computed(() => db.m.value)
 const query = ref(props.initialQuery)
 const input = ref<HTMLInputElement | null>(null)
 const active = ref(0)
-const canCreate = computed(() => props.editable && db.canEditStructure.value && props.prop.type !== 'status')
-const options = computed(() => optionsOf(props.prop))
+const canEdit = computed(() => props.editable && db.canEditStructure.value)
+/** Status options are added in the property's menu (each belongs to a group), not from a cell. */
+const canCreate = computed(() => canEdit.value && props.prop.type !== 'status')
+/** The property as the source has it now (its option menu saves while open). */
+const live = computed(() => db.props.value.find(p => p.id === props.prop.id) ?? props.prop)
+const options = computed(() => optionsOf(live.value))
 const filtered = computed(() => {
   const q = fold(query.value.trim())
   return q ? options.value.filter(o => fold(o.name).includes(q)) : options.value
@@ -53,7 +56,12 @@ function toggle(opt: SelectOption) {
 }
 
 function saveOptions(next: SelectOption[]) {
-  db.source.upsertProp({ ...props.prop, config: { ...props.prop.config, options: next } })
+  patchConfig({ options: next })
+}
+function patchConfig(patch: Partial<PropConfig>) {
+  const config: PropConfig = { ...live.value.config, ...patch }
+  for (const k of Object.keys(patch)) if (patch[k] === undefined) delete config[k]
+  db.source.upsertProp({ ...live.value, config })
 }
 
 function create() {
@@ -87,30 +95,10 @@ function onKey(e: KeyboardEvent) {
   }
 }
 
-// ── Option menu (rename / color / delete) ──
-const editing = ref<{ option: SelectOption, anchor: HTMLElement } | null>(null)
-const editName = ref('')
+// ── Option menu ──
+const editing = ref<{ id: string, anchor: HTMLElement } | null>(null)
 function openEdit(option: SelectOption, e: MouseEvent) {
-  editing.value = { option, anchor: e.currentTarget as HTMLElement }
-  editName.value = option.name
-}
-function rename() {
-  const e = editing.value
-  if (!e || !editName.value.trim() || editName.value === e.option.name) return
-  saveOptions(options.value.map(o => (o.id === e.option.id ? { ...o, name: editName.value.trim() } : o)))
-}
-function recolor(color: OptionColor) {
-  const e = editing.value
-  if (!e) return
-  saveOptions(options.value.map(o => (o.id === e.option.id ? { ...o, color } : o)))
-  editing.value = { ...e, option: { ...e.option, color } }
-}
-function remove() {
-  const e = editing.value
-  if (!e) return
-  saveOptions(options.value.filter(o => o.id !== e.option.id))
-  emit('change', props.value.filter(id => id !== e.option.id))
-  editing.value = null
+  editing.value = editing.value?.id === option.id ? null : { id: option.id, anchor: e.currentTarget as HTMLElement }
 }
 </script>
 
@@ -134,9 +122,9 @@ function remove() {
         @mouseenter="active = i"
         @click="toggle(opt)"
       >
-        <span class="me-db-tag" :data-color="opt.color === 'default' ? undefined : opt.color">{{ opt.name }}</span>
+        <span class="me-db-tag" :class="{ 'is-status': prop.type === 'status' }" :data-color="opt.color === 'default' ? undefined : opt.color">{{ opt.name }}</span>
         <Check v-if="value.includes(opt.id)" class="me-db-picker-check" />
-        <button v-if="canCreate" type="button" class="me-db-icon-button" :aria-label="m.editOptions" @click.stop="openEdit(opt, $event)">
+        <button v-if="canEdit" type="button" class="me-db-icon-button" :aria-label="m.editOptions" data-option-more @click.stop="openEdit(opt, $event)">
           <MoreHorizontal />
         </button>
       </div>
@@ -156,24 +144,16 @@ function remove() {
       <div v-if="!filtered.length && !showCreate" class="me-menu-empty">{{ m.noResults }}</div>
     </div>
 
-    <DbPopover v-if="editing" :anchor="editing.anchor" :scope="db.scope.value" placement="right" @close="editing = null">
-      <div class="me-db-menu">
-        <input v-model="editName" class="me-input" :aria-label="m.optionName" @keydown.enter.prevent="rename(); editing = null" @blur="rename">
-        <button type="button" class="me-menu-item me-db-danger" @click="remove"><Trash2 class="me-db-menu-icon" />{{ m.deleteOption }}</button>
-        <div class="me-menu-label">{{ m.optionColor }}</div>
-        <button
-          v-for="c in COLORS"
-          :key="c"
-          type="button"
-          class="me-menu-item"
-          :aria-pressed="editing.option.color === c"
-          @click="recolor(c as OptionColor)"
-        >
-          <span class="me-db-swatch" :data-color="c === 'default' ? undefined : c" />
-          <span class="me-menu-title">{{ m.colors[c] }}</span>
-          <Check v-if="editing.option.color === c" class="me-db-picker-check" />
-        </button>
-      </div>
-    </DbPopover>
+    <OptionMenu
+      v-if="editing"
+      :key="editing.id"
+      :config="live.config ?? {}"
+      :option-id="editing.id"
+      :anchor="editing.anchor"
+      :status="prop.type === 'status'"
+      @change="patchConfig"
+      @removed="id => emit('change', value.filter(x => x !== id))"
+      @close="editing = null"
+    />
   </div>
 </template>

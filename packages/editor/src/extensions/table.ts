@@ -25,7 +25,10 @@ const ColoredHeader = TableHeader.extend({
 })
 
 export const tableExtensions = [
-  TableKit.configure({ table: { resizable: true }, tableCell: false, tableHeader: false }),
+  // allowTableNodeSelection: the whole table can be selected as a block (drag handle, block menu, Delete). Without it
+  // prosemirror-tables turns that selection into one of its cells, so a drag copied the table (only the cells' text
+  // was removed) and Delete emptied the cells instead of removing the table.
+  TableKit.configure({ table: { resizable: true, allowTableNodeSelection: true }, tableCell: false, tableHeader: false }),
   ColoredCell,
   ColoredHeader,
 ]

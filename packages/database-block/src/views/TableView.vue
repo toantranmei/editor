@@ -51,7 +51,60 @@ watch(scroller, (el) => {
     def: cssPx(el, '--me-database-cell-default-width', T.cellDefaultWidth),
   }
 })
-const gutter = computed(() => sizes.value.handle + sizes.value.select)
+/**
+ * Bleed (Notion): the table's scroll area reaches out to the edges of the page's scroll area, so its sideways
+ * scrollbar spans the page. The extra room on the left widens the (sticky) gutter, so columns stay in line with the
+ * text and nothing scrolls into the margin; on the right it is room after the last column.
+ */
+const wrap = ref<HTMLElement | null>(null)
+const bleed = ref({ left: 0, right: 0 })
+const SCROLLS = /(auto|scroll|overlay)/
+/**
+ * What the table may reach out to: the nearest ancestor that scrolls (Notion's page scroller, a peek panel) or that
+ * the host marks with `data-me-bleed-root` (a page that scrolls the document, e.g. its main column). None: no bleed,
+ * so a table never spreads over a sidebar or the whole window.
+ */
+function bleedRoot(el: HTMLElement): HTMLElement | null {
+  for (let p = el.parentElement; p && p !== document.body && p !== document.documentElement; p = p.parentElement) {
+    if (p.hasAttribute('data-me-bleed-root')) return p
+    const s = getComputedStyle(p)
+    if (SCROLLS.test(s.overflowY) || SCROLLS.test(s.overflowX)) return p
+  }
+  return null
+}
+function measureBleed() {
+  const el = wrap.value
+  const root = el && db.options.bleed !== false ? bleedRoot(el) : null
+  if (!el || !root) {
+    if (bleed.value.left || bleed.value.right) bleed.value = { left: 0, right: 0 }
+    return
+  }
+  const r = el.getBoundingClientRect()
+  const start = root.getBoundingClientRect().left + root.clientLeft
+  const end = start + root.clientWidth
+  const next = { left: Math.max(0, Math.floor(r.left - start)), right: Math.max(0, Math.floor(end - r.right)) }
+  if (next.left !== bleed.value.left || next.right !== bleed.value.right) bleed.value = next
+}
+let bleedObserver: ResizeObserver | undefined
+watch(wrap, (el) => {
+  bleedObserver?.disconnect()
+  if (!el || typeof ResizeObserver === 'undefined') return
+  bleedObserver = new ResizeObserver(() => measureBleed())
+  bleedObserver.observe(el)
+  const root = bleedRoot(el)
+  if (root) bleedObserver.observe(root)
+  measureBleed()
+})
+if (typeof window !== 'undefined') window.addEventListener('resize', measureBleed)
+onBeforeUnmount(() => {
+  bleedObserver?.disconnect()
+  if (typeof window !== 'undefined') window.removeEventListener('resize', measureBleed)
+})
+/**
+ * Handle + checkbox columns. Like Notion they sit in the page margin (the left bleed), so the first column lines up
+ * with the title and the page's text; only without enough margin do they push the columns in.
+ */
+const gutter = computed(() => Math.max(sizes.value.handle + sizes.value.select, bleed.value.left))
 
 // ── Columns: TanStack Table ──
 const cols = computed(() => db.visible.value)
@@ -111,7 +164,7 @@ const restStarts = computed(() => {
 })
 const restWidth = computed(() => restStarts.value[restStarts.value.length - 1]!)
 const addColWidth = computed(() => sizes.value.def / 2)
-const totalWidth = computed(() => gutter.value + frozenWidth.value + restWidth.value + addColWidth.value)
+const totalWidth = computed(() => gutter.value + frozenWidth.value + restWidth.value + addColWidth.value + bleed.value.right)
 
 // ── Text wrapping (per column, `config.wraps` over `config.wrap`): rows then grow and are measured ──
 const wraps = computed(() => {
@@ -250,7 +303,21 @@ const loadLimit = computed(() => (props.full ? 0 : (db.view.value?.config.load_l
 const shownLines = ref(0)
 watch(() => [db.view.value?.id, loadLimit.value], () => (shownLines.value = loadLimit.value), { immediate: true })
 const limited = computed(() => loadLimit.value > 0 && itemCount.value > shownLines.value)
-const limitedHeight = computed(() => (limited.value ? sizes.value.header * 2 + shownLines.value * sizes.value.row + 2 : contentHeight.value))
+/**
+ * Thickness of the sideways scrollbar (0 for overlay scrollbars). A table that grows with its rows adds it to its
+ * height: it scrolls sideways only, the page scrolls it up and down (no second, vertical scrollbar).
+ */
+const hBar = ref(0)
+function measureBar() {
+  const el = scroller.value
+  if (!el) return
+  const s = getComputedStyle(el)
+  const bar = el.offsetHeight - el.clientHeight - Number.parseFloat(s.borderTopWidth || '0') - Number.parseFloat(s.borderBottomWidth || '0')
+  const next = Math.max(0, Math.round(bar))
+  if (next !== hBar.value) hBar.value = next
+}
+const limitedHeight = computed(() => (limited.value ? sizes.value.header * 2 + shownLines.value * sizes.value.row + 2 : contentHeight.value) + (loadLimit.value > 0 ? hBar.value : 0))
+watch([totalWidth, bleed, scroller], () => nextTick(measureBar), { immediate: true })
 const remaining = computed(() => Math.max(0, itemCount.value - shownLines.value))
 const vCols = computed(() => colVirtualizer.value.getVirtualItems().map(v => ({ ...v, col: v.index + frozen.value })))
 const padLeft = computed(() => (vCols.value.length ? restStarts.value[vCols.value[0]!.index]! : 0))
@@ -675,36 +742,166 @@ function toggleAll() {
 }
 
 const canMove = computed(() => db.canEditContent.value && !db.view.value?.config.sorts?.length)
-const drag = ref<{ id: string, over: number | null, after: boolean } | null>(null)
-function onRowDragStart(e: DragEvent, row: Row) {
-  if (!canMove.value) return e.preventDefault()
-  drag.value = { id: row.id, over: null, after: false }
-  e.dataTransfer?.setData('application/x-me-db-row', row.id)
-  if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move'
-}
-function onRowDragOver(e: DragEvent, index: number) {
-  if (!drag.value) return
+// ── Rows: drag to move (Notion) ──
+// Pointer events, not HTML5 drag and drop: a see-through copy of the whole row follows the pointer, one blue line
+// shows where it lands (one element, not a class on every row, so a move doesn't re-render the rows), the page or
+// the table scrolls when the pointer nears its edge, Escape cancels. Hit testing runs once per frame.
+const dragId = ref<string | null>(null)
+const dropLine = ref<{ index: number, after: boolean, top: number } | null>(null)
+let rowDrag: { id: string, el: HTMLElement, startX: number, startY: number, x: number, y: number, grabY: number, active: boolean } | null = null
+let ghost: HTMLElement | null = null
+let frameId = 0
+let suppressClick = false
+const EDGE = 56
+const MAX_SPEED = 18
+
+function onHandlePointerDown(e: PointerEvent, row: Row) {
+  if (e.button !== 0 || !canMove.value) return
+  const el = (e.currentTarget as HTMLElement).closest('.me-db-tr') as HTMLElement | null
+  if (!el) return
   e.preventDefault()
-  const el = e.currentTarget as HTMLElement
-  const r = el.getBoundingClientRect()
-  drag.value = { ...drag.value, over: index, after: e.clientY > r.top + r.height / 2 }
+  rowDrag = { id: row.id, el, startX: e.clientX, startY: e.clientY, x: e.clientX, y: e.clientY, grabY: e.clientY - el.getBoundingClientRect().top, active: false }
+  window.addEventListener('pointermove', onRowDragMove)
+  window.addEventListener('pointerup', onRowDragUp)
+  window.addEventListener('pointercancel', cancelRowDrag)
+  window.addEventListener('keydown', onRowDragKey, true)
 }
-function onRowDrop(e: DragEvent) {
-  const d = drag.value
-  drag.value = null
-  if (!d || d.over === null) return
+function onRowDragMove(e: PointerEvent) {
+  const d = rowDrag
+  if (!d) return
+  d.x = e.clientX
+  d.y = e.clientY
+  if (!d.active) {
+    if (Math.hypot(d.x - d.startX, d.y - d.startY) < 4) return
+    beginRowDrag()
+  }
   e.preventDefault()
-  const item = itemAt(d.over)
+  if (!frameId) frameId = requestAnimationFrame(rowDragFrame)
+}
+function scopeAttrs(el: HTMLElement) {
+  for (const [k, v] of Object.entries(db.scope.value)) {
+    if (k === 'class') el.classList.add(...(Array.isArray(v) ? v : String(v).split(' ')).filter(Boolean).map(String))
+    else if (v !== undefined && v !== null && v !== false) el.setAttribute(k, String(v))
+  }
+}
+function beginRowDrag() {
+  const d = rowDrag
+  const sc = scroller.value
+  if (!d || !sc) return
+  d.active = true
+  dragId.value = d.id
+  suppressClick = true
+  // The copy: a box the size of the table's visible width, scrolled like the table so frozen columns stay put.
+  const box = document.createElement('div')
+  scopeAttrs(box)
+  box.classList.add('me-db-row-ghost')
+  const wrapEl = wrap.value
+  if (wrapEl?.classList.contains('is-no-vlines')) box.classList.add('is-no-vlines')
+  const r = sc.getBoundingClientRect()
+  box.style.left = `${r.left}px`
+  box.style.width = `${sc.clientWidth}px`
+  box.style.height = `${d.el.offsetHeight}px`
+  const copy = d.el.cloneNode(true) as HTMLElement
+  copy.classList.remove('is-checked', 'is-dragging')
+  copy.style.transform = 'none'
+  box.appendChild(copy)
+  document.body.appendChild(box)
+  box.scrollLeft = sc.scrollLeft
+  ghost = box
+  document.documentElement.classList.add('me-db-row-dragging')
+}
+/** What scrolls the rows up and down: the table (full page) or the page around it. */
+function verticalScroller(): HTMLElement | null {
+  const sc = scroller.value
+  if (sc && sc.scrollHeight > sc.clientHeight + 1 && getComputedStyle(sc).overflowY !== 'hidden') return sc
+  for (let p = wrap.value?.parentElement; p && p !== document.body; p = p.parentElement) {
+    if (/(auto|scroll|overlay)/.test(getComputedStyle(p).overflowY) && p.scrollHeight > p.clientHeight) return p
+  }
+  return (document.scrollingElement as HTMLElement | null) ?? document.documentElement
+}
+function rowDragFrame() {
+  frameId = 0
+  const d = rowDrag
+  const sc = scroller.value
+  if (!d?.active || !sc) return
+  if (ghost) ghost.style.transform = `translate(${d.x - d.startX}px, ${d.y - d.grabY}px)`
+  // Auto scroll near the edges (faster closer to them).
+  const v = verticalScroller()
+  let again = false
+  if (v) {
+    const isPage = v === document.scrollingElement || v === document.documentElement
+    const top = isPage ? 0 : v.getBoundingClientRect().top
+    const bottom = isPage ? window.innerHeight : v.getBoundingClientRect().bottom
+    const speed = d.y < top + EDGE ? -MAX_SPEED * (1 - Math.max(0, d.y - top) / EDGE) : d.y > bottom - EDGE ? MAX_SPEED * (1 - Math.max(0, bottom - d.y) / EDGE) : 0
+    if (speed) {
+      const before = v.scrollTop
+      v.scrollTop += speed
+      again = v.scrollTop !== before
+    }
+  }
+  // Where it lands: the row under the pointer, before or after its middle.
+  const r = sc.getBoundingClientRect()
+  const y = d.y - r.top + sc.scrollTop - sizes.value.header
+  const list = rendered.value.filter(x => x.item?.kind === 'row' || x.item?.kind === 'child')
+  let next: { index: number, after: boolean, top: number } | null = null
+  if (list.length) {
+    let hit = list.find(x => y >= x.top && y < x.top + x.v.size)
+    if (!hit) hit = y < list[0]!.top ? list[0] : list[list.length - 1]
+    const after = y > hit!.top + hit!.v.size / 2
+    next = hit!.row?.id === d.id ? null : { index: hit!.v.index, after, top: after ? hit!.top + hit!.v.size : hit!.top }
+  }
+  const cur = dropLine.value
+  if (next?.index !== cur?.index || next?.after !== cur?.after || next?.top !== cur?.top) dropLine.value = next
+  if (again) frameId = requestAnimationFrame(rowDragFrame)
+}
+function onRowDragKey(e: KeyboardEvent) {
+  if (e.key !== 'Escape' || !rowDrag) return
+  e.preventDefault()
+  e.stopPropagation()
+  cancelRowDrag()
+}
+function onRowDragUp() {
+  const d = rowDrag
+  const line = dropLine.value
+  endRowDrag()
+  if (d?.active && line) moveTo(d.id, line.index, line.after)
+}
+function cancelRowDrag() {
+  endRowDrag()
+}
+function endRowDrag() {
+  window.removeEventListener('pointermove', onRowDragMove)
+  window.removeEventListener('pointerup', onRowDragUp)
+  window.removeEventListener('pointercancel', cancelRowDrag)
+  window.removeEventListener('keydown', onRowDragKey, true)
+  if (frameId) cancelAnimationFrame(frameId)
+  frameId = 0
+  ghost?.remove()
+  ghost = null
+  document.documentElement.classList.remove('me-db-row-dragging')
+  rowDrag = null
+  dragId.value = null
+  dropLine.value = null
+  // The click that ends a drag doesn't open the row menu.
+  setTimeout(() => (suppressClick = false), 0)
+}
+onBeforeUnmount(endRowDrag)
+function onHandleClick(row: Row, e: MouseEvent) {
+  if (suppressClick) return
+  openRowMenu(row, e.currentTarget as HTMLElement)
+}
+/** Moves row `id` before / after the row at item `index` (into its group: that group's value). */
+function moveTo(id: string, index: number, after: boolean) {
+  const item = itemAt(index)
   if (item?.kind !== 'row' || !store.value) return
   const target = store.value.rowAt(item.seg, item.index)
-  if (!target || target.id === d.id) return
-  const before = d.after ? store.value.rowAt(item.seg, item.index + 1) : target
-  const after = d.after ? target : store.value.rowAt(item.seg, item.index - 1)
-  db.source.moveRow(d.id, after?.id ?? null, before?.id ?? null)
-  // Dropped into another group: take that group's value.
-  const key = segment(item.seg)?.key
-  const gv = groupValue(key)
-  if (store.value.grouped && groupProp.value && gv !== undefined && !isReadOnly(groupProp.value.type)) db.source.setCell(d.id, groupProp.value.id, gv)
+  if (!target || target.id === id) return
+  const before = after ? store.value.rowAt(item.seg, item.index + 1) : target
+  const prev = after ? target : store.value.rowAt(item.seg, item.index - 1)
+  if (before?.id === id || prev?.id === id) return // already there
+  db.source.moveRow(id, prev?.id ?? null, before?.id ?? null)
+  const gv = groupValue(segment(item.seg)?.key)
+  if (store.value.grouped && groupProp.value && gv !== undefined && !isReadOnly(groupProp.value.type)) db.source.setCell(id, groupProp.value.id, gv)
 }
 
 // ── Column header: menu, add property, reorder ──
@@ -786,12 +983,12 @@ defineExpose({ sel, checked, startEdit, pasteMatrix, store, rowVirtualizer, colV
 </script>
 
 <template>
-  <div class="me-db-table-wrap" :class="{ 'is-no-vlines': db.view.value?.config.vertical_lines === false }">
+  <div ref="wrap" class="me-db-table-wrap" :class="{ 'is-no-vlines': db.view.value?.config.vertical_lines === false }">
     <div
       ref="scroller"
       class="me-db-table"
       :class="{ 'is-full': props.full, 'is-resizing': !!resizing, 'is-wrap': anyWrap, 'is-grow': loadLimit > 0, 'is-limited': limited }"
-      :style="{ height: `${limitedHeight}px` }"
+      :style="{ 'height': `${limitedHeight}px`, 'marginLeft': `${-bleed.left}px`, 'marginRight': `${-bleed.right}px`, '--me-db-bleed-left': `${bleed.left}px` }"
       tabindex="0"
       role="grid"
       :aria-rowcount="itemCount"
@@ -850,6 +1047,7 @@ defineExpose({ sel, checked, startEdit, pasteMatrix, store, rowVirtualizer, colV
 
         <!-- Body -->
         <div class="me-db-tbody" role="rowgroup" :style="{ height: `${rowVirtualizer.getTotalSize()}px` }">
+          <div v-if="dropLine" class="me-db-drop-line" :style="{ top: `${dropLine.top}px`, left: `${gutter}px`, width: `${totalWidth - gutter}px` }" aria-hidden="true" />
           <div
             v-for="r in rendered"
             :key="r.v.index"
@@ -860,9 +1058,7 @@ defineExpose({ sel, checked, startEdit, pasteMatrix, store, rowVirtualizer, colV
               'is-child': r.item?.kind === 'child',
               'is-add': r.item?.kind === 'add',
               'is-checked': !!r.row && checked.has(r.row.id),
-              'is-drop-before': drag?.over === r.v.index && !drag?.after,
-              'is-drop-after': drag?.over === r.v.index && drag?.after,
-              'is-dragging': !!r.row && drag?.id === r.row.id,
+              'is-dragging': !!r.row && dragId === r.row.id,
             }"
             role="row"
             :data-cc="r.cc?.row"
@@ -870,8 +1066,6 @@ defineExpose({ sel, checked, startEdit, pasteMatrix, store, rowVirtualizer, colV
             :data-index="r.v.index"
             :aria-rowindex="r.v.index + 1"
             :style="{ transform: `translateY(${r.top}px)`, [anyWrap && r.item?.kind === 'row' ? 'minHeight' : 'height']: `${anyWrap && r.item?.kind === 'row' ? sizes.row : r.v.size}px`, width: `${totalWidth}px` }"
-            @dragover="onRowDragOver($event, r.v.index)"
-            @drop="onRowDrop"
             @contextmenu="onRowContext($event, r.row)"
           >
             <!-- Group header -->
@@ -900,12 +1094,11 @@ defineExpose({ sel, checked, startEdit, pasteMatrix, store, rowVirtualizer, colV
                   class="me-db-row-handle"
                   role="button"
                   tabindex="-1"
-                  :draggable="canMove"
+                  :class="{ 'can-move': canMove }"
                   :title="canMove ? `${m.dragToMove} · ${m.rowActions}` : m.rowActions"
                   :aria-label="m.rowActions"
-                  @click="openRowMenu(r.row, $event.currentTarget as HTMLElement)"
-                  @dragstart="onRowDragStart($event, r.row)"
-                  @dragend="drag = null"
+                  @pointerdown="onHandlePointerDown($event, r.row)"
+                  @click="onHandleClick(r.row, $event)"
                 ><GripVertical /></span>
                 <input v-if="r.row" type="checkbox" class="me-db-row-check" :checked="checked.has(r.row.id)" :aria-label="m.selectRow" @click="toggleChecked(r.row.id, r.v.index, $event)">
               </div>

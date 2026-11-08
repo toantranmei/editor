@@ -1,7 +1,8 @@
 <script setup lang="ts">
 /**
  * Notion-style table controls, drawn over the editor:
- * - grip handles on the hovered row (left) and column (top) → row/column menu
+ * - a pill on the hovered row's left border and column's top border, growing into a ⋮⋮ button when pointed at:
+ *   click → row / column menu; drag → move the row / column (a line shows where it lands, Escape cancels)
  * - "+" bars below and to the right of the table to add a row / column
  * - a small toolbar for multi-cell selections (merge, split, color, clear)
  */
@@ -13,7 +14,7 @@ import {
   TableCellsMerge, TableCellsSplit, Trash,
 } from '@lucide/vue'
 import { CellSelection } from '@tiptap/pm/tables'
-import { computed, onBeforeUnmount, onMounted, ref, shallowRef } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef } from 'vue'
 import { COLORS } from '../colors'
 import { useClickOutside } from '../composables/useClickOutside'
 import { useScope } from '../composables/useScope'
@@ -69,7 +70,7 @@ function locate(cell: HTMLElement): Hover | null {
 }
 
 function onMouseMove(e: MouseEvent) {
-  if (menu.value || !props.editor.isEditable) return
+  if (menu.value || drag.value || !props.editor.isEditable) return
   const target = e.target as HTMLElement | null
   if (target?.closest('.me-table-controls-ui')) {
     clearTimeout(hideTimer)
@@ -101,6 +102,110 @@ const onUpdate = () => {
   if (hover.value && !tableAt(props.editor, hover.value.tablePos)) hover.value = null
 }
 
+// --- Drag a row / column ---------------------------------------------------------
+/** Pointer moves this far before a press on a handle becomes a drag (else it's a click: the menu). */
+const DRAG_THRESHOLD = 4
+interface Drag { kind: 'row' | 'col', from: number, tablePos: number, to: number, line: DOMRect | null }
+const drag = shallowRef<Drag | null>(null)
+let press: { kind: 'row' | 'col', x: number, y: number, from: number, tablePos: number, table: HTMLTableElement } | null = null
+let dragged = false
+
+/** Row (top..bottom) or column (left..right) extents of the table, in screen coordinates. */
+function bands(table: HTMLTableElement, kind: 'row' | 'col', count: number): Array<[number, number]> {
+  if (kind === 'row') return [...table.rows].map((r) => { const b = r.getBoundingClientRect(); return [b.top, b.bottom] })
+  // Columns: from the first row's cells, a spanning cell split evenly.
+  const out: Array<[number, number]> = []
+  for (const c of [...(table.rows[0]?.cells ?? [])]) {
+    const b = c.getBoundingClientRect()
+    const span = Math.max(1, c.colSpan)
+    for (let i = 0; i < span; i++) out.push([b.left + (b.width * i) / span, b.left + (b.width * (i + 1)) / span])
+  }
+  return out.slice(0, count)
+}
+
+function onGripDown(kind: 'row' | 'col', e: PointerEvent) {
+  const h = hover.value
+  if (e.button !== 0 || !h) return
+  // Keeps the editor's selection (no focus change); the click still fires.
+  e.preventDefault()
+  const dom = props.editor.view.nodeDOM(h.tablePos)
+  const table = dom instanceof HTMLElement ? (dom.matches('table') ? dom : dom.querySelector('table')) : null
+  if (!(table instanceof HTMLTableElement)) return
+  press = { kind, x: e.clientX, y: e.clientY, from: kind === 'row' ? h.row : h.col, tablePos: h.tablePos, table }
+  dragged = false
+  document.addEventListener('pointermove', onDragMove)
+  document.addEventListener('pointerup', onDragUp)
+  document.addEventListener('keydown', onDragKey, true)
+}
+
+function onDragMove(e: PointerEvent) {
+  const p = press
+  if (!p) return
+  if (!drag.value) {
+    if (Math.hypot(e.clientX - p.x, e.clientY - p.y) < DRAG_THRESHOLD) return
+    const t = tableAt(props.editor, p.tablePos)
+    if (!t) return endDrag()
+    dragged = true
+    // The moving row / column shows selected (Notion).
+    if (p.kind === 'row') selectRow(props.editor, t, p.from)
+    else selectColumn(props.editor, t, p.from)
+    document.documentElement.classList.add('me-table-dragging')
+    drag.value = { kind: p.kind, from: p.from, tablePos: p.tablePos, to: p.from, line: null }
+  }
+  const t = tableAt(props.editor, p.tablePos)
+  if (!t) return endDrag()
+  const list = bands(p.table, p.kind, p.kind === 'row' ? t.map.height : t.map.width)
+  const at = p.kind === 'row' ? e.clientY : e.clientX
+  let to = list.findIndex(([a, b]) => at >= a && at < b)
+  if (to < 0) to = at < (list[0]?.[0] ?? 0) ? 0 : list.length - 1
+  const band = list[to]!
+  const tableRect = p.table.getBoundingClientRect()
+  // The line sits on the edge the row / column lands against: above / left when it moves up / left.
+  const edge = to < p.from ? band[0] : band[1]
+  const line = to === p.from
+    ? null
+    : p.kind === 'row'
+      ? local(new DOMRect(tableRect.left, edge, tableRect.width, 0))
+      : local(new DOMRect(edge, tableRect.top, 0, tableRect.height))
+  if (drag.value.to !== to || !!drag.value.line !== !!line) drag.value = { ...drag.value, to, line }
+}
+
+function onDragUp() {
+  const d = drag.value
+  endDrag()
+  if (!d || d.to === d.from) return
+  const t = tableAt(props.editor, d.tablePos)
+  if (!t) return
+  if (d.kind === 'row') moveRow(props.editor, t, d.from, d.to)
+  else moveColumn(props.editor, t, d.from, d.to)
+  props.editor.commands.focus()
+}
+
+function onDragKey(e: KeyboardEvent) {
+  if (e.key !== 'Escape' || !drag.value) return
+  e.preventDefault()
+  e.stopPropagation()
+  endDrag()
+}
+
+function endDrag() {
+  press = null
+  drag.value = null
+  document.documentElement.classList.remove('me-table-dragging')
+  document.removeEventListener('pointermove', onDragMove)
+  document.removeEventListener('pointerup', onDragUp)
+  document.removeEventListener('keydown', onDragKey, true)
+}
+
+/** Click on a handle: its menu, unless the press was a drag. */
+function onGripClick(kind: 'row' | 'col', e: MouseEvent) {
+  if (dragged) {
+    dragged = false
+    return
+  }
+  openMenu(kind, e)
+}
+
 // --- Menus --------------------------------------------------------------------
 interface Item { key: string, label: string, icon: Component, run?: () => void, checked?: boolean, danger?: boolean, disabled?: boolean, submenu?: boolean }
 const menu = shallowRef<{ kind: 'row' | 'col', index: number, tablePos: number, x: number, y: number, above: boolean } | null>(null)
@@ -120,6 +225,8 @@ function openMenu(kind: 'row' | 'col', e: MouseEvent) {
   const above = screen.bottom + 360 > window.innerHeight
   menu.value = { kind, index: kind === 'row' ? h.row : h.col, tablePos: h.tablePos, x: r.left, y: r.bottom + 4, above }
   colorOpen.value = false
+  // Focused so Escape closes it.
+  nextTick(() => menuEl.value?.focus({ preventScroll: true }))
 }
 
 function closeMenu() {
@@ -218,6 +325,7 @@ onBeforeUnmount(() => {
   props.editor.off('selectionUpdate', onSelection)
   clearTimeout(hideTimer)
   cancelAnimationFrame(frame)
+  endDrag()
 })
 </script>
 
@@ -225,26 +333,44 @@ onBeforeUnmount(() => {
   <div ref="layer" class="me-table-controls">
     <template v-if="hover && table && !menu">
       <button
+        v-if="!drag || drag.kind === 'row'"
         type="button"
         class="me-table-controls-ui me-table-grip me-table-grip--row"
-        :style="{ left: `${hover.table.left}px`, top: `${hover.rowRect.top}px`, height: `${hover.rowRect.height}px` }"
+        :class="{ 'is-active': drag?.kind === 'row' }"
+        :style="{ left: `${hover.table.left}px`, top: `${hover.rowRect.top + hover.rowRect.height / 2}px` }"
         :title="m.rowMenu"
-        @mousedown.prevent
-        @click="openMenu('row', $event)"
+        :aria-label="m.rowMenu"
+        data-table-grip="row"
+        @pointerdown="onGripDown('row', $event)"
+        @click="onGripClick('row', $event)"
       >
         <GripVertical />
       </button>
       <button
+        v-if="!drag || drag.kind === 'col'"
         type="button"
         class="me-table-controls-ui me-table-grip me-table-grip--col"
-        :style="{ left: `${hover.colRect.left}px`, top: `${hover.table.top}px`, width: `${hover.colRect.width}px` }"
+        :class="{ 'is-active': drag?.kind === 'col' }"
+        :style="{ left: `${hover.colRect.left + hover.colRect.width / 2}px`, top: `${hover.table.top}px` }"
         :title="m.columnMenu"
-        @mousedown.prevent
-        @click="openMenu('col', $event)"
+        :aria-label="m.columnMenu"
+        data-table-grip="col"
+        @pointerdown="onGripDown('col', $event)"
+        @click="onGripClick('col', $event)"
       >
         <GripHorizontal />
       </button>
+      <div
+        v-if="drag?.line"
+        class="me-table-drop-line"
+        :class="drag.kind === 'row' ? 'is-row' : 'is-col'"
+        :style="drag.kind === 'row'
+          ? { left: `${drag.line.left}px`, top: `${drag.line.top}px`, width: `${drag.line.width}px` }
+          : { left: `${drag.line.left}px`, top: `${drag.line.top}px`, height: `${drag.line.height}px` }"
+        data-table-drop-line
+      />
       <button
+        v-if="!drag"
         type="button"
         class="me-table-controls-ui me-table-add me-table-add--row"
         :style="{ left: `${hover.visible.left}px`, top: `${hover.table.top + hover.table.height}px`, width: `${hover.visible.width}px` }"
@@ -255,6 +381,7 @@ onBeforeUnmount(() => {
         <Plus />
       </button>
       <button
+        v-if="!drag"
         type="button"
         class="me-table-controls-ui me-table-add me-table-add--col"
         :style="{ left: `${hover.visible.left + hover.visible.width}px`, top: `${hover.table.top}px`, height: `${hover.table.height}px` }"
@@ -300,7 +427,7 @@ onBeforeUnmount(() => {
     </div>
 
     <div
-      v-if="selection && !menu"
+      v-if="selection && !menu && !drag"
       v-bind="scope"
       class="me-table-controls-ui me-popover me-toolbar me-table-toolbar"
       :style="{ left: `${selection.x}px`, top: `${selection.y}px` }"

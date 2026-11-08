@@ -64,6 +64,9 @@ export interface DatabaseMessages {
   addProperty: string
   propertyName: string
   propertyType: string
+  /** "+" menu: the name's placeholder and the types' heading (Notion). */
+  propertyNamePlaceholder: string
+  selectType: string
   types: Record<string, string>
   rename: string
   changeType: string
@@ -273,6 +276,15 @@ export interface DatabaseMessages {
   lockDatabase: string
   unlockDatabase: string
   copyLinkToView: string
+  /** "⋯" by the database title (Notion) and its menu. */
+  titleMenu: string
+  addNewView: string
+  duplicateThisView: string
+  viewDatabase: string
+  editTitle: string
+  editIcon: string
+  editLayout: string
+  hideTitle: string
   openAsFullPage: string
   groups: string
   conditionalColor: string
@@ -303,6 +315,8 @@ export interface DatabaseMessages {
   showFullUrl: string
   appliesToAllViews: string
   optionSort: string
+  /** Title over the options of a select property ("Options"). */
+  optionsLabel: string
   optionSorts: Record<'manual' | 'asc' | 'desc', string>
   setAsDefault: string
   defaultBadge: string
@@ -413,6 +427,8 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     addProperty: 'Add property',
     propertyName: 'Property name',
     propertyType: 'Type',
+    propertyNamePlaceholder: 'Type property name…',
+    selectType: 'Select type',
     types: {
       title: 'Title', text: 'Text', number: 'Number', select: 'Select', multi_select: 'Multi-select', status: 'Status',
       date: 'Date', person: 'Person', files: 'Files & media', checkbox: 'Checkbox', url: 'URL', email: 'Email',
@@ -603,6 +619,14 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     lockDatabase: 'Lock database',
     unlockDatabase: 'Unlock database',
     copyLinkToView: 'Copy link to view',
+    titleMenu: 'More',
+    addNewView: 'Add a new view',
+    duplicateThisView: 'Duplicate view',
+    viewDatabase: 'View database',
+    editTitle: 'Edit title',
+    editIcon: 'Edit icon',
+    editLayout: 'Edit layout',
+    hideTitle: 'Hide title',
     openAsFullPage: 'Open as full page',
     groups: 'Groups',
     conditionalColor: 'Conditional color',
@@ -633,6 +657,7 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     showFullUrl: 'Show full URL',
     appliesToAllViews: 'Changes apply to all views showing this property.',
     optionSort: 'Sort',
+    optionsLabel: 'Options',
     optionSorts: { manual: 'Manual', asc: 'Alphabetical', desc: 'Reverse alphabetical' },
     setAsDefault: 'Set as default',
     defaultBadge: 'Default',
@@ -765,6 +790,8 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     addProperty: 'Thêm thuộc tính',
     propertyName: 'Tên thuộc tính',
     propertyType: 'Kiểu',
+    propertyNamePlaceholder: 'Nhập tên thuộc tính…',
+    selectType: 'Chọn kiểu',
     types: {
       title: 'Tiêu đề', text: 'Văn bản', number: 'Số', select: 'Chọn', multi_select: 'Chọn nhiều', status: 'Trạng thái',
       date: 'Ngày', person: 'Người', files: 'Tệp & phương tiện', checkbox: 'Hộp kiểm', url: 'URL', email: 'Email',
@@ -955,6 +982,14 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     lockDatabase: 'Khoá database',
     unlockDatabase: 'Mở khoá database',
     copyLinkToView: 'Sao chép liên kết tới view',
+    titleMenu: 'Thêm',
+    addNewView: 'Thêm chế độ xem mới',
+    duplicateThisView: 'Nhân bản chế độ xem',
+    viewDatabase: 'Xem database',
+    editTitle: 'Sửa tiêu đề',
+    editIcon: 'Sửa biểu tượng',
+    editLayout: 'Sửa bố cục',
+    hideTitle: 'Ẩn tiêu đề',
     openAsFullPage: 'Mở toàn trang',
     groups: 'Các nhóm',
     conditionalColor: 'Màu theo điều kiện',
@@ -985,6 +1020,7 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     showFullUrl: 'Hiện URL đầy đủ',
     appliesToAllViews: 'Thay đổi áp dụng cho mọi view hiện thuộc tính này.',
     optionSort: 'Sắp xếp',
+    optionsLabel: 'Lựa chọn',
     optionSorts: { manual: 'Thủ công', asc: 'Theo bảng chữ cái', desc: 'Ngược bảng chữ cái' },
     setAsDefault: 'Đặt làm mặc định',
     defaultBadge: 'Mặc định',
@@ -1117,6 +1153,8 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     addProperty: '添加属性',
     propertyName: '属性名称',
     propertyType: '类型',
+    propertyNamePlaceholder: '输入属性名称…',
+    selectType: '选择类型',
     types: {
       title: '标题', text: '文本', number: '数字', select: '单选', multi_select: '多选', status: '状态',
       date: '日期', person: '人员', files: '文件和媒体', checkbox: '复选框', url: '网址', email: '电子邮件',
@@ -1307,6 +1345,14 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     lockDatabase: '锁定数据库',
     unlockDatabase: '解锁数据库',
     copyLinkToView: '复制视图链接',
+    titleMenu: '更多',
+    addNewView: '添加新视图',
+    duplicateThisView: '复制视图',
+    viewDatabase: '查看数据库',
+    editTitle: '编辑标题',
+    editIcon: '编辑图标',
+    editLayout: '编辑布局',
+    hideTitle: '隐藏标题',
     openAsFullPage: '以整页打开',
     groups: '分组',
     conditionalColor: '条件颜色',
@@ -1337,6 +1383,7 @@ export const messages: Record<LocaleName, DatabaseMessages> = {
     showFullUrl: '显示完整网址',
     appliesToAllViews: '更改将应用于显示此属性的所有视图。',
     optionSort: '排序',
+    optionsLabel: '选项',
     optionSorts: { manual: '手动', asc: '按字母顺序', desc: '按字母倒序' },
     setAsDefault: '设为默认',
     defaultBadge: '默认',

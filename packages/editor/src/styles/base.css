@@ -26,6 +26,8 @@
   :where(.me-scope) button:disabled { cursor: default; opacity: 0.6; }
   :where(.me-scope) :is(img, iframe) { display: block; max-width: 100%; }
   :where(.me-scope) input::placeholder { color: var(--me-color-text-faint); }
+  /* Scrollbars as Notion's (every scrolling part, popovers included): native width, a soft thumb, no track. */
+  :where(.me-scope), :where(.me-scope) * { scrollbar-color: var(--me-color-scrollbar-thumb) transparent; }
 
   /* Lucide icons: size and stroke come from tokens; containers tweak --me-icon-size. */
   :where(.me-scope) .lucide {

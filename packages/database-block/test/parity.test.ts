@@ -149,8 +149,6 @@ describe('table columns', () => {
     await settle()
     popover().querySelector<HTMLElement>('[data-type="number"]')!.click()
     await settle()
-    popover().querySelector<HTMLFormElement>('form')!.dispatchEvent(new Event('submit'))
-    await settle()
     const added = source.props.value.at(-1)!
     expect(added.type).toBe('number')
     expect(view(source).config.visible!.slice(0, 3)).toEqual([added.id, 'status', copy.id])

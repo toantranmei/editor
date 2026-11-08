@@ -488,6 +488,13 @@ export interface DatabaseBlockOptions {
   onError?: ((error: unknown) => void) | null
   /** Override any string, per locale. */
   messages?: Partial<Record<LocaleName, Partial<DatabaseMessages>>> | null
+  /**
+   * Tables reach out to the edges of the page's scroll area, like Notion: their sideways scrollbar spans the page
+   * while the columns stay in line with the text. The area is the nearest ancestor that scrolls or that carries
+   * `data-me-bleed-root` (for a page that scrolls the document, mark its main column). Default true; `false` keeps a
+   * table within its block.
+   */
+  bleed?: boolean
   /** Rows per window request (aligned chunks). Default 50. */
   pageSize?: number
   /** Rows read by calendar / timeline when the source has no `rowsInRange`. Default 2000. */

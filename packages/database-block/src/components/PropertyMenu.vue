@@ -7,15 +7,16 @@ import {
   ArrowDown, ArrowUp, BetweenVerticalEnd, Calculator, Check, BetweenVerticalStart, ChevronRight, Copy, EyeOff, Group, ListFilter, Settings2,
   Snowflake, Trash2, TriangleAlert, WrapText,
 } from '@lucide/vue'
-import { computed, ref } from 'vue'
+import { computed, nextTick, onMounted, ref } from 'vue'
 import { useDb } from '../context'
 import { defaultCondition, groupItems, groupMode, makeGroup, resultType } from '../filters'
 import { fmt } from '../messages'
-import type { Prop, PropType } from '../types'
+import type { Prop, PropConfig, PropType } from '../types'
 import { aggregatesFor } from '../aggregates'
-import { clone, CREATABLE_TYPES, groupableTypes, placeColumn, positionAfter, uuidv7, visibleIds } from '../util'
+import { clone, CREATABLE_TYPES, groupableTypes, OPTION_TYPES, placeColumn, positionAfter, uuidv7, visibleIds } from '../util'
 import { isLossyChange } from '../values'
 import DbPopover from './DbPopover.vue'
+import OptionsList from './OptionsList.vue'
 import PropertyEditor from './PropertyEditor.vue'
 import PropIcon from './PropIcon.vue'
 
@@ -41,6 +42,33 @@ const wrapped = computed(() => config.value.wraps?.[props.prop.id] ?? !!config.v
 const frozenHere = computed(() => isTable.value && (config.value.freeze ?? 1) === props.column! + 1)
 const pendingType = ref<PropType | null>(null)
 const root = ref<HTMLElement | null>(null)
+
+/** The property as the source has it now (the options submenu saves several times while open). */
+const live = computed(() => db.props.value.find(p => p.id === props.prop.id) ?? props.prop)
+const hasOptions = computed(() => OPTION_TYPES.has(props.prop.type))
+/** "Edit property ›" of a select / status property: its options in a submenu beside this menu (Notion). */
+const optionsAnchor = ref<HTMLElement | null>(null)
+function editProperty(e: MouseEvent) {
+  if (!hasOptions.value) {
+    panel.value = 'edit'
+    return
+  }
+  optionsAnchor.value = e.currentTarget as HTMLElement
+}
+function patchOptions(patch: Partial<PropConfig>) {
+  const config: PropConfig = { ...live.value.config, ...patch }
+  for (const k of Object.keys(patch)) if (patch[k] === undefined) delete config[k]
+  db.source.upsertProp({ ...live.value, config })
+}
+
+/** The name field is focused when the menu opens, the caret after the name (Notion), if the user may rename. */
+const nameInput = ref<HTMLInputElement | null>(null)
+onMounted(() => nextTick(() => {
+  const el = nameInput.value
+  if (!el || !structure.value) return
+  el.focus({ preventScroll: true })
+  el.setSelectionRange(el.value.length, el.value.length)
+}))
 
 function rename() {
   const n = name.value.trim()
@@ -140,9 +168,11 @@ function remove() {
   <DbPopover v-if="panel !== 'edit' && panel !== 'insert'" :anchor="anchor" :scope="db.scope.value" :label="prop.name" @close="rename(); emit('close')">
     <div ref="root" class="me-menu me-db-menu" role="menu">
       <template v-if="panel === 'menu'">
-        <input v-model="name" class="me-input" :readonly="!structure" :aria-label="m.rename" @keydown.enter.prevent="rename(); emit('close')" @blur="rename">
+        <input ref="nameInput" v-model="name" class="me-input" data-prop-name :readonly="!structure" :aria-label="m.rename" @keydown.enter.prevent="rename(); emit('close')" @blur="rename">
         <template v-if="structure">
-          <button type="button" class="me-menu-item" role="menuitem" @click="panel = 'edit'"><Settings2 class="me-db-menu-icon" />{{ m.editOptions }}</button>
+          <button type="button" class="me-menu-item" role="menuitem" data-action="edit-property" :aria-expanded="hasOptions ? !!optionsAnchor : undefined" @click="editProperty">
+            <Settings2 class="me-db-menu-icon" /><span class="me-menu-title">{{ m.editProperty }}</span><ChevronRight class="me-db-menu-end" />
+          </button>
           <button v-if="!isTitle" type="button" class="me-menu-item" role="menuitem" @click="panel = 'types'">
             <PropIcon :type="prop.type" /><span class="me-menu-title">{{ m.changeType }}</span><ChevronRight class="me-db-menu-end" />
           </button>
@@ -221,6 +251,11 @@ function remove() {
       </div>
     </div>
   </DbPopover>
-  <PropertyEditor v-else-if="panel === 'insert'" :anchor="anchor" :place="{ next: prop.id, side: insertSide }" @close="emit('close')" />
-  <PropertyEditor v-else :anchor="anchor" :prop="prop" @close="emit('close')" />
+  <DbPopover v-if="optionsAnchor && panel === 'menu'" :anchor="optionsAnchor" :scope="db.scope.value" placement="right" :label="m.editProperty" @close="optionsAnchor = null">
+    <div class="me-menu me-db-menu" data-options-menu>
+      <OptionsList :config="live.config ?? {}" :status="prop.type === 'status'" @change="patchOptions" />
+    </div>
+  </DbPopover>
+  <PropertyEditor v-if="panel === 'insert'" :anchor="anchor" :place="{ next: prop.id, side: insertSide }" @close="emit('close')" />
+  <PropertyEditor v-if="panel === 'edit'" :anchor="anchor" :prop="prop" @close="emit('close')" />
 </template>

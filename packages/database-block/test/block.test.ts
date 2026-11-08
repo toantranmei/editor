@@ -1,3 +1,4 @@
+import { NodeSelection } from '@tiptap/pm/state'
 import { Editor, EditorContent, type JSONContent } from '@tiptap/vue-3'
 import { createExtensions, text } from '@toantranmei/editor'
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
@@ -76,6 +77,12 @@ describe('databaseView node', () => {
     let content = editor.getJSON().content!
     expect(content.map(n => n.type)).toContain(DATABASE_NODE)
     expect(content.find(n => n.type === DATABASE_NODE)!.attrs).toMatchObject({ databaseId: 'db-new', inline: true })
+    // Like Notion: the new block isn't left selected (no block highlight); its title takes the focus.
+    expect(editor.state.selection).not.toBeInstanceOf(NodeSelection)
+    expect(document.querySelector('.me-db-node')!.classList.contains('is-selected')).toBe(false)
+    await vi.waitFor(() => expect(document.querySelector('[data-db-title]')).not.toBeNull())
+    await settle()
+    expect(document.activeElement?.matches('[data-db-title]')).toBe(true)
 
     editor.commands.setTextSelection(editor.state.doc.content.size - 1)
     block.items[1]!.insert(editor.chain().focus()).run()
@@ -83,6 +90,71 @@ describe('databaseView node', () => {
     content = editor.getJSON().content!
     expect(content.filter(n => n.type === DATABASE_NODE).map(n => n.attrs!.inline)).toEqual([true, false])
     expect(open).toHaveBeenCalledWith('db-page')
+  })
+
+  it('one view (Notion): no tab bar; "+" (add view) and the toolbar share the title row, no rule under the title', async () => {
+    const init = sampleDatabase(3, { databaseId: 'db1' })
+    const one = { ...init, views: init.views.slice(0, 1) }
+    const { wrapper } = setup({ source: async () => createMemorySource(one) }, dbDoc('db1'))
+    await vi.waitFor(() => expect(wrapper.find('.me-db-title').exists()).toBe(true))
+    await settle()
+    expect(wrapper.find('.me-db-topbar').exists()).toBe(false)
+    const header = wrapper.find('.me-db-header')
+    expect(header.find('[data-add-view]').exists()).toBe(true)
+    expect(header.findAll('.me-db-tab[role="tab"]')).toHaveLength(0)
+    expect(header.find('[data-tool="new"]').exists()).toBe(true)
+  })
+
+  it('title "⋯" menu (Notion): duplicate view, edit title / icon / layout, hide title; "+" adds a view from a 4-column grid', async () => {
+    const init = sampleDatabase(3, { databaseId: 'db1' })
+    const source = createMemorySource({ ...init, views: init.views.slice(0, 1) })
+    const { wrapper } = setup({ source: async () => source, open: vi.fn() }, dbDoc('db1'))
+    await vi.waitFor(() => expect(wrapper.find('.me-db-title').exists()).toBe(true))
+    await settle()
+    const menu = async () => {
+      await wrapper.find('[data-title-menu]').trigger('click')
+      await settle()
+    }
+    const action = (a: string) => document.querySelector<HTMLElement>(`[data-title-action="${a}"]`)
+    await menu()
+    expect(['duplicate', 'open', 'edit-title', 'edit-icon', 'edit-layout', 'hide-title'].every(a => action(a))).toBe(true)
+    action('edit-title')!.click()
+    await settle()
+    expect(document.activeElement).toBe(wrapper.find('.me-db-title').element)
+
+    await menu()
+    action('edit-icon')!.click()
+    await settle()
+    document.querySelector<HTMLElement>('[data-pick-icon="🚀"]')!.click()
+    await settle()
+    expect(source.meta.value?.icon).toBe('🚀')
+
+    await menu()
+    action('edit-layout')!.click()
+    await settle()
+    expect(document.querySelector('.me-db-layouts')).not.toBeNull()
+
+    await wrapper.find('.me-db-header [data-add-view]').trigger('click')
+    await settle()
+    expect(document.querySelector('.me-db-add-view-grid')!.querySelectorAll('[data-view-type]')).toHaveLength(11)
+    document.querySelector<HTMLElement>('.me-db-add-view-grid [data-view-type="board"]')!.click()
+    await settle()
+    expect(source.views.value.map(v => v.type)).toEqual(['table', 'board'])
+    expect(document.querySelector('.me-db-add-view-grid')).toBeNull()
+
+    await menu()
+    action('hide-title')!.click()
+    await settle()
+    expect(wrapper.find('.me-db-title').exists()).toBe(false)
+  })
+
+  it('several views: title row, then the tab bar with the toolbar', async () => {
+    const { wrapper } = setup({ source: async () => createMemorySource(sampleDatabase(3, { databaseId: 'db1' })) }, dbDoc('db1'))
+    await vi.waitFor(() => expect(wrapper.find('.me-db-title').exists()).toBe(true))
+    await settle()
+    expect(wrapper.find('.me-db-header [data-tool="new"]').exists()).toBe(false)
+    expect(wrapper.find('.me-db-topbar [data-tool="new"]').exists()).toBe(true)
+    expect(wrapper.findAll('.me-db-topbar .me-db-tab[role="tab"]').length).toBeGreaterThan(1)
   })
 
   it('resolves the source (async, cached) and renders the database; switching tabs stores viewId', async () => {
