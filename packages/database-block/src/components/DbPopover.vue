@@ -2,6 +2,8 @@
 /**
  * Popover teleported to <body> (so table overflow never clips it), positioned under / over an anchor element.
  * Closes on outside pointerdown and Escape; popovers opened from inside it (nested) don't close it.
+ * While it is open the page doesn't scroll under it (Notion): the wheel scrolls only a popover that can scroll that
+ * way. If the page scrolls anyway (its scrollbar dragged), the popover follows its anchor.
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
@@ -30,6 +32,9 @@ function rectOf(a: HTMLElement | DOMRect | null): DOMRect | null {
   return a instanceof DOMRect || !('getBoundingClientRect' in a) ? a as DOMRect : a.getBoundingClientRect()
 }
 
+/** Least room below an `over` / `right` popover's anchor for it to stay there (shrunk) instead of moving up. */
+const ROOM = 240
+
 function place() {
   const r = rectOf(props.anchor)
   const el = root.value
@@ -44,8 +49,27 @@ function place() {
   if (left + w > vw - 8) left = Math.max(8, vw - w - 8)
   // An anchor scrolled out to the left (a column header) still opens the popover on screen.
   left = Math.max(8, left)
-  if (h && top + h > vh - 8) top = props.placement === 'below' && r.top - h > 8 ? r.top - h : Math.max(8, vh - h - 8)
-  pos.value = { left, top, width: props.matchWidth ? r.width : 0, maxHeight: vh - top - 8 }
+  let maxHeight = vh - top - 8
+  if (h && top + h > vh - 8) {
+    if (props.placement === 'below') {
+      // Below the anchor when it fits, else above; neither: the roomier side, shrunk to it (it scrolls), as Notion.
+      const below = vh - 8 - r.bottom
+      const above = r.top - 8
+      if (h <= above) top = r.top - h
+      else if (above > below) {
+        top = 8
+        maxHeight = above
+      }
+      else maxHeight = below
+    }
+    // Over / beside its anchor: stays there, shrunk to the room below (it scrolls), when that room is enough for a
+    // few items; else moved up until it fits.
+    else if (vh - 8 - top < ROOM) {
+      top = Math.max(8, vh - h - 8)
+      maxHeight = vh - top - 8
+    }
+  }
+  pos.value = { left, top, width: props.matchWidth ? r.width : 0, maxHeight }
 }
 
 const style = computed(() => ({
@@ -70,6 +94,36 @@ function onKeyDown(e: KeyboardEvent) {
   emit('close', 'escape')
 }
 const onWindow = () => place()
+/** Can `el` or a scrolling parent of it inside the popover scroll `dy` further? */
+function canScroll(el: Element | null, dy: number, dx: number): boolean {
+  for (let n = el; n && n !== document.body; n = n.parentElement) {
+    const s = getComputedStyle(n)
+    if (dy && /(auto|scroll)/.test(s.overflowY) && n.scrollHeight > n.clientHeight) {
+      if (dy < 0 ? n.scrollTop > 0 : n.scrollTop + n.clientHeight < n.scrollHeight - 1) return true
+    }
+    if (dx && /(auto|scroll)/.test(s.overflowX) && n.scrollWidth > n.clientWidth) {
+      if (dx < 0 ? n.scrollLeft > 0 : n.scrollLeft + n.clientWidth < n.scrollWidth - 1) return true
+    }
+    if (n.hasAttribute('data-db-popover')) break
+  }
+  return false
+}
+function onWheel(e: WheelEvent) {
+  // Only the first popover of the stack handles it (nested ones add nothing).
+  if (stack[0] !== id) return
+  const target = e.target as Element | null
+  const inside = target?.closest?.('[data-db-popover]')
+  if (!inside || !canScroll(target, e.deltaY, e.deltaX)) e.preventDefault()
+}
+function onTouchMove(e: TouchEvent) {
+  if (stack[0] !== id) return
+  if (!(e.target as Element | null)?.closest?.('[data-db-popover]')) e.preventDefault()
+}
+function onScroll(e: Event) {
+  const t = e.target
+  if (t instanceof Element && t.closest('[data-db-popover]')) return
+  place()
+}
 let resizer: ResizeObserver | undefined
 
 onMounted(async () => {
@@ -77,6 +131,9 @@ onMounted(async () => {
   document.addEventListener('pointerdown', onPointerDown, true)
   document.addEventListener('keydown', onKeyDown, true)
   window.addEventListener('resize', onWindow)
+  document.addEventListener('wheel', onWheel, { capture: true, passive: false })
+  document.addEventListener('touchmove', onTouchMove, { capture: true, passive: false })
+  document.addEventListener('scroll', onScroll, true)
   // Content that grows after opening (a submenu panel, a loaded list) is placed again.
   if (typeof ResizeObserver !== 'undefined' && root.value?.firstElementChild) {
     resizer = new ResizeObserver(() => place())
@@ -93,6 +150,9 @@ onBeforeUnmount(() => {
   document.removeEventListener('pointerdown', onPointerDown, true)
   document.removeEventListener('keydown', onKeyDown, true)
   window.removeEventListener('resize', onWindow)
+  document.removeEventListener('wheel', onWheel, { capture: true })
+  document.removeEventListener('touchmove', onTouchMove, { capture: true })
+  document.removeEventListener('scroll', onScroll, true)
   resizer?.disconnect()
 })
 watch(() => props.anchor, () => nextTick(place))

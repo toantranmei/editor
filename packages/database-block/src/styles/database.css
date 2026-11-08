@@ -15,14 +15,30 @@
     color: var(--me-color-text);
     line-height: var(--me-font-line-height);
   }
-  .me-db-header { display: flex; align-items: center; gap: var(--me-space-3); }
-  .me-db-header-action { opacity: 0; }
-  .me-db-header:hover .me-db-header-action, .me-db-header-action:focus-visible { opacity: 1; }
-  .me-db-title:focus-visible { box-shadow: 0 var(--me-border-width-medium) 0 var(--me-input-focus-ring); }
+  /* Title row (Notion): the title is as wide as its text, "+" (add view) right after it, actions at the end. No rule under it. */
+  .me-db-header {
+    display: flex;
+    align-items: center;
+    gap: var(--me-space-2);
+    min-width: 0;
+    min-height: var(--me-database-header-row-height);
+    container-type: inline-size;
+  }
+  /* One view: the table starts right under the title row, like Notion. */
+  .me-db-header.is-single { margin-bottom: calc(var(--me-database-gap) * -1); }
+  .me-db-header-end { display: flex; flex: none; align-items: center; gap: var(--me-database-toolbar-gap); margin-left: auto; }
+  .me-db-header-action, .me-db-tabs.is-compact, .me-db-title-more { opacity: 0; transition: opacity var(--me-duration-fast); }
+  .me-db:hover .me-db-header-action, .me-db-header-action:focus-visible,
+  .me-db-header:hover :is(.me-db-tabs.is-compact, .me-db-title-more),
+  .me-db-tabs.is-compact:focus-within, .me-db-title-more:focus-visible, .me-db-title-more[aria-expanded="true"] { opacity: 1; }
+  .me-db-title-more { flex: none; }
+  .me-db-tabs.is-compact { flex: none; }
   .me-db-icon { font-size: var(--me-database-title-size); line-height: 1; }
   .me-db-title {
-    flex: 1;
+    flex: 0 1 auto;
     min-width: 0;
+    max-width: 100%;
+    field-sizing: content;
     padding: 0;
     border: 0;
     outline: none;
@@ -30,6 +46,7 @@
     font: inherit;
     font-size: var(--me-database-title-size);
     font-weight: var(--me-database-title-weight);
+    line-height: var(--me-line-height-snug);
     color: var(--me-database-title-color);
   }
   .me-db-title::placeholder { color: var(--me-database-title-placeholder); }
@@ -71,6 +88,27 @@
   .me-db-tab.is-active { color: var(--me-database-tab-active-color); background: var(--me-database-hover-bg); font-weight: var(--me-font-weight-medium); }
   .me-db-tab.is-add { border-bottom-color: transparent; }
   .me-db-tab .me-db-row-icon { width: auto; margin-right: 0; font-size: var(--me-font-size-sm); }
+  /* "Add a new view" (Notion): 4 columns of layouts, icon over name. */
+  .me-db-menu.me-db-add-view { width: var(--me-database-add-view-width); }
+  .me-db-add-view-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--me-space-1); }
+  .me-db-add-view-type {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    gap: var(--me-space-2);
+    min-width: 0;
+    min-height: var(--me-database-add-view-tile-height);
+    padding: var(--me-space-3) var(--me-space-2);
+    border-radius: var(--me-database-radius);
+    color: var(--me-color-text);
+    font-size: var(--me-font-size-sm);
+    text-align: center;
+  }
+  .me-db-add-view-type:hover, .me-db-add-view-type:focus-visible { background: var(--me-database-hover-bg); outline: none; }
+  /* Long names (vi) wrap to two lines instead of being cut. */
+  .me-db-add-view-type > span { display: -webkit-box; max-width: 100%; overflow: hidden; line-height: var(--me-line-height-tight); overflow-wrap: anywhere; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+  .me-db-add-view-type svg { width: var(--me-font-size-md); height: var(--me-font-size-md); }
   .me-db-tab-icon-edit { align-items: center; gap: var(--me-space-2); padding: 0 var(--me-space-2); }
   .me-db-tab-icon-input { flex: 1; min-width: 0; }
   .me-db-tab-icons { display: grid; grid-template-columns: repeat(6, var(--me-toolbar-button-size)); gap: var(--me-space-1); padding: var(--me-space-2); }
@@ -324,7 +362,8 @@
   }
   .me-db-table.is-full { max-height: var(--me-database-full-height); }
   /* Load limit: the inline table grows with its rows (no inner vertical scroll); past the limit, Load more. */
-  .me-db-table.is-grow { max-height: none; }
+  /* It scrolls sideways only: the wheel up / down scrolls the page over it (Notion). */
+  .me-db-table.is-grow { max-height: none; overflow-y: hidden; overscroll-behavior-y: auto; }
   .me-db-table.is-limited { overflow-y: hidden; }
   .me-db-load-more { align-self: flex-start; margin-top: var(--me-space-2); }
   .me-db-table.is-resizing { cursor: col-resize; user-select: none; }
@@ -354,9 +393,19 @@
   .me-db-th-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .me-db-th.is-frozen, .me-db-td.is-frozen, .me-db-tf.is-frozen { position: sticky; z-index: 2; }
   .me-db-th.is-frozen-last, .me-db-td.is-frozen-last, .me-db-tf.is-frozen-last { box-shadow: var(--me-border-width-thin) 0 0 var(--me-database-border); }
-  .me-db-th.is-dragging, .me-db-tr.is-dragging { opacity: 0.5; }
+  .me-db-th.is-dragging { opacity: 0.5; }
+  /* Row drag (Notion): the row stays in place, selected; a see-through copy follows the pointer; one line where it lands. */
+  .me-db-tr.is-dragging .me-db-td:not(.me-db-gutter) { background: var(--me-database-selected-bg); }
+  .me-db-row-handle.can-move { cursor: grab; touch-action: none; }
+  .me-db-row-ghost { position: fixed; top: 0; z-index: var(--me-database-drag-ghost-z); overflow: hidden; opacity: var(--me-database-drag-ghost-opacity); pointer-events: none; }
+  .me-db-row-ghost .me-db-row-handle, .me-db-row-ghost .me-db-row-check { opacity: 0; }
+  .me-db-drop-line { position: absolute; z-index: 4; height: var(--me-drop-indicator-height); margin-top: calc(var(--me-drop-indicator-height) / -2); background: var(--me-drop-indicator-color); pointer-events: none; }
+  :where(html.me-db-row-dragging), :where(html.me-db-row-dragging) * { cursor: grabbing; user-select: none; }
   .me-db-gutter { position: sticky; left: 0; z-index: 2; justify-content: flex-end; gap: 0; padding: 0; border-right: 0; cursor: default; }
   .me-db-th.me-db-gutter:hover { background: var(--me-database-bg); }
+  /* Row lines start at the first column (Notion): the gutter (and the bleed into the page margin) covers them. */
+  .me-db-th.me-db-gutter, .me-db-td.me-db-gutter { box-shadow: 0 var(--me-border-width-thin) 0 var(--me-database-bg); }
+  .me-db-tf.me-db-gutter { box-shadow: 0 calc(-1 * var(--me-border-width-thin)) 0 var(--me-database-bg); }
   .me-db-th.is-drop-before { box-shadow: inset var(--me-database-drop-indicator-width) 0 0 var(--me-database-drop-indicator); }
   .me-db-th.is-drop-after { box-shadow: inset calc(-1 * var(--me-database-drop-indicator-width)) 0 0 var(--me-database-drop-indicator); }
   .me-db-resize { position: absolute; top: 0; right: 0; bottom: 0; width: var(--me-database-resize-handle-width); cursor: col-resize; }
@@ -379,8 +428,6 @@
   .me-db-td.is-selected, .me-db-tr.is-checked .me-db-td { background: var(--me-database-selected-bg); }
   .me-db-td.is-active { box-shadow: inset 0 0 0 var(--me-database-active-ring-width) var(--me-database-active-ring); }
   .me-db-td.is-placeholder { position: sticky; }
-  .me-db-tr.is-drop-before { box-shadow: inset 0 var(--me-database-drop-indicator-width) 0 var(--me-database-drop-indicator); }
-  .me-db-tr.is-drop-after { box-shadow: inset 0 calc(-1 * var(--me-database-drop-indicator-width)) 0 var(--me-database-drop-indicator); }
   .me-db-tr.is-group, .me-db-tr.is-add { border-bottom: 0; }
   .me-db-row-check { flex: none; width: var(--me-database-select-col-width); accent-color: var(--me-color-accent); opacity: 0; }
   .me-db-tr:hover .me-db-row-check, .me-db-row-check:checked, .me-db-row-check:focus-visible, .me-db-thead:hover .me-db-row-check { opacity: 1; }
@@ -399,15 +446,19 @@
   .me-db-option-sort { display: flex; flex-wrap: wrap; align-items: center; gap: var(--me-space-1); }
   .me-db-seg { padding: var(--me-space-1) var(--me-space-2); border: var(--me-border-width-thin) solid var(--me-database-border); border-radius: var(--me-radius-sm); background: none; color: inherit; font: inherit; font-size: var(--me-font-size-xs); cursor: pointer; }
   .me-db-seg.is-on { border-color: var(--me-color-accent); color: var(--me-color-accent); }
-  .me-db-option-section { display: flex; flex-direction: column; gap: var(--me-space-1); }
-  .me-db-option-group-head { display: flex; align-items: center; justify-content: space-between; }
+  /* Options of a select / status property (Notion's "Edit property"): tags with a handle and "›", one menu each. */
+  .me-db-option-section { display: flex; flex-direction: column; }
+  .me-db-option-group-head { display: flex; align-items: center; justify-content: space-between; min-height: var(--me-toolbar-button-size); }
+  .me-db-option-item { gap: var(--me-space-2); cursor: pointer; }
+  .me-db-option-item.is-open { background: var(--me-menu-item-hover-bg, var(--me-database-hover-bg)); }
   .me-db-option-item.is-over { box-shadow: 0 calc(-1 * var(--me-border-width-medium)) 0 var(--me-color-accent); }
-  .me-db-option-item .me-db-row-handle { opacity: 1; }
-  .me-db-option-panel { display: flex; flex-direction: column; gap: var(--me-space-1); padding: var(--me-space-1) 0 var(--me-space-2) var(--me-database-handle-col-width); }
-  .me-db-swatches { display: grid; grid-template-columns: repeat(5, max-content); gap: var(--me-space-1); }
-  .me-db-swatch-button { display: inline-flex; padding: var(--me-space-1); border: 0; border-radius: var(--me-radius-sm); background: none; cursor: pointer; }
-  .me-db-swatch-button:hover { background: var(--me-menu-item-hover-bg, var(--me-database-default-tag-bg)); }
-  .me-db-swatch-button .me-db-swatch { display: inline-flex; align-items: center; justify-content: center; }
+  .me-db-option-item > .me-db-tag { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .me-db-option-item > .me-db-menu-value { margin-left: auto; text-transform: uppercase; }
+  .me-db-option-item > .me-db-menu-value + .me-db-menu-end { margin-left: 0; }
+  .me-db-option-handle { display: inline-flex; flex: none; color: var(--me-color-handle); cursor: grab; opacity: 0; }
+  .me-db-option-handle svg { width: var(--me-font-size-md); height: var(--me-font-size-md); }
+  .me-db-option-item:hover .me-db-option-handle, .me-db-option-item:focus-visible .me-db-option-handle { opacity: 1; }
+  .me-db-option-add { display: flex; padding: var(--me-space-1) 0; }
   .me-db-swatch svg { width: var(--me-database-swatch-size); height: var(--me-database-swatch-size); }
   .me-db-section-head { justify-content: space-between; margin-top: var(--me-space-2); }
   .me-db-prop-row { cursor: default; }
@@ -450,7 +501,7 @@
   .me-db-filterbar-sep { align-self: stretch; width: var(--me-border-width-thin); background: var(--me-database-border); }
   .me-db-filterbar-end { display: inline-flex; gap: var(--me-space-2); margin-left: auto; }
   .me-db-save-draft { height: var(--me-toolbar-button-size); }
-  .me-db-db-list { display: flex; flex-direction: column; max-height: calc(var(--me-database-calendar-cell-height) * 2); overflow-y: auto; }
+  .me-db-db-list { display: flex; flex-direction: column; max-height: calc(var(--me-database-calendar-cell-height) * 2); }
   .me-db-db-icon { flex: none; width: var(--me-font-size-md); text-align: center; }
   .me-db-template-row { gap: var(--me-space-1); }
   .me-db-template-name { display: inline-flex; flex: 1; align-items: center; gap: var(--me-space-2); min-width: 0; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: start; cursor: pointer; }
@@ -458,7 +509,8 @@
   .me-db-formula-status { display: flex; align-items: center; gap: var(--me-space-2); min-height: var(--me-font-size-md); }
   .me-db-hint.is-ok { color: var(--me-palette-green-text); }
   .me-db-formula-catalog { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--me-space-3); border-top: var(--me-border-width-thin) solid var(--me-database-border); padding-top: var(--me-space-2); }
-  .me-db-formula-list { display: flex; flex-direction: column; max-height: calc(var(--me-database-calendar-cell-height) * 2.5); overflow-y: auto; }
+  /* The left column of the catalog, not at the popover's edge: scrolls in place (only up and down). */
+  .me-db-formula-list { display: flex; flex-direction: column; max-height: calc(var(--me-database-calendar-cell-height) * 2.5); overflow-x: hidden; overflow-y: auto; }
   .me-db-formula-doc { display: flex; flex-direction: column; gap: var(--me-space-2); font-size: var(--me-font-size-xs); }
   .me-db-mono { font-family: var(--me-font-mono); font-size: var(--me-font-size-xs); white-space: pre-wrap; word-break: break-word; }
   /* Sub-items: toggle before the title, sub-item rows indented under their parent. */
@@ -544,7 +596,7 @@
   .me-db-table.is-wrap .me-db-tr:not(.is-group, .is-add) .me-db-td { align-items: flex-start; padding-top: var(--me-space-3); padding-bottom: var(--me-space-3); }
   .me-db-td.is-wrap .me-db-value { flex-wrap: wrap; overflow: visible; }
   .me-db-td.is-wrap .me-db-text, .me-db-td.is-wrap .me-db-link { overflow-wrap: anywhere; white-space: normal; }
-  .me-db-group-head { position: sticky; left: 0; display: flex; align-items: center; gap: var(--me-space-3); padding: 0 var(--me-space-2); }
+  .me-db-group-head { position: sticky; left: var(--me-db-bleed-left, 0); display: flex; align-items: center; gap: var(--me-space-3); padding: 0 var(--me-space-2); }
   .me-db-group-label { font-weight: var(--me-font-weight-medium); }
   .me-db-group-count { color: var(--me-database-faint-color); }
   .me-db-new-row {
@@ -586,7 +638,10 @@
   .me-db-selection-bar svg { width: var(--me-font-size-sm); height: var(--me-font-size-sm); }
 
   /* ── Popovers: menus, editors, builders ──────────────────────── */
-  .me-db-popover { position: fixed; z-index: 60; overflow: auto; font-size: var(--me-database-font-size); color: var(--me-color-text); }
+  .me-db-popover { position: fixed; z-index: 60; overflow: auto; overscroll-behavior: contain; font-size: var(--me-database-font-size); color: var(--me-color-text); }
+  /* Menus show all their items (Notion); the popover itself scrolls, only when the window is too short, with its
+     scrollbar at its edge. */
+  .me-db-popover > .me-menu { max-height: none; overflow: visible; }
   .me-db-popover.is-over { padding: 0; }
   .me-db-menu { display: flex; flex-direction: column; gap: var(--me-space-1); width: var(--me-database-menu-width); }
   /* In a column `.me-input`'s flex: 1 (meant for rows) would collapse it to its text height. */
@@ -594,7 +649,24 @@
   .me-db-prop-editor { gap: var(--me-space-3); }
   .me-db-field { display: flex; flex-direction: column; gap: var(--me-space-1); }
   .me-db-field > .me-menu-label { padding: 0; }
-  .me-db-type-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--me-space-1); max-height: var(--me-menu-max-height); overflow-y: auto; }
+  /* In a column `.me-input`'s flex: 1 (meant for rows) would collapse it to its text height. */
+  .me-db-field > .me-input { flex: none; }
+  /* "+" (Notion): opened over the "+" cell, the name takes the header row; below it the types in two columns, in
+     groups. Shows all of them; the popover itself scrolls on a short window. */
+  .me-db-new-prop { display: flex; flex-direction: column; gap: var(--me-space-1); width: var(--me-database-new-prop-width); padding: 0 var(--me-space-2) var(--me-space-2); }
+  .me-db-new-prop-name {
+    display: flex;
+    align-items: center;
+    height: var(--me-database-header-height);
+    margin: 0 calc(-1 * var(--me-space-2));
+    padding: 0 var(--me-database-cell-padding-x);
+    border-bottom: var(--me-border-width-thin) solid var(--me-database-border);
+  }
+  .me-db-new-prop-input { flex: 1; min-width: 0; border: 0; outline: none; background: none; color: var(--me-color-text); font: inherit; font-size: var(--me-font-size-sm); }
+  .me-db-new-prop > .me-menu-label { margin-top: var(--me-space-2); }
+  .me-db-new-prop-types { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--me-space-1); }
+  .me-db-new-prop-types > .me-menu-item { min-height: var(--me-space-9); }
+  .me-db-prop-editor { width: var(--me-database-prop-editor-width); }
   .me-db-formula { height: var(--me-database-formula-height); padding: var(--me-space-3); font-family: var(--me-font-mono); resize: vertical; }
   .me-db-hint { color: var(--me-database-muted-color); font-size: var(--me-font-size-xs); }
   .me-db-error { color: var(--me-database-error-color); font-size: var(--me-font-size-xs); }
@@ -610,8 +682,7 @@
   }
   .me-db-toggle-row { display: flex; align-items: center; justify-content: space-between; gap: var(--me-space-4); padding: var(--me-space-2) var(--me-menu-item-padding-x); }
   .me-db-settings { gap: var(--me-space-3); }
-  .me-db-options { display: flex; flex-direction: column; gap: var(--me-space-2); }
-  .me-db-option-row .me-input:first-of-type { flex: 1; }
+  .me-db-options { display: flex; flex-direction: column; gap: var(--me-space-1); }
 
   .me-db-cell-editor { min-width: var(--me-database-cell-default-width); }
   .me-db-cell-editor.is-select, .me-db-cell-editor.is-multi_select, .me-db-cell-editor.is-status,

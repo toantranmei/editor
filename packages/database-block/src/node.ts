@@ -1,7 +1,9 @@
 import type { Editor } from '@tiptap/core'
 import { mergeAttributes, Node } from '@tiptap/core'
+import { NodeSelection, TextSelection } from '@tiptap/pm/state'
 import { blockNodeView } from '@toantranmei/editor'
 import DatabaseNodeView from './DatabaseNodeView.vue'
+import { markNewDatabase } from './new-database'
 import type { DatabaseBlockOptions, DatabaseKind } from './types'
 
 export const DATABASE_NODE = 'databaseView'
@@ -41,16 +43,32 @@ function track(editor: Editor, pos: number) {
 export function insertDatabaseAt(editor: Editor, pos: number | null, attrs: { databaseId: string, viewId?: string | null, inline?: boolean }): boolean {
   const content = { type: DATABASE_NODE, attrs: { viewId: null, inline: true, ...attrs } }
   const { doc } = editor.state
+  let done = false
   if (pos !== null && pos >= 0 && pos < doc.content.size) {
     const target = doc.nodeAt(pos)
     if (target?.type.name === 'paragraph' && target.content.size === 0) {
-      return editor.chain().insertContentAt({ from: pos, to: pos + target.nodeSize }, content).run()
+      done = editor.chain().insertContentAt({ from: pos, to: pos + target.nodeSize }, content).run()
     }
-    if (target && editor.can().insertContentAt(pos + target.nodeSize, content)) {
-      return editor.chain().insertContentAt(pos + target.nodeSize, content).run()
+    else if (target && editor.can().insertContentAt(pos + target.nodeSize, content)) {
+      done = editor.chain().insertContentAt(pos + target.nodeSize, content).run()
     }
   }
-  return editor.chain().focus().insertContent(content).run()
+  if (!done) done = editor.chain().focus().insertContent(content).run()
+  if (done) leaveBlock(editor)
+  return done
+}
+
+/**
+ * Inserting an atom leaves it node-selected, which painted the new database with the block-selection highlight until
+ * you clicked elsewhere. Notion doesn't select it: put the caret in the next text block (else the previous one).
+ */
+function leaveBlock(editor: Editor) {
+  const { state } = editor
+  const sel = state.selection
+  if (!(sel instanceof NodeSelection) || sel.node.type.name !== DATABASE_NODE) return
+  const next = TextSelection.findFrom(state.doc.resolve(sel.to), 1, true)
+    ?? TextSelection.findFrom(state.doc.resolve(sel.from), -1, true)
+  if (next) editor.view.dispatch(state.tr.setSelection(next).scrollIntoView())
 }
 
 /**
@@ -133,6 +151,7 @@ export const DatabaseViewNode = Node.create<DatabaseBlockOptions>({
           .then((databaseId) => {
             tracked?.stop()
             if (editor.isDestroyed) return
+            if (kind === 'inline') markNewDatabase(databaseId)
             insertDatabaseAt(editor, tracked ? tracked.get() : null, { databaseId, inline: kind === 'inline' })
             if (kind === 'full_page') open?.(databaseId)
           })

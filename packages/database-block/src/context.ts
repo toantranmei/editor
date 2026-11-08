@@ -37,7 +37,8 @@ export interface DbContext {
   /** Adds people / rows (from `people()` / `searchRows()` results) to the name caches. */
   remember: (people: Array<{ id: string, name: string, avatar?: string }>, rows?: Array<{ id: string, title: string }>) => void
   /** Cross-component UI requests (e.g. a header menu asking the toolbar to open the filter builder). */
-  ui: { openFilter: number, openSort: number }
+  /** Bumped to open a toolbar panel from elsewhere (a header menu's Filter / Sort, the title menu's Edit layout). */
+  ui: { openFilter: number, openSort: number, openSettings: number }
   /** "Open pages in" of the current view (default `side_peek`). */
   openMode: ComputedRef<OpenMode>
   /**
@@ -306,7 +307,7 @@ export function createContext(input: {
     }),
     names,
     remember,
-    ui: reactive({ openFilter: 0, openSort: 0 }),
+    ui: reactive({ openFilter: 0, openSort: 0, openSettings: 0 }),
     openMode,
     openRow(rowId, event, mode) {
       const wanted: OpenMode = mode ?? (event && (event.metaKey || event.ctrlKey) ? 'full_page' : openMode.value)

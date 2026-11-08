@@ -5,12 +5,14 @@
  */
 import { Maximize2 } from '@lucide/vue'
 import { baseTokensCss, type LocaleName } from '@toantranmei/editor'
-import { computed, onBeforeUnmount, provide, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, provide, ref, watch } from 'vue'
 import FilterBar from './components/FilterBar.vue'
 import Toolbar from './components/Toolbar.vue'
+import TitleMenu from './components/TitleMenu.vue'
 import ViewTabs from './components/ViewTabs.vue'
 import { createContext, DB_KEY } from './context'
 import { type DatabaseMessages, databaseMessages } from './messages'
+import { takeNewDatabase } from './new-database'
 import type { DatabaseBlockOptions, DatabaseSource, OpenMode } from './types'
 import BoardView from './views/BoardView.vue'
 import CalendarView from './views/CalendarView.vue'
@@ -87,10 +89,28 @@ const VIEWS = { table: TableView, board: BoardView, calendar: CalendarView, time
 const viewRef = ref<{ newRow?: (seg?: number, top?: boolean) => void } | null>(null)
 
 // ── Title: `source.meta.title`, saved while typing (debounced) and on blur / Enter ──
+const singleView = computed(() => db.source.views.value.length <= 1)
 const titleShown = computed(() => (props.showTitle ?? !props.full) && db.view.value?.config.show_title !== false)
 const metaTitle = computed(() => props.source.meta.value?.title ?? '')
 const title = ref(metaTitle.value)
 const titleFocused = ref(false)
+const titleInput = ref<HTMLInputElement | null>(null)
+function editTitle() {
+  titleInput.value?.focus()
+  titleInput.value?.select()
+}
+// Just created from the slash menu: type its name right away (like Notion). The title row appears once the view has
+// loaded (later on a slow / worker-backed source), so focus it when it shows up.
+const focusTitle = takeNewDatabase(props.databaseId)
+if (focusTitle) {
+  let done = false
+  const stop = watch(titleInput, (el) => {
+    if (!el || done) return
+    done = true
+    nextTick(() => el.focus())
+  }, { flush: 'post' })
+  onBeforeUnmount(stop)
+}
 // Remote / host renames show up unless the user is typing here.
 watch(metaTitle, (t) => {
   if (!titleFocused.value) title.value = t
@@ -145,9 +165,11 @@ defineExpose({ db, view: viewRef })
 
 <template>
   <div class="me-db" :class="{ 'is-full': full, 'is-readonly': !db.canEditContent.value, 'has-title': titleShown }" :data-view-type="type" @keydown="onUndoKey">
-    <div v-if="titleShown" class="me-db-header">
+    <!-- Like Notion: with one view there's no tab bar; "+" (add view) follows the title and the toolbar shares its row. -->
+    <div v-if="titleShown" class="me-db-header" :class="{ 'is-single': singleView }">
       <span v-if="source.meta.value?.icon" class="me-db-icon" aria-hidden="true">{{ source.meta.value.icon }}</span>
       <input
+        ref="titleInput"
         v-model="title"
         class="me-db-title"
         :readonly="!db.canEditStructure.value"
@@ -160,11 +182,16 @@ defineExpose({ db, view: viewRef })
         @keydown.enter.prevent="($event.target as HTMLInputElement).blur()"
         @keydown.esc="title = metaTitle; ($event.target as HTMLInputElement).blur()"
       >
-      <button v-if="options.open && !full" type="button" class="me-db-icon-button me-db-header-action" :aria-label="m.openFullPage" :title="m.openFullPage" @click="emit('open', databaseId, $event); options.open?.(databaseId, $event)">
-        <Maximize2 />
-      </button>
+      <ViewTabs v-if="singleView" compact @select="select" />
+      <TitleMenu :full="full" @select="select" @edit-title="editTitle" @edit-layout="db.ui.openSettings++" />
+      <span class="me-db-header-end">
+        <button v-if="options.open && !full" type="button" class="me-db-icon-button me-db-header-action" :aria-label="m.openFullPage" :title="m.openFullPage" @click="emit('open', databaseId, $event); options.open?.(databaseId, $event)">
+          <Maximize2 />
+        </button>
+        <Toolbar v-if="singleView" @new-row="newRow" @new-from-template="newFromTemplate" />
+      </span>
     </div>
-    <div class="me-db-topbar">
+    <div v-if="!singleView || !titleShown" class="me-db-topbar">
       <ViewTabs @select="select" />
       <Toolbar @new-row="newRow" @new-from-template="newFromTemplate" />
     </div>

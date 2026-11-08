@@ -41,6 +41,10 @@ watch(() => db.ui.openFilter, () => {
   const el = buttons.value.filter
   if (el) open.value = { panel: 'filter', anchor: el }
 })
+watch(() => db.ui.openSettings, () => {
+  const el = buttons.value.settings
+  if (el) open.value = { panel: 'settings', anchor: el }
+})
 watch(() => db.ui.openSort, () => {
   const el = buttons.value.sort
   if (el) open.value = { panel: 'sort', anchor: el }
@@ -116,7 +120,7 @@ const REPEATS: TemplateRepeat[] = ['day', 'week', 'month']
         @keydown.esc="db.search.value = ''; searching = false"
       >
     </span>
-    <button type="button" class="me-db-tool" data-tool="settings" :aria-label="m.viewOptions" :title="m.viewOptions" :aria-expanded="open?.panel === 'settings'" @click="toggle('settings', $event)">
+    <button :ref="el => (buttons.settings = el as HTMLElement)" type="button" class="me-db-tool" data-tool="settings" :aria-label="m.viewOptions" :title="m.viewOptions" :aria-expanded="open?.panel === 'settings'" @click="toggle('settings', $event)">
       <Ellipsis />
     </button>
     <span v-if="canAdd" class="me-db-new-split">

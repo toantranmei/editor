@@ -243,7 +243,7 @@ onBeforeUnmount(() => clearTimeout(timer))
       </div>
 
       <!-- Scrolls only while searching: in the action list, submenus sit outside the box. -->
-      <div class="me-block-menu-list" :class="{ 'is-scroll': query }">
+      <div class="me-block-menu-list" :class="{ 'is-scroll me-popover-scroll': query }">
       <template v-for="(row, i) in rows" :key="row.key">
         <div v-if="query && row.group && (i === 0 || rows[i - 1]!.group !== row.group)" class="me-menu-label">
           {{ row.group }}

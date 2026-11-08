@@ -96,7 +96,8 @@ onBeforeUnmount(() => cancelAnimationFrame(raf))
 </script>
 
 <template>
-  <div class="min-h-screen">
+  <!-- data-me-bleed-root: database tables reach out to the page edges (the document scrolls this page) -->
+  <div class="min-h-screen" data-me-bleed-root>
     <header class="sticky top-0 z-20 flex h-11 items-center justify-between bg-white/90 px-4 text-sm backdrop-blur dark:bg-[#191919]/90">
       <span class="font-medium">Database <span class="text-neutral-400">· reads {{ reads }} · last window {{ lastWindow }}</span></span>
       <div class="flex items-center gap-2">

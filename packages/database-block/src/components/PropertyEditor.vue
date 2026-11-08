@@ -1,11 +1,15 @@
 <script setup lang="ts">
 /**
- * Creates a property ("+" in the table header, "Add property") or edits one's settings: name, type, number format,
- * options, date format, formula (checked with the optional `validateFormula`), relation / rollup, ID prefix, button label
- * and actions.
+ * Creates a property ("+" in the table header, "Insert left / right") or edits one's settings: name, description,
+ * number format, options, date format, formula (checked with the optional `validateFormula`), relation / rollup, ID
+ * prefix, button label and actions.
+ *
+ * A new property opens as Notion's "+" menu: its name over the header row, then the types in two columns (basic,
+ * advanced, automatic). Picking a type creates the property and closes the menu; it is set up later from its column
+ * menu. Only a type that cannot be created yet (a rollup with no relation to roll up) shows its settings, with Save.
  */
 import { Check } from '@lucide/vue'
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useDb } from '../context'
 import type { DateDisplay, FormulaCheck, NumberFormat, Prop, PropConfig, PropType, RollupFn, SelectOption } from '../types'
 import { clone, CREATABLE_TYPES, OPTION_TYPES, placeColumn, positionAfter, uuidv7 } from '../util'
@@ -27,10 +31,21 @@ const emit = defineEmits<{ close: [], saved: [prop: Prop] }>()
 
 const db = useDb()
 const m = computed(() => db.m.value)
-const editing = computed(() => !!props.prop)
+/** The property being edited: the one given, or the new one once its type is picked. */
+const current = ref<Prop | undefined>(props.prop)
+const editing = computed(() => !!current.value)
 const type = ref<PropType>(props.prop?.type ?? props.initialType ?? 'text')
 const name = ref(props.prop?.name ?? '')
 const config = ref<PropConfig>(clone(props.prop?.config) ?? {})
+/** New property: its type is picked (the settings show instead of the type list). */
+const picked = ref(!!props.prop || !!props.initialType)
+const nameInput = ref<HTMLInputElement | null>(null)
+onMounted(() => nextTick(() => {
+  const el = nameInput.value
+  if (!el) return
+  el.focus({ preventScroll: true })
+  el.setSelectionRange(el.value.length, el.value.length)
+}))
 
 const NUMBER_FORMATS: NumberFormat[] = ['number', 'percent', 'currency']
 const DATE_FORMATS: DateDisplay[] = ['full', 'short', 'dmy', 'mdy', 'ymd', 'relative']
@@ -57,14 +72,15 @@ function defaultsFor(t: PropType): PropConfig {
     }
     case 'date': return { time: false }
     case 'relation': return { database_id: db.databaseId }
-    case 'rollup': return { fn: 'count' }
+    // Rolls up the first relation, if any (the rollup can't be created without one).
+    case 'rollup': return { fn: 'count', relation_prop_id: db.props.value.find(p => p.type === 'relation')?.id }
     case 'formula': return { expression: '' }
     case 'button': return { actions: [] }
     default: return {}
   }
 }
 watch(type, (t) => {
-  if (!editing.value) config.value = defaultsFor(t)
+  if (!editing.value && !picked.value) config.value = defaultsFor(t)
 })
 if (!editing.value) config.value = defaultsFor(type.value)
 
@@ -155,54 +171,89 @@ function patchConfig(patch: Partial<PropConfig>) {
 
 function save(andClose = true) {
   saveTimer = undefined
-  if (!valid.value) return
+  if (!valid.value) return false
   const c: PropConfig = { ...config.value }
   if (type.value === 'formula' && check.value?.ok && check.value.type) c.result_type = check.value.type
   const all = db.props.value
-  const prop: Prop = props.prop
-    ? { ...props.prop, name: name.value.trim(), type: type.value, config: c }
+  const before = current.value
+  const prop: Prop = before
+    ? { ...before, name: name.value.trim(), type: type.value, config: c }
     : { id: uuidv7(), name: name.value.trim(), type: type.value, position: positionAfter(all[all.length - 1]?.position), config: c }
   if (!Object.keys(c).length) delete prop.config
   db.source.upsertProp(prop)
+  current.value = prop
   // A new property shows up in the current view (next to a column when inserted from its menu).
   const view = db.view.value
-  if (!props.prop && view && props.place) db.updateView({ visible: placeColumn(view, db.props.value, prop.id, props.place.next, props.place.side) })
-  else if (!props.prop && view?.config.visible) db.updateView({ visible: [...view.config.visible, prop.id] })
-  if (!andClose) return
-  emit('saved', prop)
-  emit('close')
+  if (!before && view && props.place) db.updateView({ visible: placeColumn(view, db.props.value, prop.id, props.place.next, props.place.side) })
+  else if (!before && view?.config.visible) db.updateView({ visible: [...view.config.visible, prop.id] })
+  if (!before) emit('saved', prop)
+  if (andClose) emit('close')
+  return true
+}
+
+/** Notion's "+" menu: the types in groups, as it orders them. */
+const TYPE_GROUPS: PropType[][] = ([
+  ['text', 'number', 'select', 'multi_select', 'status', 'date', 'person', 'files', 'checkbox', 'url', 'phone', 'email'],
+  ['relation', 'rollup', 'formula', 'button', 'unique_id'],
+  ['created_time', 'last_edited_time', 'created_by', 'last_edited_by'],
+] as PropType[][]).map(g => g.filter(t => CREATABLE_TYPES.includes(t)))
+
+/** "+" menu: creates the property with the picked type and closes (Notion). */
+function pick(t: PropType) {
+  type.value = t
+  config.value = defaultsFor(t)
+  if (!name.value.trim()) name.value = m.value.types[t] ?? t
+  // The formula check isn't done yet: an empty formula is valid.
+  if (t === 'formula') check.value = null
+  if (save()) return
+  // Can't be created as it is (a rollup with nothing to roll up): its settings, with Save.
+  picked.value = true
+  nextTick(() => nameInput.value?.focus({ preventScroll: true }))
 }
 </script>
 
 <template>
-  <DbPopover :anchor="anchor" :scope="db.scope.value" :label="editing ? prop!.name : m.addProperty" @close="close">
-    <form class="me-db-menu me-db-prop-editor" @submit.prevent="save()">
+  <DbPopover :anchor="anchor" :scope="db.scope.value" :placement="picked ? 'below' : 'over'" :label="current?.name ?? m.addProperty" @close="close">
+    <!-- "+" (Notion): the name over the header row, then the types in two columns; picking one creates it. -->
+    <div v-if="!picked" class="me-db-new-prop" role="menu" :aria-label="m.addProperty" data-new-prop>
+      <div class="me-db-new-prop-name">
+        <input
+          ref="nameInput"
+          v-model="name"
+          class="me-db-new-prop-input"
+          :placeholder="m.propertyNamePlaceholder"
+          :aria-label="m.propertyName"
+          data-prop-name
+          @keydown.enter.prevent="pick('text')"
+        >
+      </div>
+      <div class="me-menu-label">{{ m.selectType }}</div>
+      <template v-for="(group, i) in TYPE_GROUPS" :key="i">
+        <div v-if="i" class="me-db-separator" role="separator" />
+        <div class="me-db-new-prop-types">
+          <button
+            v-for="t in group"
+            :key="t"
+            type="button"
+            role="menuitem"
+            class="me-menu-item"
+            :data-type="t"
+            @click="pick(t)"
+          >
+            <PropIcon :type="t" /><span class="me-menu-title">{{ m.types[t] }}</span>
+          </button>
+        </div>
+      </template>
+    </div>
+    <form v-else class="me-db-menu me-db-prop-editor" @submit.prevent="save()">
       <label class="me-db-field">
         <span class="me-menu-label">{{ m.propertyName }}</span>
-        <input v-model="name" class="me-input" :aria-label="m.propertyName" autofocus>
+        <input ref="nameInput" v-model="name" class="me-input" :aria-label="m.propertyName" data-prop-name>
       </label>
       <label class="me-db-field">
         <span class="me-menu-label">{{ m.propertyDescription }}</span>
         <input :value="config.description ?? ''" class="me-input" :placeholder="m.propertyDescriptionHint" data-setting="description" @input="patchConfig({ description: ($event.target as HTMLInputElement).value || undefined })">
       </label>
-      <div v-if="!editing" class="me-db-field">
-        <span class="me-menu-label">{{ m.propertyType }}</span>
-        <div class="me-db-type-grid" role="radiogroup" :aria-label="m.propertyType">
-          <button
-            v-for="t in CREATABLE_TYPES"
-            :key="t"
-            type="button"
-            role="radio"
-            class="me-menu-item"
-            :class="{ 'is-active': type === t }"
-            :aria-checked="type === t"
-            :data-type="t"
-            @click="type = t; if (!name.trim()) name = m.types[t] ?? t"
-          >
-            <PropIcon :type="t" /><span class="me-menu-title">{{ m.types[t] }}</span>
-          </button>
-        </div>
-      </div>
 
       <template v-if="type === 'number'">
         <label class="me-db-field">
@@ -225,7 +276,6 @@ function save(andClose = true) {
       </template>
 
       <div v-else-if="OPTION_TYPES.has(type)" class="me-db-field">
-        <span class="me-menu-label">{{ m.editOptions }}</span>
         <OptionsList :config="config" :status="type === 'status'" @change="patchConfig" />
       </div>
 
@@ -265,14 +315,14 @@ function save(andClose = true) {
 
       <div v-else-if="type === 'formula'" class="me-db-field">
         <span class="me-menu-label">{{ m.formula }}</span>
-        <FormulaEditor v-model="config.expression" :check="check" :checking="checking" :self-id="prop?.id" />
+        <FormulaEditor v-model="config.expression" :check="check" :checking="checking" :self-id="current?.id" />
       </div>
 
       <template v-else-if="type === 'relation'">
         <div v-if="db.source.searchDatabases" class="me-db-field" data-setting="relation_db">
           <span class="me-menu-label">{{ m.relationDatabase }}</span>
           <input v-model="dbQuery" class="me-input" :placeholder="m.searchDatabases" :aria-label="m.searchDatabases" data-db-search>
-          <div class="me-db-db-list" role="listbox" :aria-label="m.relationDatabase">
+          <div class="me-db-db-list me-popover-scroll" role="listbox" :aria-label="m.relationDatabase">
             <button
               v-for="d in dbResults"
               :key="d.id"

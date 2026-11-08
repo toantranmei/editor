@@ -98,6 +98,8 @@ export const semanticLight = {
     blockSelected: 'rgba(35, 131, 226, 0.14)',
     danger: r('tint.red.lightText'),
     handle: '#b9b9b7',
+    /** Scrollbar thumb, as Notion: its tertiary text color at half strength on a transparent track. */
+    scrollbarThumb: 'color-mix(in srgb, #a19e99 50%, transparent)',
     inlineCodeText: '#eb5757',
     inlineCodeBg: 'rgba(135, 131, 120, 0.15)',
     overlay: 'rgba(0, 0, 0, 0.5)',
@@ -134,6 +136,7 @@ export const semanticDark: typeof semanticLight = {
     blockSelected: 'rgba(35, 131, 226, 0.22)',
     danger: r('tint.red.darkText'),
     handle: '#5a5a5a',
+    scrollbarThumb: 'color-mix(in srgb, #7d7a75 50%, transparent)',
     inlineCodeText: '#ff7369',
     inlineCodeBg: 'rgba(135, 131, 120, 0.15)',
     overlay: 'rgba(255, 255, 255, 0.5)',
@@ -224,6 +227,8 @@ export const component = {
     iconSize: '18px',
     radius: r('radius.sm'),
     gap: r('space.1'),
+    /** Room between the ⋮⋮ grip and the block, so a click meant for the block doesn't land on the handle (Notion). */
+    offset: '18px',
   },
   /**
    * Block rhythm, two levels like Notion: text blocks (paragraphs, lists, quotes,
@@ -345,13 +350,25 @@ export const component = {
     itemActive: r('color.accent'),
     indent: r('space.5'),
   },
+  /**
+   * Table row / column handles and "+" bars, like Notion's simple table: a small pill on the hovered row's left border
+   * and column's top border, that grows into a ⋮⋮ button when pointed at (click: menu; drag: move the row / column).
+   */
   tableControls: {
-    gripSize: '12px',
+    pillLength: '18px',
+    pillThickness: '6px',
+    pillBg: r('color.textFaint'),
+    /** Ring around the pill, the page color, so it reads over the table's border. */
+    pillRing: r('color.bg'),
+    gripLength: '22px',
+    gripThickness: '14px',
     gripBg: r('color.elevated'),
     gripColor: r('color.textFaint'),
-    gripHoverBg: r('color.hover'),
-    addSize: '18px',
-    addBg: r('color.surface'),
+    gripBorder: r('color.border'),
+    /** "+" bars below and right of the table, this far from it. */
+    addSize: '16px',
+    addGap: r('space.4'),
+    addBorder: r('color.border'),
     addHoverBg: r('color.hover'),
     radius: r('radius.sm'),
   },
@@ -389,10 +406,16 @@ export const component = {
   /** Database block (`@toantranmei/database-block`): header, tabs, toolbar, table and the other views. */
   database: {
     gap: r('space.4'),
-    titleSize: '1.5em',
+    /** Notion: 24px, semibold (not relative to the database's 14px text). */
+    titleSize: '24px',
     titleWeight: r('fontWeight.semibold'),
     titleColor: r('color.text'),
     titlePlaceholder: r('color.textFaint'),
+    /** Title row: Notion's is 40px (a 24px title with 4px above and below). */
+    headerRowHeight: '40px',
+    /** "Add a new view" menu (Notion): 4 columns of layout tiles. */
+    addViewWidth: '390px',
+    addViewTileHeight: '56px',
     fontSize: r('fontSize.sm'),
     mutedColor: r('color.textMuted'),
     faintColor: r('color.textFaint'),
@@ -437,6 +460,9 @@ export const component = {
     resizeHandleWidth: r('borderWidth.thick'),
     dropIndicator: r('color.accent'),
     dropIndicatorWidth: r('borderWidth.medium'),
+    /** A row being dragged: its see-through copy under the pointer (Notion: 0.4). */
+    dragGhostOpacity: '0.4',
+    dragGhostZ: '70',
     editorBg: r('color.elevated'),
     editorShadow: r('shadow.popover'),
     editorMinHeight: '120px',
@@ -457,6 +483,10 @@ export const component = {
     avatarRadius: r('rounded.full'),
     /** Popovers: menus, filter / sort builders, property editor. */
     menuWidth: '260px',
+    /** A property's settings (Notion's 290px). */
+    propEditorWidth: '290px',
+    /** "+" in the table header: two columns of types (Notion's 404px menu). */
+    newPropWidth: '404px',
     builderWidth: '560px',
     formulaHeight: '96px',
     dangerColor: r('color.danger'),

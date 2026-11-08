@@ -23,7 +23,17 @@
   .me-submenu-anchor { position: relative; }
   /* Not scrollable on purpose: submenus are positioned outside it. */
   .me-block-menu { width: var(--me-menu-width); }
-  .me-block-menu-list.is-scroll { max-height: var(--me-menu-max-height); overflow-y: auto; }
+  .me-block-menu-list.is-scroll { max-height: var(--me-menu-max-height); }
+  /* A list that scrolls inside a popover (its own height cap): only up and down, with its scrollbar at the popover's
+     edge, not inset by the popover's padding — the same as a popover that scrolls itself. Every scrolling list in a
+     popover uses it. */
+  .me-popover-scroll {
+    margin-right: calc(-1 * var(--me-popover-padding));
+    padding-right: var(--me-popover-padding);
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
   .me-menu-search {
     --me-icon-size: var(--me-font-size-sm);
     display: flex;
@@ -154,7 +164,7 @@
   /* ── Drag handle & drop indicator ────────────────────────────── */
   .me-drag-handle { transition: opacity var(--me-duration-fast); }
   .me-drag-handle[data-dragging="true"] { opacity: 0; }
-  .me-handle { display: flex; align-items: center; gap: var(--me-handle-gap); padding-right: var(--me-space-2); }
+  .me-handle { display: flex; align-items: center; gap: var(--me-handle-gap); padding-right: var(--me-handle-offset); }
   .me-handle-btn {
     --me-icon-size: var(--me-handle-icon-size);
     display: inline-flex;
@@ -219,35 +229,67 @@
   /* Table controls (drawn over the editor) */
   .me-table-controls { position: absolute; inset: 0; z-index: 15; pointer-events: none; }
   .me-table-controls-ui { position: absolute; pointer-events: auto; }
+  /* Row / column handle: a hit area centered on the table's border, showing a small pill that grows into a ⋮⋮ button
+     when pointed at (Notion). */
   .me-table-grip {
-    --me-icon-size: var(--me-font-size-xs);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border: var(--me-border-width-thin) solid var(--me-color-border);
-    border-radius: var(--me-table-controls-radius);
-    background: var(--me-table-controls-grip-bg);
-    color: var(--me-table-controls-grip-color);
-    opacity: 0.9;
-  }
-  .me-table-grip:hover { background: var(--me-table-controls-grip-hover-bg); color: var(--me-color-text); }
-  /* Centered on the table's left / top border (Notion-style), clear of the block's own ⋮⋮ handle. */
-  .me-table-grip--row { width: var(--me-table-controls-grip-size); transform: translateX(-50%); }
-  .me-table-grip--col { height: var(--me-table-controls-grip-size); transform: translateY(-50%); }
-  .me-table-add {
     --me-icon-size: var(--me-font-size-sm);
     display: flex;
     align-items: center;
     justify-content: center;
+    padding: 0;
+    border: var(--me-border-width-thin) solid transparent;
     border-radius: var(--me-table-controls-radius);
-    background: var(--me-table-controls-add-bg);
-    color: var(--me-color-text-faint);
-    opacity: 0;
-    transition: opacity var(--me-duration-fast);
+    background: none;
+    color: transparent;
+    cursor: grab;
+    touch-action: none;
+    transform: translate(-50%, -50%);
+    /* Over the cell toolbar (z-index 40), which sits above a selected row and could cover the next row's handle. */
+    z-index: 45;
+    transition: background var(--me-duration-fast), border-color var(--me-duration-fast);
   }
-  .me-table-add:hover { opacity: 1; background: var(--me-table-controls-add-hover-bg); color: var(--me-color-text); }
-  .me-table-add--row { height: var(--me-table-controls-add-size); margin-top: var(--me-space-1); }
-  .me-table-add--col { width: var(--me-table-controls-add-size); margin-left: var(--me-space-1); }
+  .me-table-grip--row { width: var(--me-table-controls-grip-thickness); height: var(--me-table-controls-grip-length); }
+  .me-table-grip--col { width: var(--me-table-controls-grip-length); height: var(--me-table-controls-grip-thickness); }
+  .me-table-grip svg { display: none; }
+  .me-table-grip::before {
+    content: '';
+    box-sizing: content-box;
+    border: var(--me-border-width-medium) solid var(--me-table-controls-pill-ring);
+    border-radius: var(--me-table-controls-radius);
+    background: var(--me-table-controls-pill-bg);
+  }
+  .me-table-grip--row::before { width: calc(var(--me-table-controls-pill-thickness) - 2 * var(--me-border-width-medium)); height: calc(var(--me-table-controls-pill-length) - 2 * var(--me-border-width-medium)); }
+  .me-table-grip--col::before { width: calc(var(--me-table-controls-pill-length) - 2 * var(--me-border-width-medium)); height: calc(var(--me-table-controls-pill-thickness) - 2 * var(--me-border-width-medium)); }
+  .me-table-grip:hover, .me-table-grip.is-active {
+    border-color: var(--me-table-controls-grip-border);
+    background: var(--me-table-controls-grip-bg);
+    color: var(--me-table-controls-grip-color);
+  }
+  .me-table-grip:hover::before, .me-table-grip.is-active::before { display: none; }
+  .me-table-grip:hover svg, .me-table-grip.is-active svg { display: block; }
+  .me-table-grip.is-active { cursor: grabbing; }
+  /* Where a dragged row / column lands. */
+  .me-table-drop-line { position: absolute; z-index: 1; border-radius: var(--me-radius-sm); background: var(--me-drop-indicator-color); pointer-events: none; }
+  .me-table-drop-line.is-row { height: var(--me-drop-indicator-height); transform: translateY(-50%); }
+  .me-table-drop-line.is-col { width: var(--me-drop-indicator-height); transform: translateX(-50%); }
+  :where(html.me-table-dragging), :where(html.me-table-dragging) * { cursor: grabbing; user-select: none; }
+  /* "+" bars below and right of the hovered table (Notion). */
+  .me-table-add {
+    --me-icon-size: var(--me-font-size-xs);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: var(--me-border-width-thin) solid var(--me-table-controls-add-border);
+    border-radius: var(--me-table-controls-radius);
+    background: none;
+    color: var(--me-color-text-faint);
+    cursor: pointer;
+    transition: background var(--me-duration-fast);
+  }
+  .me-table-add:hover { background: var(--me-table-controls-add-hover-bg); color: var(--me-color-text-muted); }
+  .me-table-add--row { height: var(--me-table-controls-add-size); margin-top: var(--me-table-controls-add-gap); }
+  .me-table-add--col { width: var(--me-table-controls-add-size); margin-left: var(--me-table-controls-add-gap); }
   .me-table-menu { z-index: 50; }
   .me-table-menu.is-above { transform: translateY(calc(-100% - var(--me-space-9))); }
   .me-table-toolbar { z-index: 40; transform: translateY(calc(-100% - var(--me-space-2))); }
@@ -259,7 +301,7 @@
   .me-mention-popover { position: fixed; z-index: 60; display: flex; flex-direction: column; gap: var(--me-space-2); width: var(--me-mention-popover-width); }
   .me-mention-popover--date { width: auto; }
   .me-mention-search { flex: none; }
-  .me-mention-results { max-height: var(--me-menu-max-height); overflow-y: auto; }
+  .me-mention-results { max-height: var(--me-menu-max-height); }
   .me-menu-item.is-current { font-weight: var(--me-font-weight-semibold); }
   .me-mention-open { color: inherit; text-decoration: none; border-top: var(--me-border-width-thin) solid var(--me-color-border); border-radius: 0; }
 
@@ -340,9 +382,8 @@
   .me-emoji-menu { width: calc(var(--me-emoji-menu-cell) * var(--me-emoji-menu-columns) + var(--me-popover-padding) * 2); }
   .me-emoji-menu-grid {
     display: grid;
-    grid-template-columns: repeat(var(--me-emoji-menu-columns), var(--me-emoji-menu-cell));
+    grid-template-columns: repeat(var(--me-emoji-menu-columns), minmax(0, var(--me-emoji-menu-cell)));
     max-height: calc(var(--me-emoji-menu-cell) * 5);
-    overflow-y: auto;
   }
   .me-emoji-menu .me-emoji { width: var(--me-emoji-menu-cell); height: var(--me-emoji-menu-cell); padding: 0; font-size: var(--me-emoji-menu-size); }
   .me-emoji-menu .me-emoji.is-active { background: var(--me-menu-item-hover); }

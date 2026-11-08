@@ -9,6 +9,9 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 html.dark body { background: #191919; color: #d4d4d4; }
+/* Page scrollbar as Notion's (the editor styles its own scrolling parts with --me-color-scrollbar-thumb). */
+html { scrollbar-color: color-mix(in srgb, #a19e99 50%, transparent) transparent; }
+html.dark { scrollbar-color: color-mix(in srgb, #7d7a75 50%, transparent) transparent; }
 
 .page-title {
   @apply mb-2 block w-full resize-none overflow-hidden bg-transparent text-[40px] font-bold leading-[1.2] outline-none placeholder:text-neutral-300 dark:placeholder:text-neutral-600;

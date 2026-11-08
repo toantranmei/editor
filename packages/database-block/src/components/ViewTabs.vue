@@ -3,9 +3,9 @@
 import { ArrowUpRight, Check, Copy, Link2, Pencil, Plus, Trash2, X } from '@lucide/vue'
 import { computed, nextTick, ref, shallowRef } from 'vue'
 import { useDb } from '../context'
-import { fmt } from '../messages'
 import type { View, ViewType } from '../types'
-import { byPosition, clone, positionAfter, uuidv7, viewDefaults } from '../util'
+import { byPosition, positionAfter, uuidv7, viewDefaults } from '../util'
+import { copyViewLink as copyLink, duplicateView, VIEW_TYPES } from '../view-actions'
 import DbPopover from './DbPopover.vue'
 import PropIcon from './PropIcon.vue'
 import RowIcon from './RowIcon.vue'
@@ -13,8 +13,9 @@ import RowIcon from './RowIcon.vue'
 const emit = defineEmits<{ select: [viewId: string] }>()
 const db = useDb()
 const m = computed(() => db.m.value)
+/** compact: just the "+" (add view), for a one-view database whose tab bar is hidden (Notion). */
+const props = defineProps<{ compact?: boolean }>()
 const views = computed(() => [...db.source.views.value].sort(byPosition))
-const TYPES: ViewType[] = ['table', 'board', 'calendar', 'timeline', 'gallery', 'list', 'chart', 'pivot', 'form', 'feed', 'dashboard']
 const adding = shallowRef<HTMLElement | null>(null)
 const menu = shallowRef<{ view: View, anchor: HTMLElement } | null>(null)
 const renaming = ref<string | null>(null)
@@ -28,9 +29,7 @@ function add(type: ViewType) {
 }
 function duplicate(v: View) {
   menu.value = null
-  const copy: View = { ...clone(v), id: uuidv7(), name: fmt(m.value.copyOf, { name: v.name }), position: positionAfter(views.value[views.value.length - 1]?.position) }
-  db.source.upsertView(copy)
-  emit('select', copy.id)
+  emit('select', duplicateView(db, v).id)
 }
 function remove(v: View) {
   menu.value = null
@@ -51,16 +50,9 @@ function commitRename(v: View) {
   renaming.value = null
   if (name && name !== v.name) db.source.upsertView({ ...v, name })
 }
-async function copyViewLink(v: View) {
+function copyViewLink(v: View) {
   menu.value = null
-  const url = db.options.viewUrl?.(db.databaseId, v.id)
-  if (!url) return
-  try {
-    await navigator.clipboard.writeText(url)
-  }
-  catch (error) {
-    db.report(error)
-  }
+  return copyLink(db, v)
 }
 function openFull(v: View, e: MouseEvent) {
   menu.value = null
@@ -97,8 +89,8 @@ function onTabClick(v: View, e: MouseEvent) {
 </script>
 
 <template>
-  <div class="me-db-tabs" role="tablist">
-    <template v-for="v in views" :key="v.id">
+  <div class="me-db-tabs" :class="{ 'is-compact': props.compact }" role="tablist">
+    <template v-for="v in props.compact ? [] : views" :key="v.id">
       <input
         v-if="renaming === v.id"
         v-model="draft"
@@ -130,11 +122,14 @@ function onTabClick(v: View, e: MouseEvent) {
     </button>
 
     <DbPopover v-if="adding" :anchor="adding" :scope="db.scope.value" :label="m.addView" @close="adding = null">
-      <div class="me-menu me-db-menu" role="menu">
-        <div class="me-menu-label">{{ m.addView }}</div>
-        <button v-for="t in TYPES" :key="t" type="button" class="me-menu-item" role="menuitem" :data-view-type="t" @click="add(t)">
-          <PropIcon :view="t" /><span class="me-menu-title">{{ m.viewTypes[t] }}</span>
-        </button>
+      <!-- Notion: "Add a new view", a 4-column grid of layouts (icon over name); picking one adds it and closes. -->
+      <div class="me-menu me-db-menu me-db-add-view" role="menu">
+        <div class="me-menu-label">{{ m.addNewView }}</div>
+        <div class="me-db-add-view-grid">
+          <button v-for="t in VIEW_TYPES" :key="t" type="button" class="me-db-add-view-type" role="menuitem" :data-view-type="t" @click="add(t)">
+            <PropIcon :view="t" /><span>{{ m.viewTypes[t] }}</span>
+          </button>
+        </div>
       </div>
     </DbPopover>
     <DbPopover v-if="menu" :anchor="menu.anchor" :scope="db.scope.value" :label="menu.view.name" @close="menu = null">

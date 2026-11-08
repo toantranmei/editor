@@ -33,6 +33,17 @@ async function setup(count = 100_000, viewId = 'v-table', locale: 'vi' | 'en' | 
 }
 const rowsCalls = (s: MemorySource) => s.log.filter(l => l.method === 'rows').map(l => l.args[1] as { offset: number, limit: number })
 const popover = () => document.body.querySelector<HTMLElement>('.me-db-popover:last-of-type')!
+/** Column menu → "Edit property" of a property (its settings); moved to the first columns so it is rendered. */
+async function editProperty(wrapper: VueWrapper, source: MemorySource, id: string) {
+  const v = source.views.value.find(x => x.id === 'v-table')!
+  const visible = v.config.visible ?? source.props.value.map(p => p.id)
+  source.upsertView({ ...v, config: { ...v.config, visible: [visible[0]!, id, ...visible.slice(1).filter(x => x !== id)] } })
+  await settle()
+  await wrapper.find(`.me-db-th[data-col-id="${id}"]`).trigger('click')
+  await settle()
+  popover().querySelector<HTMLElement>('[data-action="edit-property"]')!.click()
+  await settle()
+}
 const fire = (el: Element, type: string, init: KeyboardEventInit | MouseEventInit = {}) => {
   const e = type.startsWith('key') ? new KeyboardEvent(type, { bubbles: true, cancelable: true, ...init }) : new MouseEvent(type, { bubbles: true, cancelable: true, ...init })
   el.dispatchEvent(e)
@@ -318,6 +329,9 @@ describe('other views', () => {
     await settle()
     popover().querySelector<HTMLElement>('[data-type="formula"]')!.click()
     await settle()
+    // Created at once (Notion); the formula is written in its settings.
+    expect(document.body.querySelector('.me-db-popover')).toBeNull()
+    await editProperty(wrapper, source, source.props.value.at(-1)!.id)
     const ta = popover().querySelector<HTMLTextAreaElement>('.me-db-formula')!
     ta.value = 'prop("Nope")'
     ta.dispatchEvent(new Event('input'))
@@ -548,6 +562,7 @@ describe('button property', () => {
     await settle()
     popover().querySelector<HTMLElement>('[data-type="button"]')!.click()
     await settle()
+    await editProperty(wrapper, source, source.props.value.at(-1)!.id)
     const label = popover().querySelector<HTMLInputElement>('[data-setting="button_label"]')!
     label.value = 'Ship'
     label.dispatchEvent(new Event('input'))
@@ -842,11 +857,214 @@ describe('a host that posts every call to a worker (structured clone)', () => {
       await settle()
       popover().querySelector<HTMLElement>(`[data-type="${type}"]`)!.click()
       await settle()
-      popover().querySelector<HTMLButtonElement>('button[type="submit"]')!.click()
-      await settle()
       const added = source.props.value.at(-1)!
       expect(added.type).toBe(type)
       expect(errors).toEqual([])
     })
   }
+})
+
+describe('"+" in the table header (Notion)', () => {
+  it('opens over the header with the name and the types in groups; picking one creates the property and closes', async () => {
+    const { source, wrapper } = await setup(20)
+    const count = source.props.value.length
+    await wrapper.find('.me-db-add-col').trigger('click')
+    await settle()
+    await new Promise(r => setTimeout(r, 0))
+    const menu = popover().querySelector<HTMLElement>('[data-new-prop]')!
+    // Basic, advanced and automatic types, no Save: nothing is created until a type is picked.
+    expect(menu.querySelectorAll('.me-db-new-prop-types').length).toBe(3)
+    expect([...menu.querySelectorAll('.me-db-new-prop-types')[0]!.querySelectorAll('[data-type]')].map(b => b.getAttribute('data-type')).slice(0, 3)).toEqual(['text', 'number', 'select'])
+    expect(popover().querySelector('button[type="submit"]')).toBeNull()
+    const name = menu.querySelector<HTMLInputElement>('[data-prop-name]')!
+    expect(document.activeElement).toBe(name)
+    name.value = 'Priority'
+    name.dispatchEvent(new Event('input'))
+    await settle()
+    expect(source.props.value.length).toBe(count)
+
+    menu.querySelector<HTMLElement>('[data-type="select"]')!.click()
+    await settle()
+    const added = source.props.value.at(-1)!
+    expect(source.props.value.length).toBe(count + 1)
+    expect(added).toMatchObject({ name: 'Priority', type: 'select' })
+    expect(document.body.querySelector('.me-db-popover')).toBeNull()
+  })
+
+  it('names the property after its type when no name is typed', async () => {
+    const { source, wrapper } = await setup(20)
+    await wrapper.find('.me-db-add-col').trigger('click')
+    await settle()
+    popover().querySelector<HTMLElement>('[data-type="date"]')!.click()
+    await settle()
+    expect(source.props.value.at(-1)).toMatchObject({ name: 'Date', type: 'date' })
+  })
+
+  it('Enter in the name creates a text property; Escape creates nothing', async () => {
+    const { source, wrapper } = await setup(20)
+    const count = source.props.value.length
+    await wrapper.find('.me-db-add-col').trigger('click')
+    await settle()
+    popover().querySelector<HTMLElement>('[data-prop-name]')!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    await settle()
+    expect(document.body.querySelector('.me-db-popover')).toBeNull()
+    expect(source.props.value.length).toBe(count)
+
+    await wrapper.find('.me-db-add-col').trigger('click')
+    await settle()
+    const name = popover().querySelector<HTMLInputElement>('[data-prop-name]')!
+    name.value = 'Notes'
+    name.dispatchEvent(new Event('input'))
+    name.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+    await settle()
+    expect(source.props.value.at(-1)).toMatchObject({ name: 'Notes', type: 'text' })
+    expect(document.body.querySelector('.me-db-popover')).toBeNull()
+  })
+})
+
+describe('options of select and status (Notion\'s Edit property and option menu)', () => {
+  const optionsOf = (s: MemorySource, id: string) => s.props.value.find(p => p.id === id)!.config!
+  async function openEditProperty(wrapper: VueWrapper, col: string) {
+    await wrapper.find(`.me-db-th[data-col-id="${col}"]`).trigger('click')
+    await settle()
+    popover().querySelector<HTMLElement>('[data-action="edit-property"]')!.click()
+    await settle()
+    // The header menu stays open; the options open beside it.
+    expect(document.body.querySelectorAll('.me-db-popover').length).toBe(2)
+    return popover().querySelector<HTMLElement>('[data-options-menu]')!
+  }
+
+  it('select: options as tags, add one, sort, and its menu renames / recolors / deletes', async () => {
+    const { source, wrapper } = await setup(20)
+    const menu = await openEditProperty(wrapper, 'priority')
+    expect([...menu.querySelectorAll('[data-option] .me-db-tag')].map(t => t.textContent)).toEqual(['Low', 'Medium', 'High'])
+    expect(menu.querySelector('input')).toBeNull() // tags, not text fields
+    // + Add an option → field; Enter adds and keeps it open.
+    menu.querySelector<HTMLElement>('[data-add-option]')!.click()
+    await settle()
+    const draft = popover().querySelector<HTMLInputElement>('[data-option-draft]')!
+    draft.value = 'Urgent'
+    draft.dispatchEvent(new Event('input'))
+    draft.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+    await settle()
+    expect(optionsOf(source, 'priority').options!.map(o => o.name)).toEqual(['Low', 'Medium', 'High', 'Urgent'])
+    expect(popover().querySelector('[data-option-draft]')).not.toBeNull()
+    // Sort  Manual › → Alphabetical.
+    popover().querySelector<HTMLElement>('[data-option-sort]')!.click()
+    await settle()
+    popover().querySelector<HTMLElement>('[data-sort="asc"]')!.click()
+    await settle()
+    expect(optionsOf(source, 'priority').option_sort).toBe('asc')
+    expect(optionsOf(source, 'priority').options!.map(o => o.name)).toEqual(['High', 'Low', 'Medium', 'Urgent'])
+    // Option menu: rename, color, delete.
+    const urgent = optionsOf(source, 'priority').options!.find(o => o.name === 'Urgent')!.id
+    document.body.querySelector<HTMLElement>(`[data-options-menu] [data-option="${urgent}"]`)!.click()
+    await settle()
+    const name = popover().querySelector<HTMLInputElement>('[data-option-name]')!
+    expect(name.value).toBe('Urgent')
+    name.value = 'ASAP'
+    name.dispatchEvent(new Event('input'))
+    name.dispatchEvent(new Event('blur'))
+    await settle()
+    popover().querySelector<HTMLElement>('[data-color-choice="purple"]')!.click()
+    await settle()
+    expect(optionsOf(source, 'priority').options!.find(o => o.id === urgent)).toMatchObject({ name: 'ASAP', color: 'purple' })
+    popover().querySelector<HTMLElement>('[data-action="delete-option"]')!.click()
+    await settle()
+    expect(optionsOf(source, 'priority').options!.some(o => o.id === urgent)).toBe(false)
+  })
+
+  it('status: options under their groups, default marked, + per group, set as default and move to a group', async () => {
+    const { source, wrapper } = await setup(20)
+    const menu = await openEditProperty(wrapper, 'status')
+    const groups = [...menu.querySelectorAll<HTMLElement>('[data-group]')]
+    expect(groups.map(g => g.querySelector('.me-menu-label')!.textContent)).toEqual(['To-do', 'In progress', 'Complete'])
+    // + of "In progress".
+    groups[1]!.querySelector<HTMLElement>('[data-add-to-group]')!.click()
+    await settle()
+    const draft = popover().querySelector<HTMLInputElement>('[data-option-draft]')!
+    draft.value = 'Review'
+    draft.dispatchEvent(new Event('input'))
+    draft.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+    await settle()
+    const review = optionsOf(source, 'status').options!.find(o => o.name === 'Review')!.id
+    expect(optionsOf(source, 'status').groups!.find(g => g.id === 'g-prog')!.option_ids).toContain(review)
+    // Its menu: Set as default, Group › Complete.
+    document.body.querySelector<HTMLElement>(`[data-options-menu] [data-option="${review}"]`)!.click()
+    await settle()
+    popover().querySelector<HTMLElement>('[data-action="set-default"]')!.click()
+    await settle()
+    expect(optionsOf(source, 'status').default_option_id).toBe(review)
+    expect(document.body.querySelector(`[data-options-menu] [data-option="${review}"] [data-default]`)).not.toBeNull()
+    document.body.querySelector<HTMLElement>(`[data-option-menu="${review}"] [data-action="move-group"]`)!.click()
+    await settle()
+    popover().querySelector<HTMLElement>('[data-group-choice="g-done"]')!.click()
+    await settle()
+    expect(optionsOf(source, 'status').groups!.find(g => g.id === 'g-done')!.option_ids).toContain(review)
+    expect(optionsOf(source, 'status').groups!.find(g => g.id === 'g-prog')!.option_ids).not.toContain(review)
+  })
+})
+
+describe('column menu', () => {
+  it('focuses the name field when it opens, the caret after the name (Notion)', async () => {
+    const { wrapper } = await setup(20)
+    await wrapper.find('.me-db-th[data-col-id="priority"]').trigger('click')
+    await settle()
+    const input = popover().querySelector<HTMLInputElement>('[data-prop-name]')!
+    expect(document.activeElement).toBe(input)
+    expect(input.selectionStart).toBe('Priority'.length)
+    expect(input.selectionEnd).toBe('Priority'.length)
+  })
+})
+
+describe('row drag (Notion: pointer, a see-through copy, one line where it lands)', () => {
+  const ptr = (target: EventTarget, type: string, x: number, y: number) =>
+    target.dispatchEvent(new PointerEvent(type, { bubbles: true, cancelable: true, button: 0, clientX: x, clientY: y }))
+  const frame = () => new Promise(r => requestAnimationFrame(() => r(null)))
+  async function start(wrapper: VueWrapper) {
+    const T = (await import('@toantranmei/editor')).componentTokens.database
+    const row = Number.parseFloat(T.rowHeight)
+    const header = Number.parseFloat(T.headerHeight)
+    const handle = wrapper.find('.me-db-tr[data-row="0"] .me-db-row-handle').element
+    ptr(handle, 'pointerdown', 10, header + row / 2)
+    return { row, header, handle }
+  }
+
+  it('moves the row after the one under the pointer, with a copy and one line while dragging', async () => {
+    const { source, wrapper } = await setup(20)
+    const before = source.all().slice(0, 4).map(r => r.id)
+    const { row, header } = await start(wrapper)
+    // Past row 3's middle → after row 3.
+    ptr(window, 'pointermove', 14, header + 3 * row + row * 0.75)
+    await frame()
+    await settle()
+    expect(document.body.querySelector('.me-db-row-ghost')).not.toBeNull()
+    expect(wrapper.findAll('.me-db-drop-line')).toHaveLength(1)
+    expect(wrapper.find('.me-db-tr[data-row="0"]').classes()).toContain('is-dragging')
+    ptr(window, 'pointerup', 14, header + 3 * row + row * 0.75)
+    await settle()
+    const moves = source.log.filter(l => l.method === 'moveRow')
+    expect(moves.at(-1)!.args).toEqual([before[0], before[3], before[4] ?? source.all()[4]!.id])
+    expect(document.body.querySelector('.me-db-row-ghost')).toBeNull()
+    expect(wrapper.find('.me-db-drop-line').exists()).toBe(false)
+    expect(document.body.querySelector('.me-db-popover')).toBeNull() // the drag's click didn't open the row menu
+  })
+
+  it('Escape cancels; a click without moving opens the row menu', async () => {
+    const { source, wrapper } = await setup(20)
+    const { row, header, handle } = await start(wrapper)
+    ptr(window, 'pointermove', 14, header + 3 * row)
+    await frame()
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))
+    ptr(window, 'pointerup', 14, header + 3 * row)
+    await settle()
+    expect(source.log.some(l => l.method === 'moveRow')).toBe(false)
+    expect(document.body.querySelector('.me-db-row-ghost')).toBeNull()
+    await new Promise(r => setTimeout(r, 0))
+    ptr(handle, 'pointerdown', 10, header + row / 2)
+    ptr(window, 'pointerup', 10, header + row / 2)
+    ;(handle as HTMLElement).click()
+    await settle()
+    expect(document.body.querySelector('.me-db-popover')).not.toBeNull()
+  })
 })

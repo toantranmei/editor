@@ -201,7 +201,7 @@ onBeforeUnmount(() => {
         />
         <template v-else>
           <input ref="searchInput" v-model="query" class="me-input me-mention-search" :placeholder="m.searchPlaceholder">
-          <div class="me-mention-results">
+          <div class="me-mention-results me-popover-scroll">
             <button
               v-for="(item, i) in results"
               :key="`${item.kind}-${item.id}`"
